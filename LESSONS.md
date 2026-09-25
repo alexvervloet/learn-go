@@ -4,6 +4,36 @@ Things that did not go according to plan while building this repo, written down
 when they happened. The counterpart to `PLAN.md`, which is scratch and never
 committed. This file is committed and stays.
 
+## 2026-09-25 — The linter already knows about the typed-nil trap
+
+**Expected:** lesson 03's typed-nil demo would need prose and a test, because
+the trap is famously invisible to tooling. I had written the README section as
+"two rules avoid it completely", implying vigilance was the only defence.
+
+**What happened:** staticcheck flagged it immediately, by name. `SA4023:
+brokenValidate never returns a nil interface value`, plus a marker on every
+downstream comparison reading "this comparison is always true". It found both
+shapes: the function returning a nil-valued concrete variable, and the one whose
+concrete return type springs the trap at the call site instead.
+
+**Next time:** before writing a "be careful about X" section, run the linters
+over the broken example. If a tool catches X, the section should lead with the
+tool and treat the rule as a fallback. The README now does, and the suppressions
+in `typednil.go` exist only so the file can keep demonstrating the bug.
+
+Two mechanical notes for future suppressions:
+
+- `SA4023` anchors its "related information" diagnostics on the ASSIGNMENT line,
+  not the comparison that is actually always-true. A `//nolint` above the
+  comparison does nothing; it has to sit on the line the diagnostic names.
+- `reflect.Ptr` is a deprecated alias and `go vet`'s inline analyzer now flags
+  it. `reflect.Pointer` is the current spelling.
+
+This is the same finding as the staticcheck entry below, arriving a second time
+in a stronger form. The pattern is now clear enough to state as a rule for the
+rest of this build: **write the broken example, run the linter, then write the
+prose.**
+
 ## 2026-09-25 — Go's map randomisation is a rotation, not a shuffle
 
 **Expected:** writing `TestMapIterationOrderIsRandomised` over a 5-key map, I

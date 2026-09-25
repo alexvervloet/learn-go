@@ -44,7 +44,7 @@ Work them in order. Each one assumes the ones before it.
 | 10 | [context](10-context/) | Cancellation, deadlines, the tree, `Cause`, values, HTTP, the six mistakes | ✅ |
 | 11 | [generics](11-generics/) | Type parameters, constraints and `~`, generic types, containers, `iter.Seq`, measured costs | ✅ |
 | 12 | [struct-tags-and-reflection](12-struct-tags-and-reflection/) | Tag syntax, `omitempty` vs `omitzero`, `Type`/`Kind`, settability, a tag-driven validator | ✅ |
-| 13 | io-composition | `Reader`/`Writer` composition, pipes, `io.Copy`'s fast paths | ⬜ |
+| 13 | [io-composition](13-io-composition/) | The Read/Write contracts, `io.Copy` fast paths, the combinators, `bufio`, `io.Pipe` | ✅ |
 | 14 | embed-and-build-tags | `go:embed`, build constraints, cross-compilation | ⬜ |
 | 15 | modules-and-workspaces | Semantic import versioning, `go.work`, vendoring, MVS | ⬜ |
 | 16 | race-detector | A real data race, caught and fixed | ⬜ |

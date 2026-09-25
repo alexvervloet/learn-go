@@ -1,5 +1,7 @@
 # Learning Backend Engineering with Go
 
+[![CI](https://github.com/alexvervloet/learn-go/actions/workflows/ci.yml/badge.svg)](https://github.com/alexvervloet/learn-go/actions/workflows/ci.yml)
+
 A public, open learning resource for backend engineering with Go. It covers the
 language itself, CS fundamentals, HTTP services, databases, auth, messaging and
 AI integration, up to full capstone projects. Every module is concept-focused,
@@ -113,6 +115,22 @@ explains the mechanics, rather than reaching for a framework that hides them.
 | GraphQL | `gqlgen` | Schema-first with generated resolvers |
 | gRPC | `grpc-go` | Go is the reference implementation |
 | Linting | `golangci-lint` | The ruff analogue; config in [.golangci.yml](.golangci.yml) |
+
+## A note on the coverage number
+
+`make cover-summary` reports about 40% total, and that number is not worth
+chasing. Every lesson has a `main.go` plus a `demo*` function per topic, which
+exist so `go run ./04-errors` prints a guided tour. They are output formatting,
+they are never called from a test, and they are a large share of the statements.
+
+The number that means something is coverage of the functions that teach
+something: **97.6% across 154 functions, with none at zero**. What remains is
+unreachable branches, mostly error paths on operations that cannot fail in a
+test.
+
+This is why the CI coverage job prints the total and does not enforce a
+threshold. A gate here would be satisfied by calling `demoErrors()` from a test
+and asserting nothing, which would raise the number and test nothing.
 
 ## Development
 

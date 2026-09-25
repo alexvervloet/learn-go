@@ -29,21 +29,60 @@ func withTimeout(t *testing.T, d time.Duration, fn func()) {
 	}
 }
 
-// TestUnbufferedIsAHandshake asserts the ORDER, which the memory model
-// guarantees. The receiver logs "received" before the sender logs "sent",
-// because the sender is parked inside its send until the receive completes.
+// TestUnbufferedIsAHandshake asserts the ordering the MEMORY MODEL guarantees,
+// which is narrower than the ordering the demo happens to print.
+//
+// Guaranteed: the receive completes before the send returns. So
+// "receiver: received" always precedes "sender: sent".
+//
+// NOT guaranteed: which of the two "about to" lines is recorded first. Those
+// happen in different goroutines with nothing ordering them, and the 20ms sleep
+// in the receiver only makes the sender likely to win, not certain. CI caught
+// this: under -race on a loaded runner, main was descheduled past the sleep and
+// the receiver logged first.
+//
+// Asserting the full four-line sequence was asserting a race. This asserts the
+// guarantee instead.
 func TestUnbufferedIsAHandshake(t *testing.T) {
 	withTimeout(t, 2*time.Second, func() {
 		got := unbufferedIsAHandshake()
 
-		want := []string{
-			"sender: about to send",
-			"receiver: about to receive",
-			"receiver: received",
-			"sender: sent",
+		if len(got) != 4 {
+			t.Fatalf("got %d events, want 4: %v", len(got), got)
 		}
-		if !slices.Equal(got, want) {
-			t.Errorf("events =\n  %v\nwant\n  %v", got, want)
+
+		indexOf := func(event string) int {
+			return slices.Index(got, event)
+		}
+
+		received := indexOf("receiver: received")
+		sent := indexOf("sender: sent")
+		aboutToSend := indexOf("sender: about to send")
+		aboutToReceive := indexOf("receiver: about to receive")
+
+		for name, i := range map[string]int{
+			"sender: about to send":      aboutToSend,
+			"receiver: about to receive": aboutToReceive,
+			"receiver: received":         received,
+			"sender: sent":               sent,
+		} {
+			if i < 0 {
+				t.Fatalf("event %q missing from %v", name, got)
+			}
+		}
+
+		// THE guarantee: an unbuffered send does not return until a receiver
+		// has taken the value.
+		if received > sent {
+			t.Errorf("receive logged after send returned, which an unbuffered channel forbids:\n  %v", got)
+		}
+
+		// Each goroutine's own events are ordered within that goroutine.
+		if aboutToSend > sent {
+			t.Errorf("sender's events out of order: %v", got)
+		}
+		if aboutToReceive > received {
+			t.Errorf("receiver's events out of order: %v", got)
 		}
 	})
 }

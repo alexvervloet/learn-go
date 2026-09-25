@@ -4,6 +4,51 @@ Things that did not go according to plan while building this repo, written down
 when they happened. The counterpart to `PLAN.md`, which is scratch and never
 committed. This file is committed and stays.
 
+## 2026-09-25 — Two of my tests were flaky, and only CI could tell me
+
+**Expected:** `make test` and `make test-race` passing locally, repeatedly,
+meant the suite was stable. Lessons 06 and 09 both went in green.
+
+**What happened:** two failures that only ever appeared on GitHub's runners.
+
+**`TestParallelIsFasterThanSequential`**, on a 4-CPU runner:
+
+```
+sequential 12ms, parallel 17ms, speedup 0.7x on 4 CPUs
+```
+
+Parallel was SLOWER. The test timed one run of each and asserted `par < seq`.
+On a shared host with four cores, one goroutine being descheduled for longer
+than the whole measurement is entirely normal. My machine has twelve idle cores
+and never showed it.
+
+**`TestAddInsideTheGoroutineIsUnreliable`**, on macOS:
+
+```
+panic: sync: WaitGroup is reused before previous Wait has returned
+```
+
+The test drove a deliberate race and expected a short count. The race can also
+PANIC, which is the same bug with a different symptom, and the test had no
+recover.
+
+**Next time, two rules.**
+
+For timing assertions on hardware you do not control: **best-of-N, and a
+threshold with real slack.** A slow run means something interfered; a fast run
+is closer to the truth. Five runs, take the minimum of each side, and assert
+"at least 20% faster" rather than "faster". Locally that now reports a stable
+7.6-8.9x and it will not flip on a contended runner.
+
+For tests that drive a deliberate bug: **accept every symptom the bug can
+produce.** The test now treats a short count OR a panic as evidence, and only
+fails if the code turns out to be reliably correct, which would mean the example
+had stopped demonstrating anything.
+
+The wider point: a green local run on a quiet 12-core machine is weak evidence
+about a 4-core shared runner. The test matrix exists for this, and both bugs
+were mine rather than Go's.
+
 ## 2026-09-25 — The range-over-func contract is enforced, not just documented
 
 **Expected:** writing lesson 11's iterator section, I described a producer that

@@ -22,7 +22,7 @@ tests clean on Go 1.27.
 
 | Area | Status |
 |---|---|
-| [go-concepts/](go-concepts/) | 🟡 14 of 18 lessons |
+| [go-concepts/](go-concepts/) | 🟡 15 of 18 lessons |
 | dsa/ | ⬜ not started |
 | backends/learning/ | ⬜ not started |
 | backends/ capstones | ⬜ not started |
@@ -135,13 +135,16 @@ and asserting nothing, which would raise the number and test nothing.
 ## Development
 
 ```bash
-make check         # fmt-check, vet, lint, test — what CI runs
+make check         # fmt-check, vet, lint, tidy-check, isolated-check, test
 make test          # every test in every module
 make test-race     # under the race detector
 make bench         # benchmarks with allocation counts
 make cover         # coverage report in a browser
 make lint-fix      # apply what the linter can fix
 make help          # every target
+
+make tidy-check    # fail if any go.mod or go.sum is stale
+make isolated-check # build each module with GOWORK=off, as a consumer would
 ```
 
 Scope any target to one module with `DIR`:

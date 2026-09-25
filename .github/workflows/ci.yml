@@ -1,0 +1,160 @@
+name: CI
+
+# Runs on every push to main and every pull request. Unlike the Python repo's
+# workflow, this one is not path-scoped: Go builds the whole workspace in
+# seconds, so filtering would add configuration without saving time.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel in-progress runs for the same branch when a new push arrives.
+# Without this, a rapid series of pushes queues up redundant runs.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# The default token needs nothing beyond reading the repo. Setting this
+# explicitly means a compromised action cannot push, comment, or open a PR.
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Lint — formatting, vet, and golangci-lint. Kept as its own job so a
+  # formatting mistake surfaces without waiting for the test matrix.
+  # ---------------------------------------------------------------------------
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27"
+          # setup-go caches the module and build caches keyed on every go.sum
+          # in the repo. With a workspace of many modules that is exactly the
+          # right key: adding a dependency anywhere invalidates it.
+          cache: true
+
+      # gofmt is not a style preference in Go, it is the format. There is one
+      # correct output per file, so this is a hard failure rather than advice.
+      - name: Check formatting
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt'd:"
+            echo "$unformatted"
+            echo
+            echo "Fix with: make fmt"
+            exit 1
+          fi
+
+      # go vet ships with the toolchain and catches a specific set of real bugs:
+      # printf verbs that do not match their arguments, unreachable code,
+      # struct tags that will not parse, locks copied by value.
+      - name: Vet
+        run: go vet $(go list -m -f '{{.Dir}}/...')
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --timeout=5m $(go list -m -f '{{.Dir}}/...')
+
+  # ---------------------------------------------------------------------------
+  # Test — matrix across the two supported Go versions and both major OSes.
+  #
+  # fail-fast: false so a failure on one combination does not hide the others.
+  # Windows is in the matrix because path handling and file permissions are
+  # where cross-platform Go actually breaks, and this repo touches both.
+  # ---------------------------------------------------------------------------
+  test:
+    name: Test / Go ${{ matrix.go }} / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        go: ["1.26", "1.27"]
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        # Windows on the older Go adds runner minutes without adding coverage:
+        # anything it would catch, one of the other five combinations catches.
+        exclude:
+          - os: windows-latest
+            go: "1.26"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+          cache: true
+
+      - name: Build
+        run: go build $(go list -m -f '{{.Dir}}/...')
+
+      # -count=1 disables the test cache. In CI the cache is cold anyway, so
+      # this costs nothing and removes any doubt about what actually ran.
+      - name: Test
+        run: go test -count=1 $(go list -m -f '{{.Dir}}/...')
+
+  # ---------------------------------------------------------------------------
+  # Race — the race detector on its own job, because it is 5-10x slower than a
+  # normal run and does not need the full matrix to be useful. One platform,
+  # current Go.
+  #
+  # This is the job that justifies the whole workflow. A data race is undefined
+  # behaviour that usually does not reproduce locally, and `-race` is the only
+  # thing that reliably finds one. See go-concepts/16-race-detector.
+  # ---------------------------------------------------------------------------
+  race:
+    name: Race detector
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27"
+          cache: true
+
+      - name: Test with -race
+        run: go test -race -count=1 $(go list -m -f '{{.Dir}}/...')
+
+  # ---------------------------------------------------------------------------
+  # Coverage — informational. It writes a profile and prints the total, without
+  # a threshold that fails the build.
+  #
+  # A coverage gate mostly teaches people to write tests that execute lines
+  # without asserting anything. The number is worth watching and not worth
+  # enforcing.
+  # ---------------------------------------------------------------------------
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27"
+          cache: true
+
+      - name: Test with coverage
+        run: go test -coverprofile=coverage.out $(go list -m -f '{{.Dir}}/...')
+
+      - name: Report total
+        run: go tool cover -func=coverage.out | tail -1
+
+      - name: Upload the profile
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.out
+          retention-days: 7

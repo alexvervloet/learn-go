@@ -4,6 +4,46 @@ Things that did not go according to plan while building this repo, written down
 when they happened. The counterpart to `PLAN.md`, which is scratch and never
 committed. This file is committed and stays.
 
+## 2026-09-25 — CI found three things a green local run could not
+
+**Expected:** the first push would be green. `make check` passed locally:
+gofmt clean, `go vet` clean, `golangci-lint` 0 issues, all tests passing, race
+detector clean.
+
+**What happened:** every test job passed, on all five OS and Go-version
+combinations including Windows, plus race and coverage. The **Lint** job failed,
+and for three separate reasons stacked on top of each other:
+
+1. `golangci/golangci-lint-action@v6` with `version: latest` installs the
+   **v1** line, currently v1.64.8. This repo's `.golangci.yml` is v2 format,
+   so it failed with `can't load config`. The action's major version gates the
+   linter's major version, which is not obvious from `version: latest`.
+2. That prebuilt binary is compiled with go1.24, and refused to run against a
+   module targeting a newer Go: *"the Go language version (go1.24) used to
+   build golangci-lint is lower than the targeted Go version (1.27.1)"*.
+3. `go.mod` said `go 1.27.1`. The `go` directive is a LANGUAGE version and
+   should be `go 1.27`; the patch belongs in a `toolchain` line if anywhere.
+   `go mod init` writes the patch version by default, which is how it got there.
+
+And a fourth, which would have broken the job even after fixing the other
+three: `args: --timeout=5m $(go list -m -f '{{.Dir}}/...')` inside an action's
+`with:` block is **not** expanded by a shell. It is passed through literally.
+Command substitution only works in a `run:` step.
+
+**Next time:** two rules came out of this.
+
+- **CI should run the Makefile target, not a reimplementation of it.** The lint
+  job now runs `make fmt-check`, `make vet`, `make tools`, `make lint`, which
+  are the same four commands anyone runs locally. The bug existed only because
+  CI was doing the same job a different way.
+- **Pin the linter.** `@latest` means a release nobody asked for can turn a
+  green branch red. `GOLANGCI_VERSION := v2.14.0` in the Makefile, bumped
+  deliberately and on its own commit.
+
+Worth saying plainly: the test matrix passing on Windows and on the older Go
+first time out was the part I was least confident about, and the part that gave
+no trouble. The failure was entirely in the tooling around the code.
+
 ## 2026-09-25 — Go's growable stacks make the recursion-depth worry misplaced
 
 **Expected:** the recursive-descent parser in lesson 05 would need a depth cap

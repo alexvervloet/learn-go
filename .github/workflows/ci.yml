@@ -79,6 +79,20 @@ jobs:
       - name: Lint
         run: make lint
 
+      # go.mod and go.sum must be what the code actually needs. Go 1.23's
+      # -diff reports what tidy WOULD change and exits non-zero if anything,
+      # with no copy-run-compare dance.
+      #
+      # Lesson 15 recommends this; the repo should follow its own advice.
+      - name: Check go.mod is tidy
+        run: make tidy-check
+
+      # go.work is local only, and a consumer never sees it. A module that
+      # imports another without the matching require builds fine here and
+      # fails for everyone else. GOWORK=off is how you find out.
+      - name: Check each module builds without the workspace
+        run: make isolated-check
+
   # ---------------------------------------------------------------------------
   # Test — matrix across the two supported Go versions and both major OSes.
   #

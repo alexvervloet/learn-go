@@ -40,7 +40,7 @@ Work them in order. Each one assumes the ones before it.
 | 06 | [goroutines](06-goroutines/) | Cost, the G-M-P scheduler, `GOMAXPROCS`, the three leak shapes, loop variables | ✅ |
 | 07 | [channels](07-channels/) | Unbuffered handshake, closing rules, directional types, five patterns, six deadlocks | ✅ |
 | 08 | [select-and-timeouts](08-select-and-timeouts/) | Random choice, `default`, timer leaks, nil cases, pipelines, worker pools | ✅ |
-| 09 | sync-primitives | `Mutex`, `RWMutex`, `WaitGroup`, `Once`, `atomic`, `errgroup` | ⬜ |
+| 09 | [sync-primitives](09-sync-primitives/) | `Mutex`, `RWMutex`, `WaitGroup`, `Once`, atomics, `sync.Map`, `sync.Pool`, errgroup | ✅ |
 | 10 | context | Cancellation, deadlines, values, the propagation rules | ⬜ |
 | 11 | generics | Type parameters, constraints, inference, when not to use them | ⬜ |
 | 12 | struct-tags-and-reflection | JSON round-trips, tag parsing, the cost of `reflect` | ⬜ |
@@ -88,6 +88,18 @@ Everything here is the standard library, so `go test ./...` works on a fresh
 clone with no network access. `testify` shows up later, in
 `backends/learning/testing-concepts/`, where comparing assertion styles is
 part of the point.
+
+## Running under `-race`
+
+Several lessons demonstrate a data race deliberately, and the detector cannot
+tell a teaching example from an accident. Rather than delete the examples or
+drop `-race` from CI, this module defines `raceDetectorEnabled` from the `race`
+build tag (see `09-sync-primitives/raceflag_*.go`), and the handful of tests
+that exercise an intentional race skip themselves when the detector is on.
+
+So `make test-race` is green and still meaningful. To see the reports the
+examples produce, run them without the skip, or work through
+[16-race-detector](16-race-detector/), which is about reading them.
 
 ## A note on the linter
 

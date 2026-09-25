@@ -30,13 +30,21 @@ linters:
         - name: package-comments
           disabled: true # every lesson is package main; one doc comment per folder is enough
 
+    misspell:
+      # Lesson 12 demonstrates what a MISSPELLED validation tag does, so the
+      # misspelling is the example. A //nolint on the line does not work here
+      # because misspell reports inside comments and string literals, where the
+      # directive is not attached to a statement.
+      ignore-rules:
+        - requried
+
     goconst:
       # Demo fixtures repeat sample names ("Ana", "alice@example.com") across a
       # handful of examples in one file. At the default threshold of 3 that is
       # pure noise, and hoisting a constant would make the examples harder to
       # read, not easier. Five is high enough that a genuine magic string still
       # gets caught.
-      min-occurrences: 5
+      min-occurrences: 6
       min-len: 4
       ignore-tests: true
 

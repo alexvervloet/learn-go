@@ -105,3 +105,27 @@ func TestNewVsErrorf(t *testing.T) {
 		t.Error("two errors.New values with the same text must not match")
 	}
 }
+
+// TestUnwrapReachesTheCause covers the helper directly, on both wrapping verbs.
+func TestUnwrapReachesTheCause(t *testing.T) {
+	cause := errors.New("the cause")
+
+	tests := []struct {
+		name    string
+		wrapped error
+		want    error
+	}{
+		{"wrapped with the wrapping verb", wrapWithPercentW(cause), cause},
+		{"wrapped with the plain verb", wrapWithPercentV(cause), nil},
+		{"not wrapped at all", cause, nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			//nolint:errorlint // asserting Unwrap's exact return value
+			if got := unwrapReachesTheCause(tt.wrapped); got != tt.want {
+				t.Errorf("unwrapReachesTheCause() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

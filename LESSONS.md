@@ -4,6 +4,56 @@ Things that did not go according to plan while building this repo, written down
 when they happened. The counterpart to `PLAN.md`, which is scratch and never
 committed. This file is committed and stays.
 
+## 2026-09-25 — Two pieces of escape-analysis folklore, both wrong
+
+**Expected:** lesson 18's table of what escapes was going to be the standard
+list, which I could write from memory: returning a pointer, boxing into an
+interface, `make` with a non-constant size, capturing in a closure. Then I
+added `testing.AllocsPerRun` assertions to prove each one.
+
+**What happened:** two of them failed.
+
+**"`make` with a non-constant size escapes."** Measured:
+
+```
+makeWithVariableSize(64)      0 allocations
+makeWithVariableSize(100000)  1 allocation
+```
+
+Same function, same source line. Escape analysis runs *after* inlining, so the
+compiler sees the caller's actual argument and keeps the slice in the frame
+when it can prove the size is small. `-gcflags=-l` makes both escape.
+
+**"Passing a value to an interface allocates."** This one took four attempts.
+
+1. First measurement: the `any` path allocated 1, the concrete path allocated
+   **2**. The two functions were doing different work, one using `fmt.Sprint`
+   and the other `strings.Repeat`. Lesson 17's first lie, committed in lesson
+   18 by the person who had just written lesson 17.
+2. Fixed so both only read a field: both allocated **0**. The callee inlined,
+   the compiler devirtualised the type assertion, and the boxing vanished.
+3. Added `//go:noinline`: still **0**. The box was real, and escape analysis
+   proved it never left the callee's frame, so it went on the stack.
+4. Made the box actually escape: **1**. There it is.
+
+And a fifth thing found on the way: `User{ID: 2}` has only constant fields, so
+the compiler emits it as a static value and nothing allocates in ANY of the
+four cases. Every measurement came back zero until the value was derived from
+a variable.
+
+**Next time:** the useful statement is not a list of things that escape. It is:
+
+> Escape analysis is a property of a CALL, not of a function.
+
+`testing.AllocsPerRun` asks about a call, which is why it belongs in the test
+suite next to any claim about allocation. Reading `-gcflags=-m` tells you what
+the compiler decided for the code as written; it does not tell you what happens
+at a different call site.
+
+Five corrections in this file now have the same root: I wrote down what I
+believed, then measured, and the measurement disagreed. The rule stands and I
+keep needing it — **write the demo, run it, then write the paragraph.**
+
 ## 2026-09-25 — The lesson about benchmarks lying contained a lying benchmark
 
 **Expected:** lesson 17 documents three ways a benchmark misleads, the first

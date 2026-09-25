@@ -1,3 +1,3 @@
 module github.com/alexvervloet/learn-go/go-concepts
 
-go 1.27.1
+go 1.27

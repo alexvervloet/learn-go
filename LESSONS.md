@@ -4,6 +4,85 @@ Things that did not go according to plan while building this repo, written down
 when they happened. The counterpart to `PLAN.md`, which is scratch and never
 committed. This file is committed and stays.
 
+## 2026-09-25 — I wrote "nothing catches this", and the linter caught it in the same file
+
+**Expected:** lesson 14 warns about `// go:embed` with a space, which makes the
+directive an ordinary comment and leaves the variable empty. I wrote that
+nothing reports it: "not the compiler, not vet, not the linter", and built the
+lesson's defence around a test asserting non-empty content.
+
+**What happened:** `golangci-lint` failed the package, pointing at my own
+**package doc comment**, which happened to contain the string
+`// go:embed puts files into the binary`:
+
+```
+embedding.go:3:1: SA9009: ineffectual compiler directive due to extraneous
+space: "// go:embed puts files into the binary at compile time:" (staticcheck)
+```
+
+The linter I had just written off caught the trap inside the paragraph claiming
+it could not.
+
+I checked it properly rather than assuming, with a three-line program:
+
+| | Result |
+|---|---|
+| `go build` | compiles fine |
+| `go vet` | silent |
+| `golangci-lint` | **catches it** (SA9009) |
+| at runtime | the variable is `""` |
+
+So the claim was two-thirds right and wrong where it mattered.
+
+**Next time:** this is the fourth entry in this file where running the tools
+corrected the prose, after `sync.Map`, the HTTP deadline and the range-over-func
+contract. The rule I wrote down at the third one still applies and I still did
+not follow it here: **write the demo, run the tools, then write the paragraph.**
+
+Worth noting what made this one findable: I had written the bad directive into
+the prose, so the linter had something to point at. Had I only described it, the
+claim would have shipped. There is an argument for putting the broken form in
+the code deliberately, precisely so the tooling gets a chance to disagree.
+
+## 2026-09-25 — Two build-tag files looked exhaustive and were not
+
+**Expected:** lesson 14 demonstrates platform-specific builds with
+`platform_unix.go` (`//go:build unix`) and `platform_windows.go`
+(`//go:build windows`). Unix or Windows covers everything, so cross-compiling
+the lesson to a few targets would be a formality.
+
+**What happened:**
+
+```
+$ GOOS=js GOARCH=wasm go build ./14-embed-and-build-tags
+platform.go:51:32: undefined: currentPlatform
+```
+
+Go builds for `js/wasm`, `wasip1/wasm` and `plan9`, none of which are `unix` and
+none of which are `windows`. Neither file was compiled, so the variable both of
+them declare did not exist.
+
+The error message is the worst part. `undefined: currentPlatform` points at the
+USE, and the declaration exists in two files sitting right there in the
+directory. Nothing indicates that a build constraint excluded both.
+
+**Next time:** a constraint set needs a fallback, or an explicit loud failure:
+
+```go
+//go:build !unix && !windows
+
+func init() { panic("unsupported platform: " + runtime.GOOS) }
+```
+
+Nothing tells you the set is incomplete. Not the compiler, not vet, not the
+linter, and not a CI matrix of Linux, macOS and Windows, which is exactly the
+matrix this repo runs and which would never have caught it. The only thing that
+finds it is building for the uncovered target, and `go tool dist list` plus a
+loop is about thirty seconds.
+
+With the fallback added, all seven targets build from one macOS machine, which
+is the actual selling point the lesson was trying to make and nearly got wrong.
+
 ## 2026-09-25 — sync.Pool.Get is not guaranteed to return what you just Put
 
 **Expected:** the `sync.Pool` demo in lesson 09 puts a buffer back without

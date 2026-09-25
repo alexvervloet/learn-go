@@ -4,6 +4,49 @@ Things that did not go according to plan while building this repo, written down
 when they happened. The counterpart to `PLAN.md`, which is scratch and never
 committed. This file is committed and stays.
 
+## 2026-09-25 — encoding/json beat my hand-written encoder
+
+**Expected:** lesson 12's README said reflection costs roughly an order of
+magnitude, and that `encoding/json` is "far slower than a hand-written
+encoder". Standard knowledge, and I wrote a hand-written encoder to prove it.
+
+**What happened:** `encoding/json` won. 309 ns against 330 ns for my version.
+
+The cause is embarrassing and useful: my hand-written encoder used `fmt.Sprint`
+for the numeric fields, and `fmt` is reflective and not fast. Meanwhile
+`encoding/json` caches a field map per type on first use, so after the first
+call it is doing indexed access, not name lookup.
+
+The field-access numbers told the same story more precisely:
+
+| Operation | ns/op | vs direct |
+|---|---|---|
+| direct | 26.9 | 1.0x |
+| reflect by index | 30.3 | **1.1x** |
+| reflect by name | 86.2 | 3.2x |
+
+Reflection is not slow. `FieldByName` is slow. Once a library resolves names to
+indexes the overhead is about ten percent, which is nothing like the order of
+magnitude I had written.
+
+**Next time:** two things.
+
+When benchmarking "hand-written must be faster", check what the hand-written
+version actually calls. Mine reached for `fmt` out of habit and inherited the
+cost it was supposed to be avoiding. Worth noting which tool caught it: not the
+benchmark, which was perfectly happy reporting a wrong conclusion, but
+`staticcheck`'s QF1012 suggesting `fmt.Fprint` over `WriteString(fmt.Sprint())`.
+The linter found a performance bug in a performance comparison.
+
+And "X is slow" deserves the follow-up question "which part of X". The useful
+advice that came out of this is not "avoid reflection", it is "avoid
+`FieldByName` in a loop, and cache the field map per type", which is actionable
+and which the vague version would never have produced.
+
+The one measurement that did confirm the folklore: the tag-driven validator is
+**99x** slower than the hand-written equivalent, 982 ns against 10 ns. Still the
+right trade at once per request, and worth knowing the size of.
+
 ## 2026-09-25 — Two of my tests were flaky, and only CI could tell me
 
 **Expected:** `make test` and `make test-race` passing locally, repeatedly,

@@ -117,6 +117,15 @@ jobs:
       - name: Test
         run: go test -count=1 $(go list -m -f '{{.Dir}}/...')
 
+      # Code behind a build tag is NOT compiled by default, so it is not type
+      # checked, not vetted and not covered. Without this step,
+      # go-concepts/14-embed-and-build-tags/debug_on.go could be broken for
+      # months and every job would stay green.
+      #
+      # Every custom tag the repo uses belongs here.
+      - name: Test with build tags
+        run: go test -count=1 -tags debug $(go list -m -f '{{.Dir}}/...')
+
   # ---------------------------------------------------------------------------
   # Race — the race detector on its own job, because it is 5-10x slower than a
   # normal run and does not need the full matrix to be useful. One platform,
@@ -140,6 +149,58 @@ jobs:
 
       - name: Test with -race
         run: go test -race -count=1 $(go list -m -f '{{.Dir}}/...')
+
+  # ---------------------------------------------------------------------------
+  # Cross-compile — build for every target the repo claims to support.
+  #
+  # This job exists because of a real bug: lesson 14 had platform files for
+  # `unix` and `windows`, which looks exhaustive and is not. js/wasm, wasip1
+  # and plan9 are none of those, and the package failed to build for them with
+  # "undefined: currentPlatform".
+  #
+  # Nothing else catches that. Not the compiler, not vet, not the linter, and
+  # not a test matrix of Linux, macOS and Windows, which is exactly what the
+  # jobs above are. Only building for the uncovered target does.
+  # ---------------------------------------------------------------------------
+  cross-compile:
+    name: Cross-compile
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+          - goos: js
+            goarch: wasm
+          - goos: wasip1
+            goarch: wasm
+          - goos: plan9
+            goarch: amd64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27"
+          cache: true
+
+      # Build only; these targets cannot all be RUN here, and a build failure
+      # is what this job is looking for.
+      - name: Build for ${{ matrix.goos }}/${{ matrix.goarch }}
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        run: go build $(go list -m -f '{{.Dir}}/...')
 
   # ---------------------------------------------------------------------------
   # Coverage — informational. It writes a profile and prints the total, without

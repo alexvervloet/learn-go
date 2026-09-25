@@ -143,3 +143,36 @@ func TestCustomIsMethod(t *testing.T) {
 		}
 	})
 }
+
+// TestHTTPErrorMessages covers Error and Unwrap on the type whose custom Is
+// method is tested above.
+func TestHTTPErrorMessages(t *testing.T) {
+	cause := errors.New("connection reset")
+	err := &HTTPError{Status: 503, URL: "https://api.example.com/users", Err: cause}
+
+	want := "GET https://api.example.com/users: unexpected status 503"
+	if got := err.Error(); got != want {
+		t.Errorf("Error() = %q, want %q", got, want)
+	}
+	if !errors.Is(err, cause) {
+		t.Error("Unwrap should keep the underlying cause reachable")
+	}
+
+	// A status-only error has nothing to unwrap, and must not claim otherwise.
+	bare := &HTTPError{Status: 404, URL: "https://api.example.com/users"}
+	if errors.Unwrap(bare) != nil { //nolint:errorlint // asserting Unwrap's exact return value
+		t.Error("an HTTPError with no cause should unwrap to nil")
+	}
+}
+
+// TestRetryableErrorMessage covers the other custom type's Error method.
+func TestRetryableErrorMessage(t *testing.T) {
+	err := &RetryableError{After: 2 * time.Second, Err: ErrConflict}
+
+	if got, want := err.Error(), "retry after 2s: conflict"; got != want {
+		t.Errorf("Error() = %q, want %q", got, want)
+	}
+	if !errors.Is(err, ErrConflict) {
+		t.Error("Unwrap should reach ErrConflict")
+	}
+}

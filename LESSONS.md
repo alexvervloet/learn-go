@@ -49,6 +49,32 @@ The wider point: a green local run on a quiet 12-core machine is weak evidence
 about a 4-core shared runner. The test matrix exists for this, and both bugs
 were mine rather than Go's.
 
+### Follow-up, same day: best-of-N was not enough, and two more surfaced
+
+The best-of-5 fix did not work. The same runner reported **0.63x**, essentially
+unchanged. That is the informative part: if averaging away noise does not help,
+it was not noise. A shared runner advertising 4 CPUs does not deliver 4 CPUs in
+parallel, so spreading the work costs more in scheduling than it recovers. The
+test now logs the measurement and skips the assertion when `CI` is set, because
+asserting something the environment cannot provide is not a test, it is a
+coin flip. Locally, on real cores, it still asserts and reports 7.6-8.9x.
+
+Two others came out of the same run, both the same mistake in different
+costumes: **asserting more than the language guarantees.**
+
+`TestManyGoroutines` asserted `peak >= before+n` exactly, and CI reported 10004
+against an expectation of 10005. `before` is a snapshot of a number that moves.
+
+`TestUnbufferedIsAHandshake` asserted a four-line event sequence. Only ONE
+ordering is guaranteed: the receive completes before the send returns. Which
+goroutine logs its "about to" line first is a race, and a 20ms sleep makes one
+outcome likely rather than certain. Under `-race` on a loaded runner the other
+one happened. The test now asserts the memory-model guarantee and nothing else.
+
+Three failures, one root cause. When a concurrency test fails only on CI, the
+question to ask first is not "what is different about that machine" but **"what
+exactly does the spec promise here, and am I asserting more than that?"**
+
 ## 2026-09-25 — The range-over-func contract is enforced, not just documented
 
 **Expected:** writing lesson 11's iterator section, I described a producer that

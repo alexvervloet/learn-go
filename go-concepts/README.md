@@ -45,7 +45,7 @@ Work them in order. Each one assumes the ones before it.
 | 11 | [generics](11-generics/) | Type parameters, constraints and `~`, generic types, containers, `iter.Seq`, measured costs | ✅ |
 | 12 | [struct-tags-and-reflection](12-struct-tags-and-reflection/) | Tag syntax, `omitempty` vs `omitzero`, `Type`/`Kind`, settability, a tag-driven validator | ✅ |
 | 13 | [io-composition](13-io-composition/) | The Read/Write contracts, `io.Copy` fast paths, the combinators, `bufio`, `io.Pipe` | ✅ |
-| 14 | embed-and-build-tags | `go:embed`, build constraints, cross-compilation | ⬜ |
+| 14 | [embed-and-build-tags](14-embed-and-build-tags/) | `go:embed` and its traps, `embed.FS` as `fs.FS`, platform files, custom tags, cross-compilation | ✅ |
 | 15 | modules-and-workspaces | Semantic import versioning, `go.work`, vendoring, MVS | ⬜ |
 | 16 | race-detector | A real data race, caught and fixed | ⬜ |
 | 17 | benchmarks-and-pprof | `testing.B`, `b.Loop`, allocation counts, CPU and heap profiles | ⬜ |

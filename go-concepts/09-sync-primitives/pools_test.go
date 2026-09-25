@@ -68,19 +68,38 @@ func TestPoolIsSafeUnderConcurrency(t *testing.T) {
 	}
 }
 
-// TestForgettingResetLeaksData asserts the bug, so the example cannot quietly
-// stop being wrong.
+// TestForgettingResetLeaksData asserts the CONSEQUENCE of the bug, not the
+// scheduling that exposes it.
+//
+// The first version of this test called forgettingResetLeaksData once and
+// asserted the leak. It passed locally and on seven of eight CI jobs, and
+// failed on the race job, because sync.Pool.Get is not guaranteed to return
+// what you just Put: the pool is a per-P cache and the goroutine can move.
+//
+// leakIsObservable retries until reuse actually happens, so the assertion is
+// about what a reused buffer contains rather than about whether reuse occurs.
 func TestForgettingResetLeaksData(t *testing.T) {
-	first, second := forgettingResetLeaksData()
+	leaked, observed := leakIsObservable(200)
+
+	if !observed {
+		t.Skip("the pool did not hand the buffer back in 200 attempts; the bug is still real")
+	}
+
+	if !strings.Contains(leaked, "user-1-secret") {
+		t.Errorf("a reused buffer gave %q, want it to still contain the first caller's data", leaked)
+	}
+	if !strings.Contains(leaked, "user-2-data") {
+		t.Errorf("a reused buffer gave %q, want it to also contain its own data", leaked)
+	}
+}
+
+// TestForgettingResetReportsReuseHonestly: whatever the scheduling, the first
+// caller's own read must be correct.
+func TestForgettingResetFirstCallerIsUnaffected(t *testing.T) {
+	first, _, _ := forgettingResetLeaksData()
 
 	if first != "user-1-secret" {
 		t.Errorf("first = %q, want %q", first, "user-1-secret")
-	}
-	if !strings.Contains(second, "user-1-secret") {
-		t.Errorf("second = %q, want it to still contain the first caller's data", second)
-	}
-	if !strings.Contains(second, "user-2-data") {
-		t.Errorf("second = %q, want it to also contain its own data", second)
 	}
 }
 

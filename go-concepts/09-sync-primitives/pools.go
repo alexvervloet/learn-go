@@ -71,10 +71,18 @@ func renderWithoutPool(rows []string) string {
 	return buf.String()
 }
 
-// forgettingResetLeaksData demonstrates the bug. The second caller sees the
-// first caller's content, which in a web service means one user's data in
-// another user's response.
-func forgettingResetLeaksData() (first, second string) {
+// forgettingResetLeaksData demonstrates the bug: a buffer returned to the pool
+// with content still in it hands that content to the next caller.
+//
+// The `reused` result is not decoration. sync.Pool.Get is NOT guaranteed to
+// return what you just Put: the pool is a per-P cache, so if the goroutine
+// moves to another P between the Put and the Get, or a GC runs in between, Get
+// misses and calls New instead. CI caught a test of mine that assumed reuse,
+// on the race job, where the different scheduling made the miss likely.
+//
+// So this reports whether reuse actually happened, and the caller decides what
+// that means. The bug is real; observing it is probabilistic.
+func forgettingResetLeaksData() (first, second string, reused bool) {
 	pool := sync.Pool{New: func() any { return new(bytes.Buffer) }}
 
 	// Caller 1 writes and returns the buffer WITHOUT resetting.
@@ -83,12 +91,27 @@ func forgettingResetLeaksData() (first, second string) {
 	first = buf.String()
 	pool.Put(buf) // no Reset
 
-	// Caller 2 gets the same buffer, with caller 1's data still in it.
+	// Caller 2 may or may not get the same buffer back.
 	buf2 := pool.Get().(*bytes.Buffer)
+	reused = buf == buf2
+
 	buf2.WriteString("user-2-data")
 	second = buf2.String()
 
-	return first, second
+	return first, second, reused
+}
+
+// leakIsObservable retries until reuse happens, so a test can assert the
+// consequence rather than the scheduling. It returns the leaked content once
+// the pool actually hands the buffer back.
+func leakIsObservable(attempts int) (leaked string, observed bool) {
+	for i := 0; i < attempts; i++ {
+		_, second, reused := forgettingResetLeaksData()
+		if reused {
+			return second, true
+		}
+	}
+	return "", false
 }
 
 // gcClearsThePool is the property that rules out using it as a resource pool.
@@ -130,10 +153,14 @@ func demoPools() {
 	fmt.Printf("  renderWithoutPool: %s\n", renderWithoutPool(rows))
 	fmt.Println("  ...identical output; `go test -bench BenchmarkRender -benchmem` shows the difference")
 
-	first, second := forgettingResetLeaksData()
 	fmt.Printf("\n  forgetting Reset before Put:\n")
-	fmt.Printf("    caller 1 wrote: %q\n", first)
-	fmt.Printf("    caller 2 got:   %q   <- caller 1's data is still there\n", second)
+	if leaked, observed := leakIsObservable(100); observed {
+		fmt.Printf("    caller 1 wrote: %q\n", "user-1-secret")
+		fmt.Printf("    caller 2 got:   %q   <- caller 1's data is still there\n", leaked)
+	} else {
+		fmt.Println("    the pool did not hand the buffer back in 100 attempts")
+	}
+	fmt.Println("    (Get is not guaranteed to return what you Put: it is a per-P cache)")
 
 	beforeGC, afterGC := gcClearsThePool()
 	fmt.Printf("\n  pool contents survive a Get: %t\n", beforeGC)

@@ -4,6 +4,31 @@ Things that did not go according to plan while building this repo, written down
 when they happened. The counterpart to `PLAN.md`, which is scratch and never
 committed. This file is committed and stays.
 
+## 2026-09-25 — Go's growable stacks make the recursion-depth worry misplaced
+
+**Expected:** the recursive-descent parser in lesson 05 would need a depth cap
+before it could be called safe, and the fuzz target would find a stack overflow
+given enough deeply nested input. I was ready to write a "always bound your
+recursion" section.
+
+**What happened:** 25 seconds of fuzzing, 5.3 million executions, nothing
+escaped. Probing depth directly: 100, 1000, 10,000, 100,000 and **1,000,000**
+levels of nested parentheses all parsed correctly, the last in 0.23s. Go starts
+each goroutine on an 8KB stack and grows it by copying, to a 1GB default
+maximum. Python's default recursion limit is 1000 and C's stack is fixed at 8MB;
+neither intuition transfers.
+
+**Next time:** check the runtime's actual limits before writing the warning. The
+section that went into the README is more useful than the one I was going to
+write, because it says where the real risk is: a million-level parse is a denial
+of service long before it is a crash, and `fatal error: stack overflow` at the
+1GB ceiling is not recoverable. The cap is worth having for time, not for
+safety, and saying that precisely is worth more than "bound your recursion".
+
+Also worth recording: the fuzz target was the thing that made this checkable at
+all. `_, _ = Eval(input)` with no assertion beyond "this returns" is a complete
+test of a boundary whose only contract is that panics do not escape it.
+
 ## 2026-09-25 — `./...` matches nothing from a Go workspace root
 
 **Expected:** `go vet ./...` from the repo root would cover every module,

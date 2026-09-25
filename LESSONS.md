@@ -4,6 +4,42 @@ Things that did not go according to plan while building this repo, written down
 when they happened. The counterpart to `PLAN.md`, which is scratch and never
 committed. This file is committed and stays.
 
+## 2026-09-25 — Context deadlines do not cross an HTTP hop; only cancellation does
+
+**Expected:** I wrote lesson 10's README claiming that chaining `r.Context()`
+into an outbound `http.NewRequestWithContext` propagates the caller's deadline,
+so "the caller's remaining budget becomes the callee's budget". Then I wrote a
+demo, `budgetPropagatesAcrossAHop`, to show it.
+
+**What happened:** the demo reported the downstream service had been handed
+`~0s`. I assumed a bug in my measurement and wrote a twenty-line standalone
+program to check. It was not a bug:
+
+```
+CLIENT: has deadline=true,  2026-09-25 15:57:20 ...
+SERVER: has deadline=false, 0001-01-01 00:00:00 UTC
+```
+
+HTTP has no standard header for a deadline, so nothing carries it. What DOES
+cross is cancellation: the client aborting closes the connection and the
+server's request context is cancelled. Those are different guarantees. With
+cancellation alone a downstream service works at full cost until the caller
+hangs up; with the deadline it knows its budget on arrival and can refuse.
+
+gRPC propagates it with a `grpc-timeout` header, which is a concrete, specific
+reason gRPC is nicer for service-to-service calls than plain HTTP, and I now
+have a demo rather than a claim.
+
+**Next time:** the README sentence came from general knowledge and felt obviously
+true. The thing that caught it was writing a demo that printed a NUMBER rather
+than a pass/fail. A test asserting "the downstream had a deadline" would have
+failed and I would have debugged the test. Printing `~0s` next to an expectation
+of `~198ms` pointed straight at the claim instead.
+
+The lesson's HTTP section now shows both: the plain hop losing the deadline, and
+a header-based propagation with the server clamping the caller's claim to its
+own maximum, because a header is untrusted input.
+
 ## 2026-09-25 — A buffered channel turned a counter benchmark into a queue benchmark
 
 **Expected:** `channelCounter` gave its increment channel a buffer of 64,

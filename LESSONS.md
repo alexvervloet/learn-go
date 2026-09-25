@@ -4,6 +4,48 @@ Things that did not go according to plan while building this repo, written down
 when they happened. The counterpart to `PLAN.md`, which is scratch and never
 committed. This file is committed and stays.
 
+## 2026-09-25 — The lesson about benchmarks lying contained a lying benchmark
+
+**Expected:** lesson 17 documents three ways a benchmark misleads, the first
+being "the two sides do different work". I wrote that section, wrote the
+defence (a test asserting both sides produce identical output), and benchmarked
+four string-joining implementations against `strings.Join`.
+
+**What happened:** the hand-written presized `strings.Builder` came out at
+**373 ns** against `strings.Join`'s **710 ns**. A 1.9x win for four lines of
+code over the standard library, which is the sort of result that should be
+suspicious and which I nearly wrote up as a finding.
+
+The agreement test passed, because with an empty separator the output IS
+identical. The work was not: `strings.Join` runs a separator branch on every
+element, and my version had no separator at all.
+
+Adding one that handles a separator, and comparing like for like:
+
+| | ns/op |
+|---|---|
+| hand-written, no separator | 373 |
+| `strings.Join(parts, "")` | 710 |
+| hand-written, with separator | 675 |
+| `strings.Join(parts, ",")` | 707 |
+
+**1.05x. Noise.** The entire result was the missing feature.
+
+**Next time:** the defence I had written down is not strong enough, and I now
+know why because it failed on me. "Assert the two sides produce identical
+output" catches the crude version of this lie and misses the interesting one:
+two functions can agree on every input in the benchmark and still do different
+amounts of work, because one handles a case the input never exercises.
+
+The better question is **"do these two do the same job?"**, and nothing
+automates it. What does help: treating a large win over the standard library as
+a hypothesis rather than a result. The stdlib is not always fastest, and when a
+four-line replacement beats it by 1.9x the first suspect is the benchmark.
+
+Four for four now: every time this repo has claimed a performance result
+without a fair comparison, the comparison was the problem. `appendGrowing`, the
+buffered channel counter, `fmt` vs `strconv`, and now this.
+
 ## 2026-09-25 — I wrote "nothing catches this", and the linter caught it in the same file
 
 **Expected:** lesson 14 warns about `// go:embed` with a space, which makes the

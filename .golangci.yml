@@ -30,12 +30,15 @@ linters:
         - name: package-comments
           disabled: true # every lesson is package main; one doc comment per folder is enough
 
-  exclusions:
-    rules:
-      # Teaching code deliberately ignores errors in printf-style demos where
-      # handling them would bury the point being made.
-      - path: 'go-concepts/'
-        linters: [errcheck]
+    goconst:
+      # Demo fixtures repeat sample names ("Ana", "alice@example.com") across a
+      # handful of examples in one file. At the default threshold of 3 that is
+      # pure noise, and hoisting a constant would make the examples harder to
+      # read, not easier. Five is high enough that a genuine magic string still
+      # gets caught.
+      min-occurrences: 5
+      min-len: 4
+      ignore-tests: true
 
 formatters:
   enable:

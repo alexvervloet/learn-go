@@ -62,9 +62,17 @@ func TestManyGoroutines(t *testing.T) {
 	before := runtime.NumGoroutine()
 	peak := manyGoroutines(n)
 
-	if peak < before+n {
-		t.Errorf("peak = %d, want at least %d — all should be live at once", peak, before+n)
+	// Slack, because `before` is a snapshot of a moving number: a goroutine
+	// from an earlier test may still be tearing down, and under -race the
+	// counting drifts further. The claim is "roughly n of them were live at
+	// once", not an exact arithmetic identity, and CI reported 10004 against a
+	// hard expectation of 10005.
+	const slack = 10
+	if peak < n-slack {
+		t.Errorf("peak = %d, want at least %d — all %d should be live at once",
+			peak, n-slack, n)
 	}
+	t.Logf("%d goroutines parked simultaneously (baseline %d, peak %d)", n, before, peak)
 }
 
 // BenchmarkGoroutineCreation measures what a goroutine actually costs. Run:

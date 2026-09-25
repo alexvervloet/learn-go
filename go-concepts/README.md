@@ -36,7 +36,7 @@ Work them in order. Each one assumes the ones before it.
 | 02 | [slices-and-maps](02-slices-and-maps/) | The slice header, the append aliasing trap, randomised map order, `slices`/`maps` | ✅ |
 | 03 | [interfaces](03-interfaces/) | Structural typing, consumer-defined interfaces, the typed-nil trap, method sets, `io.Writer` | ✅ |
 | 04 | [errors](04-errors/) | `%w` vs `%v`, sentinels, `errors.Is`/`As`, `errors.Join`, retry, deferred close | ✅ |
-| 05 | defer-panic-recover | `defer` ordering, argument evaluation, `recover`, when panicking is correct | ⬜ |
+| 05 | [defer-panic-recover](05-defer-panic-recover/) | `defer` ordering, argument evaluation, `recover` placement, panic boundaries, fuzzing | ✅ |
 | 06 | goroutines | The scheduler, goroutine leaks, `GOMAXPROCS` | ⬜ |
 | 07 | channels | Buffered vs unbuffered, direction, closing, range over a channel | ⬜ |
 | 08 | select-and-timeouts | `select`, timeouts, fan-in, fan-out, worker pools, pipelines | ⬜ |

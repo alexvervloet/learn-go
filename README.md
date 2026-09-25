@@ -20,7 +20,7 @@ tests clean on Go 1.27.
 
 | Area | Status |
 |---|---|
-| [go-concepts/](go-concepts/) | 🟡 4 of 18 lessons |
+| [go-concepts/](go-concepts/) | 🟡 5 of 18 lessons |
 | dsa/ | ⬜ not started |
 | backends/learning/ | ⬜ not started |
 | backends/ capstones | ⬜ not started |

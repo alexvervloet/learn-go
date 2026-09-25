@@ -325,6 +325,27 @@ Three failures, one root cause. When a concurrency test fails only on CI, the
 question to ask first is not "what is different about that machine" but **"what
 exactly does the spec promise here, and am I asserting more than that?"**
 
+### A fourth, from lesson 18, on Windows
+
+```
+--- FAIL: TestMeasureGCImpactTakesTheBest
+    pressure_test.go:62: measured 0s, want a positive duration
+```
+
+The test asserted that timing a garbage collection returns a duration greater
+than zero. On Windows the clock resolution is coarser than a collection of 100
+items, so `time.Since` returns exactly `0s`.
+
+A monotonic clock promises that time does not go backwards. It promises nothing
+about granularity, so "faster than the clock can measure" is a legitimate
+result, not a failure. The test now asserts `>= 0` and logs the value, with a
+second test at a million items where the duration is comfortably measurable on
+any platform.
+
+Same root cause as the other three, and the fourth time it has been the answer.
+The pattern is now the first thing to check whenever a test fails only on one
+platform.
+
 ## 2026-09-25 — The range-over-func contract is enforced, not just documented
 
 **Expected:** writing lesson 11's iterator section, I described a producer that

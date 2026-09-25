@@ -39,7 +39,7 @@ Work them in order. Each one assumes the ones before it.
 | 05 | [defer-panic-recover](05-defer-panic-recover/) | `defer` ordering, argument evaluation, `recover` placement, panic boundaries, fuzzing | ✅ |
 | 06 | [goroutines](06-goroutines/) | Cost, the G-M-P scheduler, `GOMAXPROCS`, the three leak shapes, loop variables | ✅ |
 | 07 | [channels](07-channels/) | Unbuffered handshake, closing rules, directional types, five patterns, six deadlocks | ✅ |
-| 08 | select-and-timeouts | `select`, timeouts, fan-in, fan-out, worker pools, pipelines | ⬜ |
+| 08 | [select-and-timeouts](08-select-and-timeouts/) | Random choice, `default`, timer leaks, nil cases, pipelines, worker pools | ✅ |
 | 09 | sync-primitives | `Mutex`, `RWMutex`, `WaitGroup`, `Once`, `atomic`, `errgroup` | ⬜ |
 | 10 | context | Cancellation, deadlines, values, the propagation rules | ⬜ |
 | 11 | generics | Type parameters, constraints, inference, when not to use them | ⬜ |

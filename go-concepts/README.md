@@ -28,28 +28,29 @@ a race is undefined behaviour rather than a slightly wrong number.
 
 ## The lessons
 
-Work them in order. Each one assumes the ones before it.
+Work them in order. Each one assumes the ones before it. All eighteen build,
+vet, lint and test clean on Go 1.27, and every claim in a README has a test.
 
-| # | Lesson | Covers | Status |
-|---|---|---|---|
-| 01 | [types-and-zero-values](01-types-and-zero-values/) | Zero values, nil map vs nil slice, declarations, shadowing, `iota`, conversions | ✅ |
-| 02 | [slices-and-maps](02-slices-and-maps/) | The slice header, the append aliasing trap, randomised map order, `slices`/`maps` | ✅ |
-| 03 | [interfaces](03-interfaces/) | Structural typing, consumer-defined interfaces, the typed-nil trap, method sets, `io.Writer` | ✅ |
-| 04 | [errors](04-errors/) | `%w` vs `%v`, sentinels, `errors.Is`/`As`, `errors.Join`, retry, deferred close | ✅ |
-| 05 | [defer-panic-recover](05-defer-panic-recover/) | `defer` ordering, argument evaluation, `recover` placement, panic boundaries, fuzzing | ✅ |
-| 06 | [goroutines](06-goroutines/) | Cost, the G-M-P scheduler, `GOMAXPROCS`, the three leak shapes, loop variables | ✅ |
-| 07 | [channels](07-channels/) | Unbuffered handshake, closing rules, directional types, five patterns, six deadlocks | ✅ |
-| 08 | [select-and-timeouts](08-select-and-timeouts/) | Random choice, `default`, timer leaks, nil cases, pipelines, worker pools | ✅ |
-| 09 | [sync-primitives](09-sync-primitives/) | `Mutex`, `RWMutex`, `WaitGroup`, `Once`, atomics, `sync.Map`, `sync.Pool`, errgroup | ✅ |
-| 10 | [context](10-context/) | Cancellation, deadlines, the tree, `Cause`, values, HTTP, the six mistakes | ✅ |
-| 11 | [generics](11-generics/) | Type parameters, constraints and `~`, generic types, containers, `iter.Seq`, measured costs | ✅ |
-| 12 | [struct-tags-and-reflection](12-struct-tags-and-reflection/) | Tag syntax, `omitempty` vs `omitzero`, `Type`/`Kind`, settability, a tag-driven validator | ✅ |
-| 13 | [io-composition](13-io-composition/) | The Read/Write contracts, `io.Copy` fast paths, the combinators, `bufio`, `io.Pipe` | ✅ |
-| 14 | [embed-and-build-tags](14-embed-and-build-tags/) | `go:embed` and its traps, `embed.FS` as `fs.FS`, platform files, custom tags, cross-compilation | ✅ |
-| 15 | [modules-and-workspaces](15-modules-and-workspaces/) | `go.mod` directives, semantic import versioning, minimal version selection, `go.work` and its traps | ✅ |
-| 16 | [race-detector](16-race-detector/) | Five race shapes and their fixes, safe code that looks racy, what `-race` cannot see, reading a report | ✅ |
-| 17 | [benchmarks-and-pprof](17-benchmarks-and-pprof/) | `b.Loop`, the three ways a benchmark lies, allocation sources measured, pprof, `net/http/pprof` safely | ✅ |
-| 18 | memory-and-escape-analysis | Stack vs heap, `-gcflags=-m`, GC tuning | ⬜ |
+| # | Lesson | Covers |
+|---|---|---|
+| 01 | [types-and-zero-values](01-types-and-zero-values/) | Zero values, nil map vs nil slice, declarations, shadowing, `iota`, conversions |
+| 02 | [slices-and-maps](02-slices-and-maps/) | The slice header, the append aliasing trap, randomised map order, `slices`/`maps` |
+| 03 | [interfaces](03-interfaces/) | Structural typing, consumer-defined interfaces, the typed-nil trap, method sets, `io.Writer` |
+| 04 | [errors](04-errors/) | `%w` vs `%v`, sentinels, `errors.Is`/`As`, `errors.Join`, retry, deferred close |
+| 05 | [defer-panic-recover](05-defer-panic-recover/) | `defer` ordering, argument evaluation, `recover` placement, panic boundaries, fuzzing |
+| 06 | [goroutines](06-goroutines/) | Cost, the G-M-P scheduler, `GOMAXPROCS`, the three leak shapes, loop variables |
+| 07 | [channels](07-channels/) | Unbuffered handshake, closing rules, directional types, five patterns, six deadlocks |
+| 08 | [select-and-timeouts](08-select-and-timeouts/) | Random choice, `default`, timer leaks, nil cases, pipelines, worker pools |
+| 09 | [sync-primitives](09-sync-primitives/) | `Mutex`, `RWMutex`, `WaitGroup`, `Once`, atomics, `sync.Map`, `sync.Pool`, errgroup |
+| 10 | [context](10-context/) | Cancellation, deadlines, the tree, `Cause`, values, HTTP, the six mistakes |
+| 11 | [generics](11-generics/) | Type parameters, constraints and `~`, generic types, containers, `iter.Seq`, measured costs |
+| 12 | [struct-tags-and-reflection](12-struct-tags-and-reflection/) | Tag syntax, `omitempty` vs `omitzero`, `Type`/`Kind`, settability, a tag-driven validator |
+| 13 | [io-composition](13-io-composition/) | The Read/Write contracts, `io.Copy` fast paths, the combinators, `bufio`, `io.Pipe` |
+| 14 | [embed-and-build-tags](14-embed-and-build-tags/) | `go:embed` and its traps, `embed.FS` as `fs.FS`, platform files, custom tags, cross-compilation |
+| 15 | [modules-and-workspaces](15-modules-and-workspaces/) | `go.mod` directives, semantic import versioning, minimal version selection, `go.work` and its traps |
+| 16 | [race-detector](16-race-detector/) | Five race shapes and their fixes, safe code that looks racy, what `-race` cannot see, reading a report |
+| 17 | [benchmarks-and-pprof](17-benchmarks-and-pprof/) | `b.Loop`, the three ways a benchmark lies, allocation sources measured, pprof, `net/http/pprof` safely |
+| 18 | [memory-and-escape-analysis](18-memory-and-escape-analysis/) | Stack vs heap, `-gcflags=-m`, stack growth, the collector, pointer density |
 
 ## How these are laid out
 

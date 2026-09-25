@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // TestTypedNilTrap pins the bug in place. If a future Go release ever changed
 // interface nil-ness (it will not; this is specified behaviour), this test
@@ -90,6 +93,34 @@ func TestIsTypedNil(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := isTypedNil(tt.in); got != tt.want {
 				t.Errorf("isTypedNil(%#v) = %t, want %t", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestDescribeInterface covers the diagnostic that renders an interface's two
+// words, which is what makes the typed-nil demo legible.
+func TestDescribeInterface(t *testing.T) {
+	var nilPtr *ValidationError
+
+	tests := []struct {
+		name     string
+		in       any
+		contains []string
+	}{
+		{"untyped nil", nil, []string{"type=<nil>", "TRUE"}},
+		{"typed nil pointer", nilPtr, []string{"*main.ValidationError", "value=<nil>", "FALSE"}},
+		{"real value", &ValidationError{Field: "x"}, []string{"*main.ValidationError", "value=<set>", "FALSE"}},
+		{"non-pointer value", 42, []string{"type=int", "value=<set>", "FALSE"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := describeInterface(tt.in)
+			for _, want := range tt.contains {
+				if !strings.Contains(got, want) {
+					t.Errorf("describeInterface(%v) = %q, want it to contain %q", tt.in, got, want)
+				}
 			}
 		})
 	}

@@ -4,6 +4,42 @@ Things that did not go according to plan while building this repo, written down
 when they happened. The counterpart to `PLAN.md`, which is scratch and never
 committed. This file is committed and stays.
 
+## 2026-09-25 — sync.Pool.Get is not guaranteed to return what you just Put
+
+**Expected:** the `sync.Pool` demo in lesson 09 puts a buffer back without
+resetting it, gets one, and shows the first caller's data still in it. A test
+asserted that leak directly. It passed locally, repeatedly, with and without
+`-race`.
+
+**What happened:** it failed on CI, on the race job only, seven of eight jobs
+green:
+
+```
+--- FAIL: TestForgettingResetLeaksData
+    pools_test.go:80: second = "user-2-data", want it to still contain
+                      the first caller's data
+```
+
+My first guess was that `-race` disables pool reuse. I wrote a twenty-line
+program to check and the guess was wrong: it reuses fine under `-race`.
+
+The actual reason is the pool's design. `sync.Pool` is a **per-P cache**. `Put`
+stores into the current processor's slot; `Get` reads from the current
+processor's slot. If the goroutine is rescheduled onto a different P between the
+two, or a GC runs, `Get` misses and calls `New`. Race instrumentation changes
+the timing enough to make that likely.
+
+**Next time:** the test was asserting the scheduling, not the behaviour. The
+behaviour is "a buffer that comes back from the pool still has its old
+contents"; whether it comes back at all is the runtime's business. The fix
+retries until reuse is actually observed and then asserts the consequence,
+skipping with a note if 200 attempts never produce one.
+
+This is the same shape as the map-iteration and parallel-speedup entries above:
+**assert what the API guarantees, and treat everything else as an observation.**
+Three times now, which suggests it is the default mistake rather than an
+occasional one.
+
 ## 2026-09-25 — encoding/json beat my hand-written encoder
 
 **Expected:** lesson 12's README said reflection costs roughly an order of

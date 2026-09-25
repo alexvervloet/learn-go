@@ -187,6 +187,14 @@ one it removes the allocation entirely and the function gets 23 times faster.
 Profile first: a pool added to a path that was not allocation-bound is pure
 complexity, and one that forgets `Reset` is a data leak between requests.
 
+One property that catches people writing tests: **`Get` is not guaranteed to
+return what you just `Put`.** A `sync.Pool` is a per-processor cache. If the
+goroutine moves to another P between the `Put` and the `Get`, or a GC runs in
+between, `Get` misses and calls `New`. A test of mine assumed reuse, passed
+locally and on seven of eight CI jobs, and failed on the race job where the
+scheduling differs. `leakIsObservable` in `pools.go` retries until reuse
+actually happens, which is the honest way to test something probabilistic.
+
 One rule the type system will not enforce for you: **`Reset` before `Put`,
 always.** A buffer returned with content in it hands that content to the next
 caller. In a web service that is one user's data in another user's response,

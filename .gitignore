@@ -1,0 +1,44 @@
+# Compiled binaries — every module builds to its own folder name by default,
+# so there is no single pattern that catches them. These are the ones this
+# repo produces.
+bin/
+dist/
+*.exe
+*.test
+*.out
+
+# Go build and module caches live outside the repo, but `go work vendor`
+# and `go mod vendor` write here.
+vendor/
+
+# Coverage and profiling artifacts
+coverage.out
+coverage.html
+*.prof
+cpu.pprof
+mem.pprof
+
+# Generated code — regenerate rather than commit.
+# gRPC stubs:   backends/learning/grpc-concepts/generate_protos.sh
+# sqlc queries: `sqlc generate` in each database module
+# gqlgen:       `go run github.com/99designs/gqlgen generate`
+*.pb.go
+*_grpc.pb.go
+
+# Environment / secrets
+.env
+.env.local
+
+# Local databases created by the demos
+*.db
+*.sqlite
+*.sqlite3
+
+# Editors / OS
+.DS_Store
+.vscode/
+.idea/
+.history/
+
+# Scratch plan — see the global convention; this file is never committed.
+PLAN.md

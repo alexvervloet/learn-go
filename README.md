@@ -59,7 +59,7 @@ Adding a module:
 
 ```bash
 mkdir backends/learning/whatever && cd $_
-go mod init github.com/alexvervloet/learning-go-backends/backends/learning/whatever
+go mod init github.com/alexvervloet/learn-go/backends/learning/whatever
 cd ../../.. && go work use ./backends/learning/whatever
 ```
 

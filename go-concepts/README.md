@@ -48,7 +48,7 @@ Work them in order. Each one assumes the ones before it.
 | 14 | [embed-and-build-tags](14-embed-and-build-tags/) | `go:embed` and its traps, `embed.FS` as `fs.FS`, platform files, custom tags, cross-compilation | ✅ |
 | 15 | [modules-and-workspaces](15-modules-and-workspaces/) | `go.mod` directives, semantic import versioning, minimal version selection, `go.work` and its traps | ✅ |
 | 16 | [race-detector](16-race-detector/) | Five race shapes and their fixes, safe code that looks racy, what `-race` cannot see, reading a report | ✅ |
-| 17 | benchmarks-and-pprof | `testing.B`, `b.Loop`, allocation counts, CPU and heap profiles | ⬜ |
+| 17 | [benchmarks-and-pprof](17-benchmarks-and-pprof/) | `b.Loop`, the three ways a benchmark lies, allocation sources measured, pprof, `net/http/pprof` safely | ✅ |
 | 18 | memory-and-escape-analysis | Stack vs heap, `-gcflags=-m`, GC tuning | ⬜ |
 
 ## How these are laid out

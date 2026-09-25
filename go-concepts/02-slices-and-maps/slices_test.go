@@ -172,3 +172,39 @@ func BenchmarkAppendPreallocated(b *testing.B) {
 		preallocated(1000)
 	}
 }
+
+func TestDescribe(t *testing.T) {
+	tests := []struct {
+		name string
+		xs   []int
+		want string
+	}{
+		{"nil slice", nil, "xs=[] len=0 cap=0"},
+		{"literal", []int{1, 2, 3}, "xs=[1 2 3] len=3 cap=3"},
+		{"with spare capacity", make([]int, 2, 8), "xs=[0 0] len=2 cap=8"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := describe("xs", tt.xs); got != tt.want {
+				t.Errorf("describe() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestAppendMustBeAssigned covers the correctly-written form. The broken form
+// lives in the README rather than here, because `go vet` rejects a discarded
+// append and the package would not build.
+func TestAppendMustBeAssigned(t *testing.T) {
+	got := appendMustBeAssigned()
+
+	if want := []int{1, 2}; !slices.Equal(got, want) {
+		t.Errorf("appendMustBeAssigned() = %v, want %v", got, want)
+	}
+	// The second append exceeded the initial cap of 1, so it reallocated. The
+	// result is only correct because the return value was kept.
+	if cap(got) < 2 {
+		t.Errorf("cap = %d, want at least 2", cap(got))
+	}
+}

@@ -34,35 +34,50 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.27"
-          # setup-go caches the module and build caches keyed on every go.sum
-          # in the repo. With a workspace of many modules that is exactly the
-          # right key: adding a dependency anywhere invalidates it.
+          # setup-go keys its cache on every go.sum in the repo, which is the
+          # right key for a workspace: adding a dependency anywhere
+          # invalidates it. Until a module has dependencies there is no go.sum
+          # and the step logs "Dependencies file is not found". That warning is
+          # expected here and resolves itself once the backend modules land.
           cache: true
 
       # gofmt is not a style preference in Go, it is the format. There is one
       # correct output per file, so this is a hard failure rather than advice.
+      # Every step below runs the same Makefile target you would run locally,
+      # so a green `make check` on your machine means something. Spelling the
+      # commands out twice is how CI and local drift apart.
+      #
+      # gofmt is not a style preference in Go, it is the format: one correct
+      # output per file. So this is a hard failure rather than advice.
       - name: Check formatting
-        run: |
-          unformatted=$(gofmt -l .)
-          if [ -n "$unformatted" ]; then
-            echo "These files are not gofmt'd:"
-            echo "$unformatted"
-            echo
-            echo "Fix with: make fmt"
-            exit 1
-          fi
+        run: make fmt-check
 
-      # go vet ships with the toolchain and catches a specific set of real bugs:
-      # printf verbs that do not match their arguments, unreachable code,
+      # go vet ships with the toolchain and catches a specific set of real
+      # bugs: printf verbs that do not match their arguments, unreachable code,
       # struct tags that will not parse, locks copied by value.
       - name: Vet
-        run: go vet $(go list -m -f '{{.Dir}}/...')
+        run: make vet
 
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: latest
-          args: --timeout=5m $(go list -m -f '{{.Dir}}/...')
+      # golangci-lint is installed with `go install` rather than through
+      # golangci/golangci-lint-action. Two reasons, both learned the hard way
+      # on this workflow's first run:
+      #
+      #  1. The action's `version: latest` resolves to the v1 line, which
+      #     cannot read a v2-format .golangci.yml and fails with
+      #     "can't load config".
+      #  2. Its prebuilt binary is compiled with an older Go than this module
+      #     targets, which it refuses outright: "the Go language version
+      #     (go1.24) used to build golangci-lint is lower than the targeted Go
+      #     version". Building from source uses the toolchain set up above, so
+      #     the two can never disagree.
+      #
+      # A third trap, unrelated to the action: `$(...)` inside an action's
+      # `with: args:` is NOT expanded by a shell. It arrives literally.
+      - name: Install golangci-lint
+        run: make tools
+
+      - name: Lint
+        run: make lint
 
   # ---------------------------------------------------------------------------
   # Test — matrix across the two supported Go versions and both major OSes.

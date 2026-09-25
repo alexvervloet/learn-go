@@ -4,6 +4,40 @@ Things that did not go according to plan while building this repo, written down
 when they happened. The counterpart to `PLAN.md`, which is scratch and never
 committed. This file is committed and stays.
 
+## 2026-09-25 — The range-over-func contract is enforced, not just documented
+
+**Expected:** writing lesson 11's iterator section, I described a producer that
+ignores `yield`'s return value as a silent waste: the loop would still exit
+because the compiler's yield returns false forever, but the producer would keep
+computing elements nobody wanted. I wrote that into a doc comment and built a
+demo to count the wasted work.
+
+**What happened:** the demo crashed the program.
+
+```
+panic: runtime error: range function continued iteration after
+       function for loop body returned false
+```
+
+The compiler rewrites a `for ... range f` body into a yield function that tracks
+whether the loop has exited, and the generated code panics on the second call
+after it returned false. So the contract is checked at runtime, every time, and
+a badly written iterator fails loudly at its first mistake instead of quietly
+doing extra work.
+
+**Next time:** this is the third time in this build that running the demo
+corrected the prose (see the `sync.Map` and HTTP-deadline entries). The pattern
+is now unambiguous enough to state as a rule for the rest of the repo:
+
+**Write the demo before the paragraph.** Not after it as an illustration. The
+paragraph is a guess until something has executed, and a guess that sounds
+plausible is exactly the kind that survives review.
+
+The corrected version is better material anyway. "The runtime catches this and
+tells you precisely what you did" is more useful to a reader than "be careful to
+return when yield says false", and it is the sort of thing you only find by
+getting it wrong in front of a compiler.
+
 ## 2026-09-25 — Context deadlines do not cross an HTTP hop; only cancellation does
 
 **Expected:** I wrote lesson 10's README claiming that chaining `r.Context()`

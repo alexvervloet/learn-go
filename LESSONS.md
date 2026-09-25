@@ -4,6 +4,48 @@ Things that did not go according to plan while building this repo, written down
 when they happened. The counterpart to `PLAN.md`, which is scratch and never
 committed. This file is committed and stays.
 
+## 2026-09-25 — The race detector found a race in the lesson about races
+
+**Expected:** `mainDoesNotWait` in lesson 06 was already careful. Every
+goroutine incremented the counter with `atomic.AddInt32`, and the function read
+it with `atomic.LoadInt32`. Every access went through an atomic operation, so
+`go test -race` would be clean.
+
+**What happened:**
+
+```
+WARNING: DATA RACE
+Write at 0x00c0002a211c by goroutine 2321:
+  sync/atomic.AddInt32()
+Previous write at 0x00c0002a211c by goroutine 2224:
+  ...mainDoesNotWait()
+      starting.go:71
+```
+
+Line 71 was `return atomic.LoadInt32(&finished)`. The signature was
+`func mainDoesNotWait(n int) (finished int32)` — a **named** return. `return x`
+against a named return is `finished = x; return`, and that assignment is a plain
+non-atomic write to the very variable the goroutines are still incrementing.
+
+The atomic calls were never the problem. The return statement was, and it does
+not look like an access at all.
+
+**Next time:** two things.
+
+- **Atomics protect the accesses that go through them, and nothing else.** One
+  ordinary read or write of the same variable reintroduces the race. A named
+  return is an ordinary write hiding inside `return`.
+- **Use `atomic.Int32` rather than `atomic.AddInt32(&x, 1)`.** The method form
+  keeps the underlying integer unexported, so there is no way to touch it
+  non-atomically by accident. The free functions take a `*int32` that anything
+  can also read directly, which is exactly how this happened. Both files now use
+  the method form.
+
+The honest note: I wrote this function, reviewed it, ran it, and shipped it into
+a lesson whose README says data races are undefined behaviour. `-race` caught it
+in under a second. That is the argument for the race job in CI, made better than
+any paragraph I could write.
+
 ## 2026-09-25 — CI found three things a green local run could not
 
 **Expected:** the first push would be green. `make check` passed locally:

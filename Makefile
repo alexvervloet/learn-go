@@ -87,9 +87,14 @@ tidy:
 		(cd $$mod && go mod tidy); \
 	done
 
-## tools: install the developer tools this repo expects
+# Pinned rather than @latest. CI installs this too, and an unpinned linter
+# means a new release can turn a green branch red without anyone touching the
+# code. Bump deliberately, see what it finds, commit the bump on its own.
+GOLANGCI_VERSION := v2.14.0
+
+## tools: install the developer tools this repo expects, at pinned versions
 tools:
-	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_VERSION)
 
 ## check: everything CI runs, in CI's order
 check: fmt-check vet lint test

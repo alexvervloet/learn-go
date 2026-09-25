@@ -96,8 +96,24 @@ GOLANGCI_VERSION := v2.14.0
 tools:
 	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_VERSION)
 
+## tidy-check: fail if go.mod or go.sum is stale (Go 1.23+)
+tidy-check:
+	@for mod in $$(go list -m -f '{{.Dir}}'); do \
+		echo "tidy -diff $$mod"; \
+		(cd $$mod && go mod tidy -diff) || exit 1; \
+	done
+	@echo "every go.mod is tidy"
+
+## isolated-check: build each module with GOWORK=off, as a consumer would
+isolated-check:
+	@for mod in $$(go list -m -f '{{.Dir}}'); do \
+		echo "GOWORK=off build $$mod"; \
+		(cd $$mod && GOWORK=off go build ./...) || exit 1; \
+	done
+	@echo "every module builds without the workspace"
+
 ## check: everything CI runs, in CI's order
-check: fmt-check vet lint test
+check: fmt-check vet lint tidy-check isolated-check test
 
 ## clean: remove build and coverage artifacts
 clean:
@@ -105,4 +121,4 @@ clean:
 	rm -f coverage.out coverage.html
 
 .PHONY: help build test test-v test-race test-count cover cover-summary bench \
-        vet lint lint-fix fmt fmt-check tidy tools check clean
+        vet lint lint-fix fmt fmt-check tidy tidy-check isolated-check tools check clean

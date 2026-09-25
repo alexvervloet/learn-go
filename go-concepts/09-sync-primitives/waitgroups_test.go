@@ -20,6 +20,17 @@ func TestCorrectWaitGroup(t *testing.T) {
 
 // TestAddInsideTheGoroutineIsUnreliable asserts that the bug is a bug. It does
 // NOT assert a particular count, because the count is the outcome of a race.
+//
+// It also has to survive a PANIC, which CI taught me. On macOS the race
+// produced:
+//
+//	panic: sync: WaitGroup is reused before previous Wait has returned
+//
+// rather than a short count. That is the same bug wearing a different hat: Wait
+// returned early, the function returned, and a goroutine then called Add on a
+// WaitGroup that was already being reused. Both outcomes are evidence, so the
+// test accepts either and fails only if the code is reliably correct, which
+// would mean the example had stopped demonstrating anything.
 func TestAddInsideTheGoroutineIsUnreliable(t *testing.T) {
 	if testing.Short() {
 		t.Skip("racy by design")
@@ -32,19 +43,28 @@ func TestAddInsideTheGoroutineIsUnreliable(t *testing.T) {
 
 	const n = 1000
 
-	sawShortCount := false
+	// runOnce returns the count, or -1 if the race panicked.
+	runOnce := func() (result int) {
+		defer func() {
+			if r := recover(); r != nil {
+				result = -1
+			}
+		}()
+		return addInsideTheGoroutineRaces(n)
+	}
+
 	for run := 0; run < 20; run++ {
-		got := addInsideTheGoroutineRaces(n)
-		if got < n {
-			sawShortCount = true
+		switch got := runOnce(); {
+		case got == -1:
+			t.Logf("run %d: the race panicked, which is the same bug", run)
+			return
+		case got < n:
 			t.Logf("run %d: Wait returned with %d of %d counted", run, got, n)
-			break
+			return
 		}
 	}
 
-	if !sawShortCount {
-		t.Skip("Wait never returned early on this machine; the race is still present")
-	}
+	t.Skip("the race did not surface on this machine; it is still present")
 }
 
 func TestMissingDoneBlocksWait(t *testing.T) {

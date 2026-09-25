@@ -38,7 +38,7 @@ Work them in order. Each one assumes the ones before it.
 | 04 | [errors](04-errors/) | `%w` vs `%v`, sentinels, `errors.Is`/`As`, `errors.Join`, retry, deferred close | ✅ |
 | 05 | [defer-panic-recover](05-defer-panic-recover/) | `defer` ordering, argument evaluation, `recover` placement, panic boundaries, fuzzing | ✅ |
 | 06 | [goroutines](06-goroutines/) | Cost, the G-M-P scheduler, `GOMAXPROCS`, the three leak shapes, loop variables | ✅ |
-| 07 | channels | Buffered vs unbuffered, direction, closing, range over a channel | ⬜ |
+| 07 | [channels](07-channels/) | Unbuffered handshake, closing rules, directional types, five patterns, six deadlocks | ✅ |
 | 08 | select-and-timeouts | `select`, timeouts, fan-in, fan-out, worker pools, pipelines | ⬜ |
 | 09 | sync-primitives | `Mutex`, `RWMutex`, `WaitGroup`, `Once`, `atomic`, `errgroup` | ⬜ |
 | 10 | context | Cancellation, deadlines, values, the propagation rules | ⬜ |

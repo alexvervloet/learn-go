@@ -4,6 +4,121 @@ Things that did not go according to plan while building this repo, written down
 when they happened. The counterpart to `PLAN.md`, which is scratch and never
 committed. This file is committed and stays.
 
+## 2026-09-25 — A buffered channel turned a counter benchmark into a queue benchmark
+
+**Expected:** `channelCounter` gave its increment channel a buffer of 64,
+because a buffer is obviously better than no buffer. `TestAllThreeCountersAgree`
+compared it against the atomic and mutex versions after a `WaitGroup.Wait`.
+
+**What happened:** an intermittent failure with a message that read like a
+compiler bug:
+
+```
+counters disagree: atomic=2000 mutex=2000 channel=2000, want 2000
+```
+
+All four numbers equal, and the assertion still fired. The `if` had read
+`cc.Value()` as something less than 2000; by the time `Errorf` formatted its
+arguments and re-read it, the owning goroutine had caught up.
+
+The cause: with a buffered channel, `Inc` returns as soon as the value is
+QUEUED. So `wg.Wait()` returned while increments were still sitting in the
+buffer, and `Value()` could observe a count that was legitimately stale.
+
+**Next time, two separate lessons.**
+
+The correctness one: a buffered channel changes a synchronous operation into an
+asynchronous one, and that is a semantic change, not a tuning knob. `Inc`
+looked like the atomic and mutex versions and no longer meant the same thing.
+
+The measurement one, which is worse: the benchmark was comparing the cost of
+*enqueuing* an increment against the cost of *performing* one. With the buffer
+removed so all three versions complete the same work, the channel version went
+from 290 ns/op to **507 ns/op** — the published number was understating the gap
+by three quarters. I had already written 290 into the README table.
+
+A benchmark comparing two implementations has to be checked for whether they
+still do the same amount of work, and "it got faster when I added a buffer" is
+the exact shape of result that deserves the suspicion. Same failure mode as the
+`appendGrowing`/`preallocated` pair earlier in this file, arriving from a
+different direction.
+
+Worth noting what caught it: a test asserting agreement between three
+implementations, not the benchmark. The benchmark was perfectly happy.
+
+## 2026-09-25 — I wrote down the standard sync.Map advice, then measured it and it was wrong
+
+**Expected:** lesson 09's `sync.Map` section would say what everyone says: it is
+a specialist for write-once-read-many and for disjoint key sets, and a plain map
+behind a `RWMutex` is usually faster otherwise. I wrote that paragraph first and
+added benchmarks to illustrate it.
+
+**What happened:** the benchmarks contradicted it. On Go 1.27, an M2 Max, 12
+cores:
+
+| Workload | sync.Map | RWMutex map |
+|---|---|---|
+| sequential reads | 16.5 ns | 14.9 ns |
+| parallel reads | **1.7 ns** | 116.8 ns |
+| parallel 50/50 | 22.0 ns | 91.4 ns |
+| parallel writes | 40.9 ns | 237.6 ns |
+
+`RWMutex` wins only with zero contention, by ten percent. With real concurrency
+it loses by up to 68x, because every `RLock`/`RUnlock` pair contends on one
+cacheline across all twelve cores.
+
+The likely cause is that Go 1.24 rewrote `sync.Map` on a hash-trie. The advice
+was accurate when it was written and has quietly expired.
+
+**Next time, two things.**
+
+First, my initial benchmark pair used `b.RunParallel` for everything, which is
+`sync.Map`'s best case. Had I stopped there I would have flipped the conclusion
+in the other direction and been equally wrong. The sequential pair is what makes
+the table honest, and adding it was an afterthought rather than a plan. A
+benchmark that only measures one contention level measures almost nothing.
+
+Second, the README now recommends the `RWMutex` map anyway, and says why: types.
+`sync.Map` stores `any`, has no `Len`, and its `Range` is not a snapshot. That
+reason survives whichever way the numbers go next release, which is what makes
+it worth writing down at all. Performance advice has a shelf life; API-shape
+advice mostly does not.
+
+## 2026-09-25 — A repo that teaches data races cannot run its own tests under -race
+
+**Expected:** lesson 09 needed an unsynchronised counter so the README's claim
+about lost updates had something to point at. I added `racyCounter`, a test
+asserting it loses increments, and expected `make test-race` to stay green
+because the race was in a demo rather than in real code.
+
+**What happened:** `go test -race` reported it immediately and failed the whole
+package. Correctly. The detector cannot tell a deliberate race from an accident,
+and it should not try.
+
+This is a real structural problem rather than a one-off. Several lessons
+demonstrate races on purpose, and lesson 16 is about nothing else. The options
+were to delete the examples, or to drop the `-race` job from CI. Both are worse
+than the problem.
+
+**Next time:** Go defines a `race` build tag when the detector is on, and a
+two-file pair is the standard way to branch on it:
+
+```go
+//go:build race
+const raceDetectorEnabled = true
+
+//go:build !race
+const raceDetectorEnabled = false
+```
+
+The standard library does exactly this in `internal/race`. Tests that exercise a
+deliberate race now call `t.Skip` when the detector is watching, so `-race` stays
+meaningful for the other 99% of the code, and the demonstrations survive.
+
+Worth knowing before designing the test layout, not after: any codebase with
+intentionally-broken example code needs this escape hatch, and it is much easier
+to add in lesson 9 than in lesson 16 with eight lessons of tests already written.
+
 ## 2026-09-25 — The race detector found a race in the lesson about races
 
 **Expected:** `mainDoesNotWait` in lesson 06 was already careful. Every

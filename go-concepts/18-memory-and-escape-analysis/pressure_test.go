@@ -54,15 +54,37 @@ func TestPointerDensityCostsTheCollector(t *testing.T) {
 }
 
 func TestMeasureGCImpactTakesTheBest(t *testing.T) {
-	// A trivial workload: the result should be small and non-zero, and taking
-	// the best of several must not return zero.
 	got := measureGCImpact(func() any { return buildValueSlice(100) }, 3)
 
-	if got <= 0 {
-		t.Errorf("measured %v, want a positive duration", got)
+	t.Logf("a collection with 100 items held: %v", got)
+
+	// NOT "> 0". CI caught this on Windows, where the clock resolution is
+	// coarser than a collection of 100 items and time.Since returns exactly
+	// zero. A zero duration is a legitimate measurement of something faster
+	// than the clock can see, not a bug.
+	//
+	// The same mistake as lesson 06's parallel-speedup test and lesson 07's
+	// handshake ordering: asserting more than the platform guarantees. A
+	// monotonic clock promises non-decreasing, not a minimum granularity.
+	if got < 0 {
+		t.Errorf("measured %v, which a monotonic clock cannot produce", got)
 	}
 	if got > 5*time.Second {
 		t.Errorf("measured %v, which is implausible for 100 items", got)
+	}
+}
+
+// TestMeasureGCImpactIsMeasurableAtScale is the positive half: with enough
+// items the duration exceeds any platform's clock resolution.
+func TestMeasureGCImpactIsMeasurableAtScale(t *testing.T) {
+	if testing.Short() {
+		t.Skip("holds a million items alive")
+	}
+
+	got := measureGCImpact(func() any { return buildPointerSlice(1_000_000) }, 3)
+
+	if got <= 0 {
+		t.Errorf("measured %v for a million pointers, want something the clock can see", got)
 	}
 }
 

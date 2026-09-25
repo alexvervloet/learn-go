@@ -4,6 +4,38 @@ Things that did not go according to plan while building this repo, written down
 when they happened. The counterpart to `PLAN.md`, which is scratch and never
 committed. This file is committed and stays.
 
+## 2026-09-25 — `./...` matches nothing from a Go workspace root
+
+**Expected:** `go vet ./...` from the repo root would cover every module,
+the way `pytest` from the Python repo root covers every folder.
+
+**What happened:**
+
+```
+pattern ./...: directory prefix . does not contain modules listed in
+go.work or their selected dependencies
+```
+
+The root of a workspace is not itself a module. `./...` is resolved against
+modules, so with `go.work` listing only `./go-concepts`, the pattern starting at
+`.` matches nothing at all. It is not an empty result either, it is an error,
+which at least fails loudly.
+
+**Next time:** a workspace Makefile has to ask the workspace what is in it:
+
+```make
+MODULES := $(shell go list -m -f '{{.Dir}}/...' 2>/dev/null)
+DIR ?= $(MODULES)
+```
+
+That expands to an absolute path per module and keeps working as modules are
+added to `go.work`, which matters here because this repo will end up with
+roughly thirty of them. The alternative, hardcoding `./go-concepts/... ./dsa/...
+./backends/...`, would need editing every time a module lands.
+
+Worth teaching directly in lesson 15 rather than only fixing in the Makefile:
+anyone adopting workspaces for a multi-module repo hits this within an hour.
+
 ## 2026-09-25 — The linter already knows about the typed-nil trap
 
 **Expected:** lesson 03's typed-nil demo would need prose and a test, because

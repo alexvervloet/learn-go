@@ -41,7 +41,7 @@ Work them in order. Each one assumes the ones before it.
 | 07 | [channels](07-channels/) | Unbuffered handshake, closing rules, directional types, five patterns, six deadlocks | ✅ |
 | 08 | [select-and-timeouts](08-select-and-timeouts/) | Random choice, `default`, timer leaks, nil cases, pipelines, worker pools | ✅ |
 | 09 | [sync-primitives](09-sync-primitives/) | `Mutex`, `RWMutex`, `WaitGroup`, `Once`, atomics, `sync.Map`, `sync.Pool`, errgroup | ✅ |
-| 10 | context | Cancellation, deadlines, values, the propagation rules | ⬜ |
+| 10 | [context](10-context/) | Cancellation, deadlines, the tree, `Cause`, values, HTTP, the six mistakes | ✅ |
 | 11 | generics | Type parameters, constraints, inference, when not to use them | ⬜ |
 | 12 | struct-tags-and-reflection | JSON round-trips, tag parsing, the cost of `reflect` | ⬜ |
 | 13 | io-composition | `Reader`/`Writer` composition, pipes, `io.Copy`'s fast paths | ⬜ |

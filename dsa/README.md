@@ -55,17 +55,17 @@ loop, one `t.Run` per case so failures name themselves.
 | [stack/](stack/) | Slice-backed LIFO stack, plus balanced-bracket checking |
 | [queue/](queue/) | Slice-backed FIFO queue, plus a matchmaking example |
 | [hashmap/](hashmap/) | Open addressing with linear probing, auto-resizing at 70% load |
-| [trie/](trie/) | Prefix tree with prefix search, document scanning and character substitution |
-| [graph/](graph/) | Adjacency list and adjacency matrix, side by side, with BFS and DFS |
-| [bst/](bst/) | Binary search tree: insert, delete, three traversals, height |
-| [redblack/](redblack/) | Self-balancing BST maintaining the red-black invariants on insert |
+| [trie/](trie/) | Rune-keyed prefix tree with subtree counts, wildcard match and longest-prefix routing |
+| [graph/](graph/) | Adjacency list and matrix side by side, with BFS, DFS, Dijkstra and topological sort |
+| [bst/](bst/) | Binary search tree: insert, delete, range queries, and what it degenerates into |
+| [redblack/](redblack/) | Left-leaning red-black tree, with the invariants checked after every insert and delete |
 
 ## Algorithms
 
 | Package | What it is |
 |---|---|
-| [sorting/](sorting/) | Bubble, insertion, selection, merge, quick, and the stdlib, benchmarked together |
-| [searching/](searching/) | Binary search and its variants: first, last, insertion point |
+| [sorting/](sorting/) | Six sorts and the stdlib, benchmarked together, with every tuning decision priced |
+| [searching/](searching/) | One partition primitive, and every binary search built on it |
 | [pvsnp/](pvsnp/) | Subset sum and the travelling salesman: exponential to solve, polynomial to verify |
 
 ## Interview patterns
@@ -82,7 +82,7 @@ pattern a problem is asking for**.
 | "all subsets / permutations / combinations" | **backtracking** | [patterns/backtracking/](patterns/backtracking/) |
 | a **matrix** + "connected regions / fewest steps" | **grid BFS/DFS** | [patterns/grid/](patterns/grid/) |
 | a list of **`[start, end]`** pairs | **intervals**, sort first | [patterns/intervals/](patterns/intervals/) |
-| "rotated sorted array", "min X such that..." | **binary search on the answer** | [patterns/binarysearchanswer/](patterns/binarysearchanswer/) |
+| "minimise the maximum", "maximise the minimum" | **binary search on the answer** | [patterns/binarysearchanswer/](patterns/binarysearchanswer/) |
 | "next greater element", "largest rectangle" | **monotonic stack** | [patterns/monotonicstack/](patterns/monotonicstack/) |
 | "connected components" as edges arrive | **union-find** | [patterns/unionfind/](patterns/unionfind/) |
 | "prefix / autocomplete / wildcard search" | **trie** | [patterns/trie/](patterns/trie/) |
@@ -100,6 +100,27 @@ Reading solutions does not build the skill. The loop that works:
 
 `go doc ./patterns/slidingwindow` prints the contracts without the bodies, which
 is exactly what step 2 needs.
+
+## What the measurements said
+
+Every package benchmarks itself against the obvious alternative, and the results are in the
+package READMEs. The ones that changed how the code was written:
+
+| Finding | Where |
+|---|---|
+| `q = q[1:]` is **not** the unbounded leak everyone says it is; the ring buffer wins on allocations, not time | [queue/](queue/) |
+| A sorted slice with `slices.BinarySearch` beats a trie at autocomplete by **17x** | [trie/](trie/) |
+| Balancing buys **7%** on random input and **163x** on sorted input | [redblack/](redblack/) |
+| An adjacency matrix wins exactly one operation and costs **909x** the memory | [graph/](graph/) |
+| A func-value comparison costs **~1.5x** against an inlined operator, in three separate packages | [sorting/](sorting/), [patterns/heap/](patterns/heap/) |
+| `container/heap` is **1.46x faster** than a generic heap, because the compiler can devirtualise its `Less` | [patterns/heap/](patterns/heap/) |
+| Union-find without both optimisations is **893x** more pointer hops | [patterns/unionfind/](patterns/unionfind/) |
+| The trie word search beats a per-word search by **2x**, not the order of magnitude it is sold with | [patterns/trie/](patterns/trie/) |
+
+Four bugs were found by benchmarks rather than tests, and they are written up in
+[LESSONS.md](../LESSONS.md): a quicksort that was quietly O(√n)-deep on sorted input, a
+depth budget that fired on every input, three stacked integer overflows in one search
+function, and a sudoku solver that could not reject an impossible puzzle.
 
 ## Complexity, in one table
 
@@ -121,6 +142,7 @@ one of the five that can walk its contents in order without sorting them first.
 ```bash
 go test ./...                              # every package
 go test -race ./...                        # the graph and queue tests use goroutines
+go test ./patterns/...                     # the eleven pattern families
 go test -bench . -benchmem ./sorting       # the six sorts compared
 go test -run Example ./...                 # every documented example, output-checked
 go doc -all ./hashmap                      # the API and its examples

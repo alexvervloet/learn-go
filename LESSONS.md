@@ -1123,3 +1123,41 @@ entirely.
 Also worth keeping: the second and third bugs were only reachable because I fixed the first.
 Each fix moved the failure one layer down. That is normal for overflow work and it is worth
 expecting, rather than treating the first green test run as the end.
+
+## The container API was the wrong shape, and it cost more than the algorithm saved
+
+**Expected.** `patterns/trie`'s word search walks a grid and a trie at the same time, so a
+grid path that is not a prefix of any dictionary word is abandoned at the first character.
+That is the whole pattern, and it is meant to beat running a separate single-word search per
+dictionary word by a wide margin. I built it on `dsa/trie`, the package that already had a
+tested prefix API.
+
+**What happened.** It lost. At every dictionary size, on every grid, the trie version was
+slower than just searching for each word separately: 72 µs against 9 µs for ten words, 1.65 ms
+against 361 µs for a thousand.
+
+The cause was the API, not the algorithm. `dsa/trie` deliberately exposes no nodes, so the
+search had to carry the prefix **string** and call `HasPrefix` and `Contains` on it. Each of
+those re-walks the prefix from the root, so a path of length k cost O(k) map lookups per cell
+instead of one. Adding a twelve-line node-based trie inside the pattern package and carrying
+a `*node` made it 6.2x faster.
+
+Then the second finding, which only appeared once the first was fixed: even done properly,
+the trie version **loses on small grids with short words** and wins by about 2x on large ones.
+A per-word search also abandons a path on the first mismatched character, and it stops at the
+first occurrence while the trie version explores every path. The order-of-magnitude win the
+pattern is usually sold with is not there.
+
+**Next time.** Two things, and the second is the one I keep relearning.
+
+**A good API for a container is not automatically a good API for an algorithm.** `dsa/trie`
+is right to hide its nodes: it is a container, and exposing internals to make one consumer
+faster is how containers rot. The right answer was a second, smaller trie inside the package
+that needs it, not a worse `dsa/trie`. Twelve duplicated lines beat a leaked abstraction.
+
+**Benchmark the regime where the pattern loses, not just the one where it wins.** My first
+configuration was an 8x8 grid with short words, chosen because it was the example in the
+problem statement, and it happens to be the regime where the trie is the wrong choice. Had I
+only run the large configuration I would have reported a clean 2x win and never learned there
+was a crossover. The benchmark now runs both on purpose, because one showing only the winning
+case is an argument rather than a measurement.

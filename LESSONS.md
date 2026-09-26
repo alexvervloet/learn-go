@@ -1012,3 +1012,39 @@ paragraph asserting something.
 The other: `struct{}` having zero size is the kind of language detail that makes
 "this cannot happen" claims unsafe. Any argument of the form "the length cannot get
 that large because of memory" needs to account for element types that occupy none.
+
+## Two hypotheses about performance, both wrong, both cheap to test
+
+**Expected.** Writing the generic heap in `patterns/heap`, I asserted in the package doc
+that it would be faster than `container/heap`, because `container/heap` deals in `any`
+and needs a type assertion per pop while a generic version does not. Separately, when
+the k-way `MergeSorted` lost to concatenate-and-sort from k=10, I reached for cache
+thrashing across k memory streams as the explanation.
+
+**What happened.** Both were wrong, and each took one benchmark to disprove.
+
+`container/heap` is **1.46x faster**: 1.39 ms against 2.04 ms for 10,000 pushes and
+pops. It calls `Less` on a concrete type, which the compiler devirtualises and inlines
+to `h[i] < h[j]`. My generic heap calls `h.compare(a, b)` through a func field, which it
+cannot. That is the same 1.48x the sorting package had already measured between
+`slices.Sort` and `slices.SortFunc`, and I had written that measurement up a few hours
+earlier without connecting it.
+
+The cache hypothesis was testable in one extra benchmark: shrink the total to 1,024 ints
+so everything fits in L1. If cache were the mechanism, the heap should close the gap.
+It went the other way: 8.5x slower at k=100 on 8 KB of data, against 1.75x on 32 MB.
+The real cause was the comparison again, with the heap paying an indirect call plus a
+double slice index per comparison against an inlined `<`, roughly 7x, putting the
+break-even at k around 6.
+
+**Next time.** The specific lesson is that **an indirect call per comparison is the
+dominant cost in every comparison-driven structure in Go**, and it is now the third
+place this repo has measured it at about 1.5x. That should be the first hypothesis, not
+the last.
+
+The general lesson is better: a hypothesis about performance that can be tested by
+changing one parameter should be tested before it is written down. The cache theory was
+plausible, well-formed, and disprovable by one number, and I had already typed it into a
+doc comment as fact. Writing "my first guess was X, and that is wrong because Y" is
+worth more to a reader than the correct explanation alone, because the wrong guess is
+the one they will also have.

@@ -929,3 +929,61 @@ Also worth keeping: the honest ranking that came out of the same benchmark. A
 sorted slice with `slices.BinarySearch` beats this tree at lookup, iteration and
 range queries. The tree earns its place only because a sorted slice costs O(n) per
 insertion. That belongs at the top of the README, not buried.
+
+## A benchmark found an algorithmic bug three tests could not
+
+**Expected.** The quicksort in `sorting/` had the three things pdqsort has: a
+median-of-three pivot so sorted input splits evenly, three-way partitioning so
+duplicates cost O(n), and a depth limit that bails out to heapsort. Tests covered
+sorted, reversed, all-equal, three-valued and organ-pipe input at 50,000 elements,
+plus 10 million sorted elements to check the stack. All green.
+
+**What happened.** The benchmark showed quicksort taking 16.6 ms on sorted input
+and 11.4 ms on random input. Sorted input should be the *easy* case for a
+median-of-three pivot, so the 46% was the only sign that anything was wrong, and it
+turned out to be hiding two separate bugs.
+
+The first was the depth limit. It read `if depth > 2*ilog2(len(s))`, recomputed from
+the current subslice, so the allowance *tightened* as the recursion descended while
+the depth grew. A 13-element subslice allows 6 partitions and a balanced quicksort
+reaches 13-element subslices at depth 13, so the limit fired on every input:
+1,909 unintended heapsort calls on 100,000 random elements. The fix is to compute it
+once from the original length.
+
+The second was worse, and finding it took an instrumented copy of the function and
+then a printed trace of the partition sizes. Three-way partitioning moves large
+elements to the tail by swapping them with the shrinking right boundary. On sorted
+input that rotation leaves the right half sorted ascending *except that the smallest
+element is now last*. Median-of-three samples the first, middle and last of that, so
+one of its three samples is the minimum and the median of the three is the
+second-smallest value in the subarray. The split is 1/1/497, the same thing repeats
+at every level, and the recursion depth goes from log(n) to **√n**: 105 partitions
+for 10,000 sorted elements against 18 for random ones.
+
+The answer was correct throughout. The sort was right, the tests were right, and the
+algorithm was quietly quadratic-ish on the most common shape real data has. Tukey's
+ninther fixed it, taking the deepest path from 105 partitions to 14.
+
+**Next time.** Four things.
+
+A correctness test suite cannot find a complexity bug. Both of these produced correct
+output on every input. If an algorithm has a performance contract, the contract needs
+a test, and the test has to measure something structural rather than time. The one I
+added counts how often the fallback fires and asserts zero on natural input, which
+would have caught the first bug in a second.
+
+Make the thing you want to observe a parameter. `quickSort` now takes its fallback as
+a `func` argument instead of calling `HeapFunc` directly, which is what makes the
+count testable. That is a one-line design change that turns an invisible property
+into an assertable one.
+
+When a benchmark result is the wrong way round, stop and find out why. My first
+instinct was that sorted input must somehow be slower for cache reasons and to write
+that down. Two of the three hours this cost were spent because I went looking for a
+plausible story before going looking for the cause.
+
+Received algorithmic wisdom has preconditions. "Median-of-three makes sorted input
+safe" is true, and it is true for a two-way partition. I combined it with a
+three-way partition and the interaction between them broke it. Bentley and McIlroy
+use the ninther in their engineered quicksort for exactly this reason, and the
+reason is in their paper, which I had not read.

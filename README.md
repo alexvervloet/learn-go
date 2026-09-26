@@ -23,7 +23,7 @@ tests clean on Go 1.27.
 | Area | Status |
 |---|---|
 | [go-concepts/](go-concepts/) | ✅ 18 of 18 lessons |
-| dsa/ | ⬜ not started |
+| [dsa/](dsa/) | 🟨 4 of 20 packages |
 | backends/learning/ | ⬜ not started |
 | backends/ capstones | ⬜ not started |
 
@@ -70,7 +70,7 @@ cd ../../.. && go work use ./backends/learning/whatever
 | Folder | What's in it |
 |---|---|
 | [go-concepts/](go-concepts/) | The language itself: goroutines, channels, interfaces, errors, generics, context, and the rest of what Python has no analogue for |
-| `dsa/` | Data structures, sorting, searching, P vs NP, and the interview-pattern families |
+| [dsa/](dsa/) | Data structures, sorting, searching, P vs NP, and the interview-pattern families |
 | `backends/learning/` | Concept-focused modules: HTTP, testing, databases, auth, caching, gRPC, GraphQL, jobs |
 | `backends/` | Capstone projects that put it together |
 
@@ -79,7 +79,7 @@ cd ../../.. && go work use ./backends/learning/whatever
 1. **[go-concepts/](go-concepts/)** — the language. Start here even if you know
    another language well, because Go's concurrency and error models are not
    transferable. 🟢
-2. **dsa/** — CS fundamentals, rewritten with generics. 🟢
+2. **[dsa/](dsa/)** — CS fundamentals, rewritten with generics. 🟢
 3. **backends/learning/http-tutorial/** — your first Go HTTP service. 🟢
 4. **backends/learning/testing-concepts/** — table-driven tests, `httptest`, fuzzing. 🟢
 5. **backends/learning/database-concepts/** — pgx, sqlc, migrations, transactions. 🐘

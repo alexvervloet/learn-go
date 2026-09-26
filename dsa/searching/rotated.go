@@ -113,25 +113,64 @@ func FindPeak[T cmp.Ordered](s []T) int {
 	return Partition(len(s)-1, func(i int) bool { return s[i] > s[i+1] })
 }
 
-// SearchAnswer returns the smallest value in [lo, hi] for which ok is true, or hi+1
-// if none is.
+// SearchAnswer returns the smallest value in [lo, hi] for which ok is true, and whether
+// there is one.
 //
-// The same search with no array involved. ok must be monotonic in the same sense:
-// false up to some threshold and true above it. "The smallest number of ships that
-// can carry this cargo in five days" and "the lowest rate limit that keeps the
-// queue from growing" are both this function.
+// The same search with no array involved. ok must be monotonic in the same sense: false up
+// to some threshold and true above it. "The smallest number of ships that can carry this
+// cargo in five days" and "the lowest rate limit that keeps the queue from growing" are both
+// this function.
+//
+// It returns (value, bool) rather than a sentinel like hi+1, and that is not a style choice:
+// hi+1 overflows when hi is math.MaxInt, which is reachable and which produced a
+// confidently wrong answer from IntegerSquareRoot before this was changed.
+//
+// The loop bisects [lo, hi] directly rather than shifting into Partition's [0, n) space.
+// The shift needs hi-lo+1, which overflows for any range wider than MaxInt.
+//
+// The midpoint is computed in UNSIGNED arithmetic, which is what makes the whole int range
+// safe. `lo + (hi-lo)/2` is fine for non-negative bounds and still overflows when the range
+// spans zero widely enough: hi-lo for lo=math.MinInt and hi=0 is 2^63, which does not fit in
+// an int. Converting to uint first makes the subtraction exact, because the true difference
+// always fits in a uint, and converting back lands on the right value by two's complement.
+// TestSearchAnswerAtTheExtremes is the case that found this, by hanging.
 //
 // See patterns/binarysearchanswer for the worked problems; this is the primitive.
-func SearchAnswer(lo, hi int, ok func(int) bool) int {
-	// Shift into Partition's [0, n) index space rather than duplicating the loop.
-	// Getting the two inclusive bounds right is the only fiddly part, and doing it
-	// once here is better than once per problem.
-	n := hi - lo + 1
-	if n <= 0 {
-		return hi + 1
+func SearchAnswer(lo, hi int, ok func(int) bool) (int, bool) {
+	if lo > hi {
+		return 0, false
 	}
 
-	i := Partition(n, func(i int) bool { return ok(lo + i) })
+	best, found := 0, false
 
-	return lo + i
+	for lo <= hi {
+		mid := midpoint(lo, hi)
+
+		if ok(mid) {
+			best, found = mid, true
+
+			if mid == lo {
+				break // hi = mid-1 would underflow at math.MinInt
+			}
+			hi = mid - 1
+
+			continue
+		}
+
+		if mid == hi {
+			break // lo = mid+1 would overflow at math.MaxInt
+		}
+		lo = mid + 1
+	}
+
+	return best, found
+}
+
+// midpoint returns the average of lo and hi, rounded down, for any lo <= hi in the int range.
+//
+// uint(hi) - uint(lo) is the exact difference whenever lo <= hi, even when that difference
+// does not fit in an int, because the two's-complement bit patterns subtract correctly. Half
+// of it added back to uint(lo) and converted lands on the true midpoint.
+func midpoint(lo, hi int) int {
+	return int(uint(lo) + (uint(hi)-uint(lo))/2)
 }

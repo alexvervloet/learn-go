@@ -24,8 +24,8 @@ func Partition(n int, pred func(int) bool) int
 array with no order at all. `SearchAnswer` supplies a predicate with no array
 involved. That is the whole package.
 
-`Partition` is exactly `sort.Search`. It is written out because the loop invariant
-is where every off-by-one bug lives:
+`Partition` is exactly `sort.Search`. It is written out because the loop invariant is where
+every off-by-one bug lives:
 
 ```
 pred is false for every index <  lo
@@ -90,9 +90,35 @@ lo + (hi-lo)/2       //  5188146770730811391   correct
 And indexing with the wrapped value panics:
 `runtime error: index out of range [-4035225266123964416]`.
 
-`Partition` handles that length fine, which is the point of the test. You will never
-have such a slice. It is nice that the habit is defensible in Go rather than just
-inherited from Java.
+`Partition` handles that length fine, which is the point of the test. You will never have
+such a slice. It is nice that the habit is defensible in Go rather than just inherited from
+Java.
+
+### And `lo + (hi-lo)/2` is not enough either
+
+`SearchAnswer` bisects an arbitrary `[lo, hi]` rather than `[0, n)`, and the safe-looking
+form breaks there too. For `lo = math.MinInt` and `hi = 0`, the difference `hi - lo` is 2⁶³,
+which does not fit in an `int`. The result is garbage and the loop never terminates.
+
+The fix is to subtract in **unsigned** arithmetic:
+
+```go
+func midpoint(lo, hi int) int {
+    return int(uint(lo) + (uint(hi)-uint(lo))/2)
+}
+```
+
+`uint(hi) - uint(lo)` is the exact difference whenever `lo <= hi`, even when it does not fit
+in an `int`, because the two's-complement bit patterns subtract correctly. Half of it added
+back to `uint(lo)` and converted lands on the true midpoint.
+
+`TestMidpointOverTheWholeIntRange` checks it against `lo + (hi-lo)/2` on 20,000 random pairs
+where that form is valid, and against hand-computed answers where it is not, including the
+full `[MinInt, MaxInt]` range, whose midpoint is −1.
+
+`SearchAnswer` also returns `(int, bool)` rather than a `hi+1` sentinel, for the same family
+of reason: `hi+1` overflows when `hi` is `math.MaxInt`, and before that change
+`IntegerSquareRoot(math.MaxInt)` returned `math.MaxInt` with no error.
 
 ## Searching things that are not sorted
 
@@ -210,10 +236,10 @@ predates generics and needed no changing.
 **`FindPeak[int](nil)`** needs the explicit type argument: Go cannot infer `T` from an
 untyped `nil`.
 
-**`SearchAnswer` shifts inclusive bounds into `Partition`'s `[0, n)` space** rather
-than duplicating the loop. Getting two inclusive bounds right is the fiddly part, and
-doing it once beats doing it per problem. It handles negative bounds, which the shift
-is what makes true.
+**`SearchAnswer` bisects `[lo, hi]` directly** rather than shifting into `Partition`'s
+`[0, n)` space. The shift needs `hi-lo+1`, which overflows for any range wider than
+`MaxInt`. See the overflow section above; the two functions are deliberately different
+because their domains are.
 
 **A non-monotonic predicate does not error.** It returns a meaningless index. That is
 the single most common way to misuse binary search and nothing in the type system

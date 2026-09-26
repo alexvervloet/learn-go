@@ -1,6 +1,7 @@
 package searching
 
 import (
+	"math"
 	"math/rand/v2"
 	"slices"
 	"testing"
@@ -358,28 +359,105 @@ func TestExponentialBeatsBinaryNearTheFront(t *testing.T) {
 }
 
 func TestSearchAnswer(t *testing.T) {
-	// The smallest x with x*x >= 200, which is 15.
-	if got := SearchAnswer(1, 1000, func(x int) bool { return x*x >= 200 }); got != 15 {
-		t.Errorf("SearchAnswer = %d, want 15", got)
+	tests := []struct {
+		name   string
+		lo, hi int
+		ok     func(int) bool
+		want   int
+		found  bool
+	}{
+		{"smallest x with x*x >= 200", 1, 1000, func(x int) bool { return x*x >= 200 }, 15, true},
+		{"never true", 1, 10, func(int) bool { return false }, 0, false},
+		{"always true", 5, 10, func(int) bool { return true }, 5, true},
+		{"inverted range", 10, 5, func(int) bool { return true }, 0, false},
+		{"negative bounds", -100, 100, func(x int) bool { return x >= -7 }, -7, true},
+		{"single value, true", 5, 5, func(int) bool { return true }, 5, true},
+		{"single value, false", 5, 5, func(int) bool { return false }, 0, false},
+		{"only the top", 1, 10, func(x int) bool { return x == 10 }, 10, true},
 	}
 
-	// Never true: returns hi+1.
-	if got := SearchAnswer(1, 10, func(int) bool { return false }); got != 11 {
-		t.Errorf("SearchAnswer with an impossible predicate = %d, want 11", got)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, found := SearchAnswer(tt.lo, tt.hi, tt.ok)
+
+			if found != tt.found {
+				t.Fatalf("found = %v, want %v (got %d)", found, tt.found, got)
+			}
+			if found && got != tt.want {
+				t.Errorf("SearchAnswer = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestSearchAnswerAtTheExtremes is why SearchAnswer returns a bool rather than hi+1, and why
+// it bisects [lo, hi] directly rather than shifting into [0, n).
+//
+// The shift computes hi-lo+1, which overflows for lo=0 and hi=math.MaxInt and made the whole
+// call return a confidently wrong answer. The sentinel hi+1 overflows at the same place.
+func TestSearchAnswerAtTheExtremes(t *testing.T) {
+	// A range covering every non-negative int.
+	got, found := SearchAnswer(0, math.MaxInt, func(x int) bool { return x >= 1<<40 })
+	if !found || got != 1<<40 {
+		t.Errorf("over [0, MaxInt] = %d, %v; want %d, true", got, found, 1<<40)
 	}
 
-	// Always true: returns lo.
-	if got := SearchAnswer(5, 10, func(int) bool { return true }); got != 5 {
-		t.Errorf("SearchAnswer with an always-true predicate = %d, want 5", got)
+	// Nothing satisfies it, over the same enormous range.
+	if _, found := SearchAnswer(0, math.MaxInt, func(int) bool { return false }); found {
+		t.Error("found a value where the predicate is never true")
 	}
 
-	// An empty range.
-	if got := SearchAnswer(10, 5, func(int) bool { return true }); got != 6 {
-		t.Errorf("SearchAnswer over an inverted range = %d, want 6", got)
+	// Only the very last value works, so the loop has to reach it without overflowing.
+	got, found = SearchAnswer(0, math.MaxInt, func(x int) bool { return x == math.MaxInt })
+	if !found || got != math.MaxInt {
+		t.Errorf("= %d, %v; want MaxInt, true", got, found)
 	}
 
-	// Negative bounds have to work too, which the index shift is what makes true.
-	if got := SearchAnswer(-100, 100, func(x int) bool { return x >= -7 }); got != -7 {
-		t.Errorf("SearchAnswer over negative bounds = %d, want -7", got)
+	// And the negative end, where mid-1 would underflow.
+	got, found = SearchAnswer(math.MinInt, 0, func(x int) bool { return x >= math.MinInt })
+	if !found || got != math.MinInt {
+		t.Errorf("= %d, %v; want MinInt, true", got, found)
+	}
+}
+
+// TestMidpointOverTheWholeIntRange checks the unsigned midpoint against the obvious
+// arithmetic where the obvious arithmetic is valid, and against known answers where it is
+// not.
+func TestMidpointOverTheWholeIntRange(t *testing.T) {
+	// Where lo + (hi-lo)/2 is safe, the two must agree.
+	r := rand.New(rand.NewPCG(31, 37))
+	for range 20_000 {
+		lo := r.IntN(1 << 40)
+		hi := lo + r.IntN(1<<40)
+
+		if got, want := midpoint(lo, hi), lo+(hi-lo)/2; got != want {
+			t.Fatalf("midpoint(%d, %d) = %d, want %d", lo, hi, got, want)
+		}
+	}
+
+	// Where it is not safe, the answers are known by hand.
+	cases := []struct{ lo, hi, want int }{
+		{math.MinInt, math.MaxInt, -1},    // the full range
+		{math.MinInt, 0, math.MinInt / 2}, // 0 - MinInt does not fit in an int
+		{0, math.MaxInt, math.MaxInt / 2},
+		{math.MinInt, math.MinInt, math.MinInt}, // a single value
+		{math.MaxInt, math.MaxInt, math.MaxInt},
+		{-1, 1, 0},
+		{0, 1, 0},
+		{-2, -1, -2}, // rounds towards negative infinity, like integer division of the sum
+	}
+
+	for _, tc := range cases {
+		if got := midpoint(tc.lo, tc.hi); got != tc.want {
+			t.Errorf("midpoint(%d, %d) = %d, want %d", tc.lo, tc.hi, got, tc.want)
+		}
+	}
+
+	// And the defining property: the midpoint is always within the range.
+	for _, tc := range cases {
+		got := midpoint(tc.lo, tc.hi)
+		if got < tc.lo || got > tc.hi {
+			t.Errorf("midpoint(%d, %d) = %d, outside the range", tc.lo, tc.hi, got)
+		}
 	}
 }

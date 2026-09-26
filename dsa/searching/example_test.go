@@ -97,19 +97,24 @@ func ExampleFindPeak() {
 func ExampleSearchAnswer() {
 	// The smallest number of boats needed to move 1,000 passengers when each boat
 	// holds 37 and must make at most 4 trips.
-	needed := searching.SearchAnswer(1, 1000, func(boats int) bool {
+	needed, _ := searching.SearchAnswer(1, 1000, func(boats int) bool {
 		return boats*37*4 >= 1000
 	})
 	fmt.Println("boats:", needed)
 
 	// Integer square root, which is the same shape.
-	fmt.Println("isqrt(200):", searching.SearchAnswer(0, 200, func(x int) bool {
-		return x*x >= 200
-	}))
+	isqrt, _ := searching.SearchAnswer(0, 200, func(x int) bool { return x*x >= 200 })
+	fmt.Println("isqrt(200):", isqrt)
+
+	// Nothing satisfies it, so the second return is false. A sentinel like hi+1 would
+	// overflow when hi is math.MaxInt.
+	_, found := searching.SearchAnswer(1, 10, func(int) bool { return false })
+	fmt.Println("impossible:", found)
 
 	// Output:
 	// boats: 7
 	// isqrt(200): 15
+	// impossible: false
 }
 
 // Exponential search doubles a bound before bisecting, so its cost depends on where

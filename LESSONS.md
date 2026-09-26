@@ -987,3 +987,28 @@ safe" is true, and it is true for a two-way partition. I combined it with a
 three-way partition and the interaction between them broke it. Bentley and McIlroy
 use the ninther in their engineered quicksort for exactly this reason, and the
 reason is in their paper, which I had not read.
+
+## The Go rebuttal to the binary-search overflow is wrong
+
+**Expected.** Writing `mid := lo + (hi-lo)/2` in the searching package, I started to
+add the usual comment: that `(lo+hi)/2` overflows, but that in Go it cannot, because a
+slice long enough would need exabytes of memory. That is the standard rebuttal and I
+have repeated it before.
+
+**What happened.** I checked it before writing it down, and it is false. A slice of
+**zero-size elements** needs no memory at all, and `make([]struct{}, 3<<61)` is legal:
+6.9 quintillion elements, allocated instantly, costing nothing. With that length
+`(lo+hi)/2` wraps to `-4035225266123964416` and indexing panics with
+`index out of range [-4035225266123964416]`.
+
+So the bug is reachable in Go. You will never have such a slice, and the habit is now
+defensible on its own terms rather than inherited from Java.
+
+**Next time.** Two things. A one-file scratch program took ninety seconds and turned a
+piece of folklore I was about to pass on into a test that demonstrates the opposite.
+Cheap to check, and the check is now `TestMidpointOverflowIsReachable` rather than a
+paragraph asserting something.
+
+The other: `struct{}` having zero size is the kind of language detail that makes
+"this cannot happen" claims unsafe. Any argument of the form "the length cannot get
+that large because of memory" needs to account for element types that occupy none.

@@ -1080,3 +1080,46 @@ of the problem does: `CombinationSum` returned the same multiset twice given dup
 candidates, and two hand-traced paths through a 3x4 word-search grid were both wrong. The
 rule that keeps earning its place: if a function takes a collection, generate test inputs
 with repeats in them, because the examples in the problem statement never do.
+
+## Fixing one overflow uncovered two more in the same function
+
+**Expected.** `searching.SearchAnswer` bisects an inclusive `[lo, hi]` range. It worked, it
+had tests, and it had been used by the binary-search-on-the-answer pattern package without
+complaint. Then a test asked for `IntegerSquareRoot(math.MaxInt)`.
+
+**What happened.** It returned `math.MaxInt`, confidently, with no error. Three separate
+overflows, each hidden behind the one before it.
+
+The **sentinel**. The signature returned `hi+1` to mean "nothing found", which wraps to
+`math.MinInt` when `hi` is `math.MaxInt`. Changed to `(int, bool)`.
+
+The **range width**. The implementation shifted `[lo, hi]` into `[0, n)` by computing
+`hi - lo + 1` so it could reuse `Partition`. That overflows for any range wider than
+`MaxInt`, and the guard `if n <= 0` then returned the sentinel, so the function reported "no
+answer" for a range containing every non-negative integer. Rewritten to bisect `[lo, hi]`
+directly.
+
+The **midpoint**. With those two fixed, the test suite hung. `lo + (hi-lo)/2` is the
+canonical safe midpoint, the one I had written a whole README section about earlier in this
+same repo, and it is not safe over an arbitrary signed range: for `lo = math.MinInt` and
+`hi = 0` the difference is 2^63, which does not fit in an `int`, so `mid` lands outside the
+range and the loop never shrinks. The fix is to subtract in unsigned arithmetic,
+`int(uint(lo) + (uint(hi)-uint(lo))/2)`, where the difference always fits.
+
+**Next time.** Two things.
+
+**A safe idiom is safe for a domain, not in general.** `lo + (hi-lo)/2` is safe for slice
+indices, which are non-negative, and that is the context everyone learns it in. Moving the
+same loop from "index into an array" to "any integer" changed the domain and silently
+invalidated the idiom. I had the earlier lesson about the midpoint overflow being reachable
+in Go written down two days of work ago, and still applied the fix from that lesson to a
+case it does not cover.
+
+**Sentinel returns are a source of this whole family of bug.** `hi+1`, `-1`, `len(s)`: each
+is a value that must not collide with a real answer, and at the extremes of a type they
+always can. `(value, bool)` costs one identifier at the call site and removes the question
+entirely.
+
+Also worth keeping: the second and third bugs were only reachable because I fixed the first.
+Each fix moved the failure one layer down. That is normal for overflow work and it is worth
+expecting, rather than treating the first green test run as the end.

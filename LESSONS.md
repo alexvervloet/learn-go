@@ -840,3 +840,41 @@ every key hashes the same, which I did eventually write, and which would have
 caught it in the first minute. And when a tool reports that something is fine,
 sanity-check the magnitude: the reason all three of these survived is that
 `0.000`, `25` and `512` all looked plausible enough not to question.
+
+## I optimised the wrong 4%
+
+**Expected.** The trie's `collect` built a fresh `strings.Builder` for every child
+node, and I left a comment saying the faster alternative was "less clear" and that
+`Complete` was "not in anyone's hot path". When the benchmark showed
+`Complete("pre")` taking 515 µs and doing 10,473 allocations for 2,359 results, I
+rewrote it to reuse one `[]rune` buffer and expected the time to fall with the
+allocations.
+
+**What happened.** Allocations fell 4.4x, to 2,373, and bytes fell from 309 KB to
+137 KB. The time went from 515 µs to 492 µs, which is 4%. I had written "18x" into
+the code comment as the cost of the old version before measuring the new one.
+
+Breaking the call down: walking the subtree is 292 µs, sorting the results is
+174 µs, and collecting them into a slice is 18 µs. String building was never the
+problem. The walk is slow because it iterates a `map[rune]*node` at every one of
+about 5,000 nodes, and the sort exists only because map iteration order is random.
+Both costs come from the same decision, and swapping to `[26]*node` children makes
+lookups 8x faster *and* removes the need to sort, because array order is already
+alphabetical.
+
+The bigger miss was not benchmarking the competition. A sorted slice with
+`slices.BinarySearch` does the same query in 28.6 µs, 17x faster than the trie,
+and allocates 13 times instead of 2,373 because it returns strings it already
+holds. I had written most of a README arguing for the trie before finding that out.
+
+**Next time.** Two rules, and neither is new.
+
+Profile before optimising, even on something this small. A 20-line function still
+has a distribution, and mine was 60/36/4 with my attention on the 4.
+
+Benchmark the boring alternative before writing the paragraph that says why the
+clever thing is better. The trie still earns its place, on `Count` at 10 ns
+against 172 µs, on wildcard matching, and on `LongestPrefixOf`. But the argument I
+was about to make, that it is the right tool for autocomplete, was wrong, and the
+only reason it did not ship is that a sorted slice took four lines to add to the
+benchmark.

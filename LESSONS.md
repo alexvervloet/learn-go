@@ -1048,3 +1048,35 @@ plausible, well-formed, and disprovable by one number, and I had already typed i
 doc comment as fact. Writing "my first guess was X, and that is wrong because Y" is
 worth more to a reader than the correct explanation alone, because the wrong guess is
 the one they will also have.
+
+## A solver that only checks its own moves cannot reject an impossible input
+
+**Expected.** The sudoku solver in `patterns/backtracking` validates every digit before
+placing it, so I wrote a test handing it a grid with two 5s already in the same row and
+expected an instant `false`.
+
+**What happened.** The whole package test run hit a 110-second timeout, and bisecting it
+pointed at that one test. The solver only ever validates digits **it places itself**. The
+conflicting 5s were givens, so nothing ever looked at them, and the solver set off to
+explore the 79 remaining empty cells of a grid with no solution. It would have finished
+eventually. Not in this decade.
+
+The fix is one pass over the givens before starting, which is 81 cells times 9 digits and
+costs nothing against a search that can run for seconds.
+
+**Next time.** The general shape: **a constraint checker that only sees the decisions the
+algorithm makes has a blind spot exactly where the input is.** The same gap exists in any
+solver, parser or state machine that trusts its starting state, and the symptom is not a
+wrong answer, it is a hang, which is why it survived every other test in the file.
+
+Worth noting how it was found. The test was written to assert a behaviour I was confident
+about, and the assertion never ran. A test that hangs is worse than one that fails, because
+the failure mode looks like a slow machine rather than a bug, and my first instinct was to
+go looking for an accidentally huge benchmark.
+
+Two smaller things from the same session, both found by randomised tests over inputs with
+duplicates, where the hand-written table used distinct values because the textbook statement
+of the problem does: `CombinationSum` returned the same multiset twice given duplicate
+candidates, and two hand-traced paths through a 3x4 word-search grid were both wrong. The
+rule that keeps earning its place: if a function takes a collection, generate test inputs
+with repeats in them, because the examples in the problem statement never do.

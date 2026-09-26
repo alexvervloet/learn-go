@@ -878,3 +878,54 @@ against 172 µs, on wildcard matching, and on `LongestPrefixOf`. But the argumen
 was about to make, that it is the right tool for autocomplete, was wrong, and the
 only reason it did not ship is that a sorted slice took four lines to add to the
 benchmark.
+
+## Three wrong benchmarks before one right one
+
+**Expected.** The BST's in-order walk should use an explicit stack rather than
+recursion, because a degenerate tree is a chain and recursing down 100,000 nodes
+would blow the stack. I wrote that in a comment, wrote the explicit-stack version,
+and benchmarked it against a recursive one.
+
+**What happened.** The premise was wrong and each of the first three measurements
+was wrong in a different way.
+
+The premise: Go grows a goroutine stack on demand up to 1 GB. A chain deep enough
+to overflow it needs tens of millions of nodes, and a BST that degenerate is
+already unusable for every other reason. The stack was never the risk.
+
+Measurement one had the explicit stack 2x *slower*, which I nearly wrote up as
+"recursion wins". It was slower because I sized the stack with
+`make([]*node, 0, max(t.Height(), 1))`, and `Height()` walks the entire tree. Every
+call to `All()` was doing an extra O(n) pass and allocating 400 KB on a deep tree.
+Removing that one line took sorted iteration from 1.83 ms to 997 µs.
+
+Measurement two had the explicit stack 3x *faster*. The recursive version went
+through `iter.Seq2` and the stack version took a plain `visit func(K, V)`
+callback, so I was pricing range-over-func rather than the traversal. Running both
+through `iter.Seq2` closed it to 5%.
+
+Measurement three used only one degenerate shape. Ascending keys make a chain of
+right children, which is the explicit stack's *best* case: it never holds more
+than one node. Adding the descending case, a chain of left children, reversed the
+result completely, at 766 µs and 2.2 MB against recursion's 459 µs and zero.
+
+The final answer is recursion, within 5% on balanced trees, never allocating, and
+only beaten on one of the two degenerate shapes.
+
+**Next time.** Three separate rules, all of which I already knew.
+
+Check the premise before optimising for it. "Recursion will blow the stack" is a C
+habit, and Go's stacks are not C's.
+
+When two implementations are compared, diff their call paths, not just their
+bodies. One went through an iterator and one did not, and that was the entire
+3x.
+
+One pathological input is not the pathological input. Ascending and descending
+keys produce mirror-image trees with opposite performance, and I had measured one
+of them.
+
+Also worth keeping: the honest ranking that came out of the same benchmark. A
+sorted slice with `slices.BinarySearch` beats this tree at lookup, iteration and
+range queries. The tree earns its place only because a sorted slice costs O(n) per
+insertion. That belongs at the top of the README, not buried.

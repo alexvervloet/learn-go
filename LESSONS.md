@@ -768,3 +768,37 @@ comments naming why beat one directory-wide rule.
 There is a second, better outcome here: a linter that flags the teaching example
 is evidence the example is realistic. Worth keeping the hits visible in the
 README rather than silently suppressed.
+
+## The famous slice-queue leak is not a leak
+
+**Expected.** Writing the queue package I set out the standard three-way
+comparison: `q = q[1:]` on pop grows memory without bound, `copy(q, q[1:])` is
+O(n) per pop, and a ring buffer fixes both. I wrote that README before writing
+the benchmark.
+
+**What happened.** Two of the three claims were wrong, and the benchmark said so
+immediately. `q = q[1:]` shrinks `cap` along with `len`, so `append` runs out of
+capacity, reallocates, and lets the old array be collected. It is amortised O(1)
+in time and O(n) in space, and it measured the same nanosecond count as the ring
+buffer at every window size from 100 to 1,000,000 (4.7 to 5.5 ns/op for both). It
+also *won* the fill-and-drain benchmark outright, 62 µs against the ring buffer's
+111 µs, because it does not pay for modulo arithmetic or for zeroing the slot it
+vacates. Only the shift-down version was as bad as advertised: 20x slower in
+steady state, 83x on a drain.
+
+The ring buffer's real advantage turned out to be the column I had not been
+looking at. 0 B/op against a permanent 14 to 39 B/op, so at a million operations
+a second the reslice version hands the collector tens of megabytes a second of
+garbage and a growing live array to scan. There is also one genuine retention bug
+in the reslice version, which is not the one everyone repeats: a slice keeps its
+*entire* backing array alive, so a queue filled to a million and drained to one
+element reports `cap` 1 while the million-element allocation is still live, and
+the vacated slots are unreachable from any slice you hold so you cannot clear
+them.
+
+**Next time.** This is the same rule as four earlier entries, so it is clearly
+not learned yet: write the demo, run the tools, then write the paragraph. The
+specific trap here is that the claim was *received wisdom*, which made it feel
+verified when it was not. A number I got from a blog post is not a measurement.
+Worth adding: when a benchmark contradicts the story, the interesting write-up is
+the contradiction, not a quietly deleted paragraph.

@@ -802,3 +802,41 @@ specific trap here is that the claim was *received wisdom*, which made it feel
 verified when it was not. A number I got from a blog post is not a measurement.
 Worth adding: when a benchmark contradicts the story, the interesting write-up is
 the contradiction, not a quietly deleted paragraph.
+
+## A measurement tool needs a known-answer test before you trust a number
+
+**Expected.** The hash map package needed two instruments: `Measure`, which scores
+how evenly a hash function spreads keys, and `CollidingKeys`, which generates keys
+that deliberately collide so the hash-flooding attack can be priced. Both are
+twenty lines. I wrote them, wrote the tests that use them, and read the numbers.
+
+**What happened.** Both instruments were wrong, and neither failure looked like a
+failure.
+
+`Measure` reported a chi-square ratio of `0.000` for a good hash and `0.0` for a
+terrible one. I had normalised the raw crowding score inside `Measure` and then
+divided by the key count again in `Ratio()`. The correct answers were 1.005 and
+45.5, so the bug did not just scale the numbers, it destroyed the entire signal
+the function existed to produce.
+
+`CollidingKeys` built keys by moving a `b` around strings of *growing* length.
+Under a byte-sum hash the sum is `length * 97`, so keys of different lengths do
+not collide with each other. Instead of one chain of 2,000 keys it produced a
+dozen short chains, and priced the attack at 25 probes per insertion. With all
+keys the same length it is 1,000 probes per insertion, so the instrument
+understated the thing it was built to demonstrate by 40x.
+
+The same shape a third time, in the map itself. `resize` used
+`slotsFor(count*2)`, but `slotsFor` already divides by the load factor, so the
+doubling was applied twice and the table grew 4x per resize. Nothing failed. The
+map was correct, the tests passed, and 100 keys sat in 512 slots at a load of
+0.20. An example asserting the printed capacity is what caught it.
+
+**Next time.** Give every measurement function a test with an answer known in
+advance, before using it to measure anything. For `Measure` that is a hash that is
+provably uniform and one that is provably terrible, asserted against 1.0 and
+"much greater than 1.0". For `CollidingKeys` it is the one-line invariant that
+every key hashes the same, which I did eventually write, and which would have
+caught it in the first minute. And when a tool reports that something is fine,
+sanity-check the magnitude: the reason all three of these survived is that
+`0.000`, `25` and `512` all looked plausible enough not to question.

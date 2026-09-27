@@ -1374,3 +1374,26 @@ The rule that comes out of both: for a database comparison, assert the machine-i
 (round trips, rows transferred, plan node types) and log the timing next to it. Then the test says
 something true on a laptop and in CI and on a managed database, and the reader can do the arithmetic for
 their own latency.
+
+## A GIN index on 10,000 rows is never used, and the planner is right
+
+**Expected.** The books table has a generated `tsvector` column and a GIN index on it, so
+`search @@ websearch_to_tsquery(...)` uses the index. Assert that and move on.
+
+**What happened.** Three versions of the test failed. With `LIMIT 20` the planner scanned, because
+'quick river' matches 137 of 10,000 titles and a scan finds 20 of them after reading 1,320 rows. With
+`count(*)`, where every match must be found, it still scanned: the table is 1,632 kB, which is a few
+hundred page reads.
+
+`SET LOCAL enable_seqscan = off` forces the index path so both can be priced. The estimate says the
+index costs 534 against the scan's 329, a 1.6x penalty. The clock says 0.79ms against 0.81ms, which is
+a tie.
+
+**Next time.** Two things worth keeping. An index test needs a table big enough for the index to win,
+and 10,000 rows is not it for GIN. And cost units are not milliseconds: they come from a model whose
+constants default to spinning-disk assumptions, `random_page_cost` at 4.0 where an SSD is nearer 1.1.
+That one setting is the most common planner tuning change there is, and this is what it looks like from
+the inside.
+
+The measurement that did survive: reading the stored generated column is 18x faster than recomputing
+`to_tsvector(title)` per row, 0.81ms against 14.68ms, and that gap has nothing to do with any index.

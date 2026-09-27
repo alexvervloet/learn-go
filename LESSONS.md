@@ -1287,3 +1287,44 @@ and a database per test binary. `dbtest` now derives a name from `os.Args[0]` (w
 and cannot run in a transaction, so it is a check-then-create, and two packages starting together both
 try, so `42P04 duplicate_database` counts as success. It costs about 120ms per package and it keeps
 `-p` at its default.
+
+## `-benchtime 200x` on a benchmark that does I/O measures nothing
+
+**Expected.** A fixed iteration count keeps a slow benchmark suite short, and 200 iterations of a
+1ms operation is 200ms of samples, which felt like plenty.
+
+**What happened.** `BenchmarkFanOut/Join/1` reported 468µs at `-benchtime 200x` and 90µs at
+`-benchtime 2000x`. I had already started writing the conclusion that a join is 7x slower than two
+queries at low fan-out, from the 200x number, which was noise.
+
+**Next time.** Use the default `-benchtime 1s` and `-count=3` and read the spread, which is what the
+default is for. Fixed iteration counts are for making a benchmark reproducible once you know the
+variance, not for making the suite finish sooner.
+
+## A cached prepared statement made the same query 6x slower, and it was Postgres, not Go
+
+**Expected.** `BenchmarkFanOut/Join/1` should report the same number wherever it runs in the suite.
+
+**What happened.** 93µs on its own, 552µs when it ran after `BenchmarkStrategies`. Same process, same
+data, same code. `GOGC=800` changed nothing, so it was not the garbage collector. Adding
+`plan_cache_mode=force_custom_plan` to the connection string removed it completely: 94.6µs against
+573µs.
+
+The cause is Postgres's plan cache. pgx prepares every statement and caches it per connection by SQL
+text. Postgres plans a prepared statement with the real parameter values for five executions, then
+compares their average cost against a GENERIC plan built without the parameters, and if the generic
+plan looks no worse it switches permanently. `BenchmarkStrategies` ran the join with `LIMIT 50`, which
+made Postgres adopt a generic plan; `BenchmarkFanOut` ran the identical SQL with `LIMIT 1` and got
+that plan.
+
+`EXPLAIN EXECUTE` under both modes shows exactly what changed. The custom plan is a Nested Loop with
+a Bitmap Index Scan on `idx_books_author`, 0.033ms. The generic plan is a Hash Join with a **Seq
+Scan** on `books`, 0.638ms, 19.3x slower, because without the parameter Postgres guesses the `LIMIT`
+will return 1000 rows where the real answer is 38.
+
+**Next time.** Two things. A benchmark that shares a connection pool with other benchmarks is not
+isolated, so measure each one alone before believing a comparison. And this is a production failure
+mode, not a benchmark artefact: it is the shape of "one endpoint got slow after a deploy and recovered
+when we restarted the pods". Parameter-dependent selectivity plus a prepared statement is the
+ingredient list, and a parameterised `LIMIT` or a tenant ID with wildly uneven row counts is the
+trigger. `nplusone.TestGenericPlanRegression` pins it.

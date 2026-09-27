@@ -1681,3 +1681,41 @@ test and reports success.
 Which is the same shape as the whole skip-on-no-service design: skipping is the right behaviour locally and a
 silent pass in CI, so both the database and the backend jobs grep their own output for the skip messages and fail
 on them. A skip is not a pass.
+
+## Four things gRPC does that I had to measure rather than assume
+
+**A server-streaming interceptor DOES see the request through `RecvMsg`.** I wrote a comment saying the request
+arrives before the handler runs, so a wrapped stream would count zero received messages. The test reported one.
+grpc-go delivers the single request by calling `RecvMsg` on the stream the interceptor wrapped, so a
+server-streaming call reports 1 received and N sent.
+
+**`grpc.SetTrailer` returns an error.** I wrote a helper with no error return and a comment explaining that it
+cannot fail, because trailers are not sent until the handler returns and so cannot be "too late". The linter
+caught it. The asymmetry I was describing is real (SetHeader fails when called after the first Send, SetTrailer
+has no such window) and the conclusion I drew from it was wrong.
+
+**Interceptors are free.** No interceptors 27.9µs per unary call, one 26.4µs, six 26.0µs, all within the noise
+of a 26µs call. I expected a measurable per-layer cost, as there is in HTTP middleware. There is not, because
+the call itself is two orders of magnitude more expensive than a closure.
+
+**Streaming is 22.7x faster than the equivalent unary calls.** 100 messages in one stream: 127µs and 97 KB
+allocated. 100 unary calls: 2,891µs and 1,247 KB. A stream amortises the framing, the headers and the status
+trailer over every message, which is the same finding as the N+1 measurement in database-concepts arrived at
+from a different direction: the chatty API is the thing to fix before the transport.
+
+And the smaller measurements that went into the README: protobuf is 4.1x smaller and 2.9x faster to encode than
+`encoding/json` on the same generated struct, while `protojson` (what a gateway emits) is 7.9x slower than
+protobuf and 2.8x slower than `encoding/json`.
+
+## The generated-code question, decided
+
+`*.pb.go` was gitignored with a comment saying "regenerate rather than commit". That is the right rule for a
+private service with a build pipeline and the wrong one here.
+
+This repo exists to be cloned and read. With the stubs ignored, `git clone && go build ./...` needs protoc,
+protoc-gen-go, protoc-gen-go-grpc and versions that agree, which is four installs before the first line
+compiles. It is also the Go community's convention: the standard library commits its generated files and every
+gRPC project on pkg.go.dev ships its `.pb.go`, because `go get` runs no generators.
+
+So the stubs are committed, the reasoning lives in `.gitignore` where the next person to touch it will read it,
+and the drift it would have prevented is caught by a CI job that regenerates and diffs instead.

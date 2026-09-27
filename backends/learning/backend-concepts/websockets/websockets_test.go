@@ -2,6 +2,7 @@ package websockets
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -19,31 +20,62 @@ func discardLogger() *slog.Logger {
 }
 
 // echoServer starts a server that echoes every message back.
+//
+// # Why the logging goes through a buffer
+//
+// The obvious version calls t.Logf from the handler when a connection ends. Under -race that reports a data
+// race inside `testing` itself: a connection can end after the test function returns, and t.Logf on a finished
+// test races with testing's own bookkeeping. It reproduces about one run in three, which is exactly the kind of
+// flake that gets rerun until it passes.
+//
+// The fix is ordering. t.Cleanup runs LIFO, so registering the drain FIRST and srv.Close SECOND means Close
+// runs first, waits for every handler to return, and only then are the messages logged, on the test's own
+// goroutine.
 func echoServer(t *testing.T, cfg Config, policy OverflowPolicy) (*httptest.Server, *Hub) {
 	t.Helper()
 
 	hub := NewHub()
 
+	var (
+		mu       sync.Mutex
+		messages []string
+	)
+
+	record := func(format string, args ...any) {
+		mu.Lock()
+		defer mu.Unlock()
+
+		messages = append(messages, fmt.Sprintf(format, args...))
+	}
+
+	// Registered first, so it runs LAST.
+	t.Cleanup(func() {
+		mu.Lock()
+		defer mu.Unlock()
+
+		for _, m := range messages {
+			t.Log(m)
+		}
+	})
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c, err := Accept(w, r, cfg, policy, discardLogger())
 		if err != nil {
-			// Not t.Fatal: this runs on the server's goroutine, and Fatal from a non-test
-			// goroutine is a documented mistake that stops the wrong goroutine.
-			t.Errorf("accept: %v", err)
+			record("accept: %v", err)
 			return
 		}
 
 		hub.Add(c)
 		defer hub.Remove(c)
 
-		err = c.Run(r.Context(), func(_ context.Context, data []byte) error {
+		if err := c.Run(r.Context(), func(_ context.Context, data []byte) error {
 			return c.Send(append([]byte("echo: "), data...))
-		})
-		if err != nil {
-			t.Logf("connection ended: %v", err)
+		}); err != nil {
+			record("connection ended: %v", err)
 		}
 	}))
 
+	// Registered second, so it runs FIRST and blocks until every handler has returned.
 	t.Cleanup(srv.Close)
 
 	return srv, hub
@@ -313,10 +345,17 @@ func TestPingDetectsADeadPeer(t *testing.T) {
 		done  = make(chan struct{})
 	)
 
+	var acceptErr error
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c, err := Accept(w, r, cfg, DropNewest, discardLogger())
 		if err != nil {
-			t.Errorf("accept: %v", err)
+			mu.Lock()
+			acceptErr = err
+			mu.Unlock()
+
+			close(done)
+
 			return
 		}
 
@@ -328,7 +367,19 @@ func TestPingDetectsADeadPeer(t *testing.T) {
 
 		close(done)
 	}))
+
+	// Close runs before the assertions below read acceptErr, and both happen on the test's own
+	// goroutine. Reporting a handler's failure through a variable rather than t.Errorf is what
+	// keeps this race-free.
 	t.Cleanup(srv.Close)
+	t.Cleanup(func() {
+		mu.Lock()
+		defer mu.Unlock()
+
+		if acceptErr != nil {
+			t.Errorf("accept: %v", acceptErr)
+		}
+	})
 
 	ws, _ := dial(t, srv)
 
@@ -400,10 +451,17 @@ func TestAClientThatDoesNotReadIsDisconnected(t *testing.T) {
 		done  = make(chan struct{})
 	)
 
+	var acceptErr error
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c, err := Accept(w, r, cfg, DropNewest, discardLogger())
 		if err != nil {
-			t.Errorf("accept: %v", err)
+			mu.Lock()
+			acceptErr = err
+			mu.Unlock()
+
+			close(done)
+
 			return
 		}
 
@@ -415,7 +473,19 @@ func TestAClientThatDoesNotReadIsDisconnected(t *testing.T) {
 
 		close(done)
 	}))
+
+	// Close runs before the assertions below read acceptErr, and both happen on the test's own
+	// goroutine. Reporting a handler's failure through a variable rather than t.Errorf is what
+	// keeps this race-free.
 	t.Cleanup(srv.Close)
+	t.Cleanup(func() {
+		mu.Lock()
+		defer mu.Unlock()
+
+		if acceptErr != nil {
+			t.Errorf("accept: %v", acceptErr)
+		}
+	})
 
 	_, _ = dial(t, srv)
 
@@ -488,15 +558,33 @@ func TestOriginIsCheckedByDefault(t *testing.T) {
 	// Not echoServer: its handler reports an accept failure as a test failure, and here the accept
 	// failure IS the expected result. A helper that treats every error as a bug cannot be used to
 	// test an error.
+	var (
+		quietMu sync.Mutex
+		rejects []string
+	)
+
+	t.Cleanup(func() {
+		quietMu.Lock()
+		defer quietMu.Unlock()
+
+		for _, r := range rejects {
+			t.Log(r)
+		}
+	})
+
 	quiet := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c, err := Accept(w, r, DefaultConfig(), DropNewest, discardLogger())
 		if err != nil {
-			t.Logf("accept rejected the handshake: %v", err)
+			quietMu.Lock()
+			rejects = append(rejects, "accept rejected the handshake: "+err.Error())
+			quietMu.Unlock()
+
 			return
 		}
 
 		_ = c.Run(r.Context(), func(context.Context, []byte) error { return nil })
 	}))
+
 	t.Cleanup(quiet.Close)
 
 	url := "ws" + strings.TrimPrefix(quiet.URL, "http")

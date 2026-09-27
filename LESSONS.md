@@ -1597,3 +1597,40 @@ The measured cardinality numbers, for 1,000 requests to one endpoint with 1,000 
 labelled by route, 27,001 labelled by raw path, 964x**. And the cost is not only Prometheus's memory:
 `Registry.Gather` takes 7.6µs at one label value and 7.36ms at 10,000, so the service pays for its own
 cardinality on every scrape.
+
+## `t.Log` from a server goroutine is a data race, and it reproduces one run in three
+
+**Expected.** A `httptest.Server` handler that logs when a connection ends, with `t.Cleanup(srv.Close)` to tear
+it down, is ordinary test code.
+
+**What happened.** `go test -race` passed four times and failed on the fifth, and the report pointed inside
+`testing` itself: a read in `testing.(*common).destination` racing with a write in `testing.tRunner.func1`. The
+cause is that a WebSocket connection can end after the test function has returned, and `t.Logf` on a finished
+test races with testing's own bookkeeping.
+
+The fix is ordering, and `t.Cleanup` runs LIFO. Registering the log drain FIRST and `srv.Close` SECOND means
+Close runs first, blocks until every handler has returned, and only then are the buffered messages logged, on
+the test's own goroutine. Handler failures go into a variable rather than through `t.Errorf` for the same
+reason.
+
+**Next time.** Nothing that outlives a test may touch its `*testing.T`. That includes `t.Log`, `t.Error` and
+`t.Fatal`, and it includes any goroutine a handler started. Buffer the messages, close the server first, then
+report. A race that appears one run in three is the kind that gets rerun until it passes.
+
+## A WebSocket client only answers pings while it is reading
+
+**Expected.** A server pings an idle connection, the client's library replies automatically, and a peer that has
+vanished fails the ping.
+
+**What happened.** The test client connected and slept for 200ms without calling `Read`. The server sent one
+ping, waited the whole `WriteTimeout`, got nothing, and gave up: zero successful pings. coder/websocket sends
+the pong from INSIDE `Read`, so a client that is not in a read loop never answers.
+
+**Next time.** A WebSocket client has to be in a read loop for the whole life of the connection, even if it
+never expects a message. "Connect, send, sleep, send" is a client that gets disconnected, and the server log
+says the peer stopped responding to pings, which sends everyone looking at the server.
+
+Two more from the same package. `Conn.Close` dereferenced the socket unconditionally, and `Send` calls `Close`
+when the overflow policy is Disconnect, so a Conn whose upgrade failed segfaulted inside whichever goroutine
+was broadcasting. And a test helper that reports every accept failure through `t.Errorf` cannot be used to test
+that an accept SHOULD fail, which is how the origin check test failed on its own success.

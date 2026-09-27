@@ -1,6 +1,7 @@
 go 1.27
 
 use (
+	./backends/learning/database-concepts
 	./backends/learning/http-tutorial
 	./backends/learning/testing-concepts
 	./dsa

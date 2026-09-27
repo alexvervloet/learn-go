@@ -37,6 +37,9 @@ linters:
       # directive is not attached to a statement.
       ignore-rules:
         - requried
+        # http-tutorial/request demonstrates what DisallowUnknownFields does by
+        # sending a typo, so the typo is the example.
+        - nmae
 
     goconst:
       # Demo fixtures repeat sample names ("Ana", "alice@example.com") across a

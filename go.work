@@ -1,6 +1,7 @@
 go 1.27
 
 use (
+	./backends/learning/http-tutorial
 	./dsa
 	./go-concepts
 )

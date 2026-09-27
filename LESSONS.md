@@ -1563,3 +1563,37 @@ int64". A `time.Duration` is an int64 count of nanoseconds, so the maximum is ab
 **Next time.** Express a far-future instant as a `time.Time`, not as an offset. Relevant beyond fixtures: a
 "never expire" sentinel written as a huge duration silently overflows to a negative number, and a negative
 timeout usually means "already expired".
+
+## Four findings from building the observability package
+
+**A metrics middleware outside the mux cannot see the route.** `http.ServeMux` sets `r.Pattern` when it
+matches, which happens inside the mux's `ServeHTTP`. A middleware wrapping the mux runs before that, so it sees
+an empty pattern and labels every metric `unmatched`. Reading it after `next.ServeHTTP` does not help either:
+the mux passes a cloned request to the handler, so the outer middleware's `r` is never the one with the pattern
+set. The fix is a mutable holder in the context, written by a middleware registered inside the mux and read by
+the outer one after the handler returns. That is what chi's RouteContext is for, and it is the only way to pass
+information back out through a handler chain.
+
+**A `slog.Handler` wrapper cannot add a top-level attribute inside a group.** Forwarding `WithGroup` keeps the
+wrapper, and the context attributes then land at `http.request_id` rather than `request_id`. By the time
+`Handle` runs, the inner handler already knows it is in a group. A handler could fix it by taking over group
+handling entirely, which is a reimplementation of slog's group semantics inside a wrapper. The practical rule:
+do not use `WithGroup` on a logger carrying request-scoped attributes, because a log query for `request_id` will
+not match the nested path.
+
+**A benchmark found a feature that silently did nothing.** `LevelFilter` gates on its own level and then defers
+to the inner handler for a sampled request. slog's handlers default to Info, so an inner handler built without
+options drops every debug line whatever the sampling says. The symptom was a benchmark: "kept because sampled"
+measured 44ns, which is not the cost of writing a log line. With the inner handler at `LevelDebug` it is 842ns
+against 13.4ns for a dropped line, a factor of 63, and that 63x is the whole argument for filtering in `Enabled`
+rather than in `Handle`.
+
+**Counting `dto.Metric` values understates a histogram by fifteen times.** `Registry.Gather` returns one metric
+per label combination, so counting those says a histogram is one series. In the exposition format the same
+histogram is one `_bucket` series per boundary plus the implicit `+Inf`, `_sum` and `_count`: 15 series for 12
+buckets. Bucket count multiplies cardinality rather than adding to it.
+
+The measured cardinality numbers, for 1,000 requests to one endpoint with 1,000 distinct ids: **28 series
+labelled by route, 27,001 labelled by raw path, 964x**. And the cost is not only Prometheus's memory:
+`Registry.Gather` takes 7.6µs at one label value and 7.36ms at 10,000, so the service pays for its own
+cardinality on every scrape.

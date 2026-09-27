@@ -1659,3 +1659,25 @@ enclosing function fails on every test with "use of closed network connection": 
 function returns, so they dial their own. And `kafka.Writer`'s zero value for `RequiredAcks` is `RequireNone`,
 so a Writer built from an empty config returns success before the broker has the message and a broker restart
 loses it silently. That is the most dangerous default in the library and it is what you get by not deciding.
+
+## Three smaller findings from finishing backend-concepts
+
+**`json.Marshal` HTML-escapes `<`, `>` and `&`, with no way to turn it off.** The first golden file in
+`apitesting` read `"created_at": "<normalised>"`, which is correct JSON and unreadable in a diff, which
+defeats the only reason to write a golden file. `json.Encoder` with `SetEscapeHTML(false)` is the only way, and it
+also appends a trailing newline that `Marshal` does not.
+
+**`httptest.NewRequest` and `http.NewRequest` produce different things and the difference is silent.**
+`httptest.NewRequest` builds a SERVER request, with `RemoteAddr` set and a relative URL. `http.NewRequest` builds
+a client request with an empty `RemoteAddr`. A handler that keys a rate limit or a log line on `RemoteAddr` gets
+`""` from the second, so every request in the test shares one bucket and the test passes for the wrong reason.
+
+**A service container cannot override a command.** GitHub Actions' `services:` takes an image and `options`
+(docker run flags) and has no equivalent of `command`. Redpanda needs `redpanda start` with listener flags, so it
+has to be a `docker run` step with a readiness poll. A fixed `sleep` instead of the poll is either too short on a
+slow runner or wasted time on a fast one, and the failure mode of too short is a suite that skips every Kafka
+test and reports success.
+
+Which is the same shape as the whole skip-on-no-service design: skipping is the right behaviour locally and a
+silent pass in CI, so both the database and the backend jobs grep their own output for the skip messages and fail
+on them. A skip is not a pass.

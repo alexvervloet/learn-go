@@ -3,6 +3,7 @@ go 1.27
 use (
 	./backends/learning/backend-concepts
 	./backends/learning/database-concepts
+	./backends/learning/graphql-concepts
 	./backends/learning/grpc-concepts
 	./backends/learning/http-tutorial
 	./backends/learning/testing-concepts

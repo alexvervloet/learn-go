@@ -1,0 +1,66 @@
+# gqlgen's configuration.
+#
+# Every line here is a decision, and the defaults are mostly right. The ones that are not are commented.
+
+schema:
+  - graph/schema/*.graphqls
+
+exec:
+  filename: graph/generated/generated.go
+  package: generated
+
+model:
+  filename: graph/model/models_gen.go
+  package: model
+
+resolver:
+  layout: follow-schema
+  dir: graph/resolvers
+  package: resolvers
+  filename_template: "{name}.resolvers.go"
+
+# omit_slice_element_pointers: a []Book! becomes []*model.Book by default, which means every element can be nil
+# and every loop needs a nil check for something the schema says cannot be null. Turning it on gives []*model.Book
+# for [Book] and []*model.Book for [Book!]... actually gqlgen still uses pointers for structs; what this controls
+# is the extra pointer for NON-NULL elements.
+omit_slice_element_pointers: true
+
+# Returning a pointer for a nullable field and a value for a non-null one is what makes the Go types carry the
+# schema's nullability. Without it, every field is a pointer and the compiler stops helping.
+autobind: []
+
+models:
+  ID:
+    model:
+      # ID as a string, not an int. GraphQL's ID is "a string, or an int that will be serialised as a string",
+      # and a client that sends "42" and one that sends 42 must both work. Binding it to Int accepts one and
+      # rejects the other.
+      - github.com/99designs/gqlgen/graphql.ID
+      - github.com/99designs/gqlgen/graphql.IntID
+
+  Int:
+    model:
+      - github.com/99designs/gqlgen/graphql.Int
+      - github.com/99designs/gqlgen/graphql.Int64
+      - github.com/99designs/gqlgen/graphql.Int32
+
+  # Binding the domain types to hand-written structs rather than letting gqlgen generate them.
+  #
+  # The generated models are fine for a toy and wrong for a service: they have no methods, no validation, and
+  # changing the schema rewrites them. Binding to types in model/ means the domain type is the domain type and
+  # the schema maps onto it.
+  Author:
+    model: github.com/alexvervloet/learn-go/backends/learning/graphql-concepts/graph/model.Author
+    fields:
+      books:
+        resolver: true
+      bookCount:
+        resolver: true
+
+  Book:
+    model: github.com/alexvervloet/learn-go/backends/learning/graphql-concepts/graph/model.Book
+    fields:
+      author:
+        resolver: true
+      similar:
+        resolver: true

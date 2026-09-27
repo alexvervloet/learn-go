@@ -1328,3 +1328,25 @@ mode, not a benchmark artefact: it is the shape of "one endpoint got slow after 
 when we restarted the pods". Parameter-dependent selectivity plus a prepared statement is the
 ingredient list, and a parameterised `LIMIT` or a tenant ID with wildly uneven row counts is the
 trigger. `nplusone.TestGenericPlanRegression` pins it.
+
+## Two things about transactions that only turned up by writing the test
+
+**Write skew needs each individual write to be legal.** My first attempt had two transactions each
+withdraw 600 from an account holding 500, with a `CHECK (balance_cents >= 0)` on the table. Both failed
+with 23514 at every isolation level, and the anomaly never appeared. Write skew is precisely the case
+where nothing individually breaks: each transaction reads a set of rows, checks a rule about the set,
+writes a row nobody else wrote, and the rule ends up broken. The working version has each transaction
+withdraw 300 from its own account while checking that the pair still holds 600 between them. At
+REPEATABLE READ both commit and the pair ends at 400. At SERIALIZABLE one gets `40001 could not
+serialize access due to read/write dependencies among transactions`.
+
+**Committing an aborted transaction is not an error in Postgres, and pgx makes it one.** After a failed
+statement, every later statement in the transaction returns `25P02`. If the code then calls COMMIT,
+Postgres accepts it and performs a ROLLBACK instead, silently. pgx notices and returns
+`pgx.ErrTxCommitRollback`. So a handler that swallows one statement's error and commits at the end does
+get told, which is better than the alternative and is not behaviour I would have assumed.
+
+**What it cost to know.** `pgx.Tx` has `Begin`, not `BeginTx`, so one `WithTx` helper cannot serve both
+the pool and the savepoint case. That is not an oversight: a savepoint has no isolation level of its
+own, because the isolation level belongs to the whole transaction. The signature is telling you
+something true.

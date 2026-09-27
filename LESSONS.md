@@ -1719,3 +1719,46 @@ gRPC project on pkg.go.dev ships its `.pb.go`, because `go get` runs no generato
 
 So the stubs are committed, the reasoning lives in `.gitignore` where the next person to touch it will read it,
 and the drift it would have prevented is caught by a CI job that regenerates and diffs instead.
+
+## The GraphQL N+1 benchmark said the opposite of what it was meant to, and it was right
+
+**Expected.** Twenty authors with their books is 21 queries without a dataloader and 2 with one, so the batched
+version should be faster, and more so as the store gets slower.
+
+**What happened.** The naive resolver was FASTER at every latency, including 1ms per query: 3.65ms against
+6.28ms. Not a bug in the benchmark.
+
+GraphQL resolves sibling fields CONCURRENTLY. The 20 books resolvers run in 20 goroutines, so against a store
+that will serve 20 queries at once, 20 one-millisecond queries take one millisecond in total. The dataloader's
+2ms batching window is then pure added cost.
+
+So an N+1 in GraphQL does not cost the REQUEST its latency. It costs the DATABASE: 21 connections instead of 2
+and 21 queries of work instead of 2. Adding a connection-pool model to the store produced the expected result:
+
+| store | naive | batched |
+| --- | --- | --- |
+| in memory | 373µs | 3,513µs |
+| 1ms, unbounded | 3.65ms | 6.28ms |
+| 1ms, pool of 4 | 8.61ms | **6.21ms** |
+| 1ms, pool of 1 | 26.6ms | **6.16ms** |
+
+**Next time.** The crossing point is the connection pool, and a benchmark of concurrent work against an
+unbounded fake measures a system nobody has. It also vindicates the rule the rest of the repo follows: every
+assertion in that package is on the QUERY COUNT, which is true everywhere, and the durations are logged beside
+it.
+
+## Three smaller things from gqlgen
+
+**`client.Post` returns an error for a GraphQL error and does not populate the target.** Every partial-success
+test failed with "unexpected end of JSON input", which is what you get decoding a target that was never
+written. `RawPost` returns `data` and `errors` together, which is the whole point when testing that a response
+carries both.
+
+**The test client decodes STRICTLY.** A field the query selects and the response struct does not have is an
+error: `'Authors[0]' has invalid keys: id`. That is the opposite of `encoding/json`, and it catches a query and
+a struct drifting apart, which is worth the noise.
+
+**One failing non-null field nulls the whole response.** With `authors: [Author!]!` and `books: [Book!]!`, an
+error in one author's books propagates to the list, to the field, and to `data`, which becomes null. Whether a
+failure costs one field or everything is decided by exclamation marks in the schema, and it is not obvious when
+writing them.

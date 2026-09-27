@@ -371,9 +371,16 @@ jobs:
           go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
           go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 
-      - name: Regenerate
+      - name: Regenerate the gRPC stubs
         working-directory: backends/learning/grpc-concepts
         run: ./generate.sh
+
+      # gqlgen needs no external tool: it is a Go program, so `go run` is the
+      # whole install. That is a real advantage over protoc and worth noticing
+      # when choosing a generator.
+      - name: Regenerate the GraphQL schema
+        working-directory: backends/learning/graphql-concepts
+        run: go run github.com/99designs/gqlgen generate
 
       - name: Fail if anything changed
         run: |

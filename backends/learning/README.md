@@ -11,7 +11,7 @@ mapping is stated rather than forced.
 | [database-concepts/](database-concepts/) | done | `database-concepts` | pgx, indexes, N+1, transactions, window functions, full text, pgvector, goose |
 | [backend-concepts/](backend-concepts/) | done | `backend-concepts` | pagination, rate limiting, caching, webhooks, JWT, OAuth, observability, WebSockets, Kafka |
 | [grpc-concepts/](grpc-concepts/) | done | `grpc-concepts` | the four RPC patterns, status codes, metadata, interceptors |
-| graphql-concepts/ | not started | `graphql-concepts` | gqlgen, resolvers, dataloaders, the N+1 again |
+| [graphql-concepts/](graphql-concepts/) | done | `graphql-concepts` | gqlgen, the N+1 and dataloaders, error models, complexity limiting |
 | jobs-concepts/ | not started | `celery-concepts` | asynq, retries, scheduling, idempotency |
 | email-concepts/ | not started | `email-concepts` | SMTP, templates, testing outbound mail |
 | docker-concepts/ | not started | `docker-concepts` | multi-stage builds, distroless, `CGO_ENABLED=0` |

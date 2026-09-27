@@ -1,0 +1,43 @@
+# Mailpit: an SMTP server that accepts everything and shows it to you.
+#
+#   docker compose up -d
+#   go test ./...
+#   open http://localhost:8026
+#
+# Without it, the tests that need a real SMTP conversation SKIP and the ones that build and parse messages still
+# run, which is most of them.
+
+services:
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: learn-go-mailpit
+
+    ports:
+      # 1026 for SMTP and 8026 for the UI and API, both shifted off the defaults so this can run
+      # alongside another Mailpit or a local mail server.
+      - "1026:1025"
+      - "8026:8025"
+
+    environment:
+      # Keep everything in memory. Mailpit defaults to an on-disk SQLite database, and for a test
+      # catcher that means yesterday's messages are still there and a test asserting "the mailbox
+      # holds one message" depends on what ran before.
+      MP_DATABASE: ""
+
+      # No authentication and no TLS, which is the whole point of a local catcher and is also why
+      # this must never be reachable from anywhere. Mailpit accepts and displays every message it is
+      # given, including the passwords in them.
+      MP_SMTP_AUTH_ACCEPT_ANY: "true"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "true"
+
+      # 500 messages, oldest evicted. Enough for a test suite and small enough that a runaway loop
+      # cannot fill the container's memory.
+      MP_MAX_MESSAGES: "500"
+
+    healthcheck:
+      # Mailpit ships no shell tools in its image beyond wget, so the check uses its own readyz
+      # endpoint rather than curl.
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8025/readyz"]
+      interval: 2s
+      timeout: 3s
+      retries: 30

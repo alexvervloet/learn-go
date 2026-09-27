@@ -335,6 +335,58 @@ jobs:
         run: docker rm -f redpanda
 
   # ---------------------------------------------------------------------------
+  # Generated — regenerate the protobuf stubs and fail if they differ.
+  #
+  # The stubs are COMMITTED, so `git clone && go build ./...` works with nothing
+  # but a Go toolchain. The reasoning is in .gitignore; this job is the other half
+  # of it, because a committed generated file can drift from its source and
+  # nothing else would notice.
+  #
+  # Its own job because it needs protoc, which nothing else does.
+  # ---------------------------------------------------------------------------
+  generated:
+    name: Generated code is current
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27"
+          cache: true
+
+      - name: Install protoc
+        # apt rather than a release download: the generated code does not depend
+        # on the protoc version, only on the plugins, so the distribution's build
+        # is fine and it is one line.
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+      - name: Install the protoc plugins
+        # @latest matches what generate.sh tells a developer to install. A pinned
+        # version would be more reproducible and would also mean CI silently
+        # passes with a plugin nobody has locally, which is the drift this job
+        # exists to catch.
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+
+      - name: Regenerate
+        working-directory: backends/learning/grpc-concepts
+        run: ./generate.sh
+
+      - name: Fail if anything changed
+        run: |
+          if ! git diff --quiet; then
+            echo "::error::the generated code is out of date; run ./generate.sh and commit"
+            git diff --stat
+            git diff
+            exit 1
+          fi
+
+          echo "generated code matches the .proto files"
+
+  # ---------------------------------------------------------------------------
   # Race — the race detector on its own job, because it is 5-10x slower than a
   # normal run and does not need the full matrix to be useful. One platform,
   # current Go.

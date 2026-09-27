@@ -1,0 +1,120 @@
+# The three services this module's tests need.
+#
+#   docker compose up -d
+#   go test ./...
+#
+# With none of them running, every test that needs one SKIPS rather than fails. The harnesses in internal/
+# make that decision and the reason is in their package docs.
+#
+# Every port is shifted off its default, so this can run alongside a Postgres, a Redis or a Kafka someone
+# already has. A compose file that refuses to start because 5432 is taken is worse than one that needs an
+# environment variable.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: learn-go-bc-postgres
+
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: learn_go_db
+
+    ports:
+      - "5433:5432"
+
+    command:
+      - postgres
+      # The pagination tests create their own database per test binary, and each one holds a pool of
+      # ten.
+      - -c
+      - max_connections=200
+      - -c
+      - fsync=off
+      - -c
+      - synchronous_commit=off
+      # So the query plans in the pagination tests resemble what an SSD-backed server would choose.
+      # The default of 4.0 assumes a spinning disk.
+      - -c
+      - random_page_cost=1.1
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d learn_go_db"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+  redis:
+    image: redis:7-alpine
+    container_name: learn-go-bc-redis
+
+    ports:
+      - "6380:6379"
+
+    command:
+      - redis-server
+      # No persistence. This is a test database; an RDB snapshot on shutdown is pure cost, and
+      # appendonly would make every write slower for data nothing reads back.
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+      # The redistest harness spreads test binaries across databases 1 to 15, which is Redis's
+      # default count. Stated here so the relationship is visible.
+      - --databases
+      - "16"
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  redpanda:
+    # Redpanda rather than Kafka, and it is not a compromise: it speaks the Kafka protocol, so
+    # segmentio/kafka-go cannot tell the difference, and it is one process with no ZooKeeper and no JVM.
+    # A Kafka compose file for a test suite is two containers, a gigabyte of heap and forty seconds of
+    # startup.
+    image: docker.redpanda.com/redpandadata/redpanda:latest
+    container_name: learn-go-bc-redpanda
+
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp
+      - "1"
+      - --memory
+      - 512M
+      - --reserve-memory
+      - 0M
+      - --node-id
+      - "0"
+      - --check=false
+      # Two listeners, and the reason is the classic Kafka-in-Docker problem. A broker advertises an
+      # address, and the client connects to whatever it advertises. A single listener advertising
+      # `localhost:9092` is unreachable from another container; one advertising the container name is
+      # unreachable from the host. Two listeners, internal and external, is the only arrangement that
+      # works from both.
+      - --kafka-addr
+      - internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr
+      - internal://redpanda:9092,external://localhost:19092
+
+    ports:
+      - "19092:19092"
+      - "19644:9644"
+
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster info --brokers localhost:9092 || exit 1"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+      start_period: 5s
+
+# No volumes on purpose.
+#
+# Every test creates what it needs and cleans up after itself: the Postgres harness creates a database per test
+# binary, the Redis one flushes its own database, and the Kafka one creates and deletes a topic per test. Data
+# that survives a restart would only give a stale-state bug somewhere to hide.

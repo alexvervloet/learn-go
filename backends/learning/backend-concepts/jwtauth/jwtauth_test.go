@@ -94,9 +94,9 @@ func TestMintAndVerify(t *testing.T) {
 			if claims.ID == "" {
 				t.Error("no jti")
 			}
-			if claims.ExpiresAt.Time.Sub(fixedTime) != 15*time.Minute {
+			if claims.ExpiresAt.Sub(fixedTime) != 15*time.Minute {
 				t.Errorf("expiry is %v after now, want 15m",
-					claims.ExpiresAt.Time.Sub(fixedTime))
+					claims.ExpiresAt.Sub(fixedTime))
 			}
 		})
 	}
@@ -546,7 +546,7 @@ func TestRS256RotationCannotDeriveOneKeyFromTheOther(t *testing.T) {
 
 	// The point, stated as an assertion: the two moduli differ, so nothing could have derived one
 	// from the other.
-	if first.PublicKey.N.Cmp(second.PublicKey.N) == 0 {
+	if first.N.Cmp(second.N) == 0 {
 		t.Fatal("the two generated keys are identical, which cannot happen")
 	}
 

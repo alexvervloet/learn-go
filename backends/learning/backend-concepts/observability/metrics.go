@@ -229,6 +229,11 @@ type statusRecorder struct {
 	wroteHeader bool
 }
 
+// WriteHeader records the status and forwards it once.
+//
+// The wroteHeader guard is what stops a double write: net/http logs "superfluous WriteHeader call" and ignores
+// the second, and a recorder without the guard would record the second status while the client received the
+// first.
 func (r *statusRecorder) WriteHeader(status int) {
 	if r.wroteHeader {
 		return
@@ -240,6 +245,7 @@ func (r *statusRecorder) WriteHeader(status int) {
 	r.ResponseWriter.WriteHeader(status)
 }
 
+// Write counts the bytes and implies a 200 if no status was set, which is what net/http does.
 func (r *statusRecorder) Write(b []byte) (int, error) {
 	if !r.wroteHeader {
 		r.WriteHeader(http.StatusOK)

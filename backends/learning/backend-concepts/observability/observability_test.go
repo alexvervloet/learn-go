@@ -34,7 +34,7 @@ func TestRedactedCannotLeakThroughAnyVerb(t *testing.T) {
 		fmt.Sprintf("%v", cfg),
 		fmt.Sprintf("%+v", cfg),
 		fmt.Sprintf("%#v", cfg),
-		fmt.Sprintf("%s", cfg.Token),
+		cfg.Token.String(),
 		fmt.Sprint(cfg),
 	}
 

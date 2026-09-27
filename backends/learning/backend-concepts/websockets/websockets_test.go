@@ -90,7 +90,13 @@ func dial(t *testing.T, srv *httptest.Server) (*websocket.Conn, context.Context)
 
 	url := "ws" + strings.TrimPrefix(srv.URL, "http")
 
-	ws, _, err := websocket.Dial(ctx, url, nil)
+	// The third return is the handshake's *http.Response, and its body has to be closed. It is almost
+	// always empty, which is why every example ignores it and why the linter is right anyway: on a
+	// FAILED handshake it carries the server's explanation, and leaking it leaks a connection.
+	ws, resp, err := websocket.Dial(ctx, url, nil)
+	if resp != nil && resp.Body != nil {
+		_ = resp.Body.Close()
+	}
 	if err != nil {
 		t.Fatalf("dialling: %v", err)
 	}
@@ -593,9 +599,12 @@ func TestOriginIsCheckedByDefault(t *testing.T) {
 	defer cancel()
 
 	// A handshake with a foreign Origin, which is what a malicious page sends.
-	_, _, err := websocket.Dial(ctx, url, &websocket.DialOptions{
+	_, rejectedResp, err := websocket.Dial(ctx, url, &websocket.DialOptions{
 		HTTPHeader: http.Header{"Origin": []string{"https://evil.example"}},
 	})
+	if rejectedResp != nil && rejectedResp.Body != nil {
+		_ = rejectedResp.Body.Close()
+	}
 
 	if err == nil {
 		t.Fatal("a cross-origin handshake was accepted")
@@ -611,9 +620,12 @@ func TestOriginIsCheckedByDefault(t *testing.T) {
 
 	allowingURL := "ws" + strings.TrimPrefix(allowing.URL, "http")
 
-	ws, _, err := websocket.Dial(ctx, allowingURL, &websocket.DialOptions{
+	ws, allowedResp, err := websocket.Dial(ctx, allowingURL, &websocket.DialOptions{
 		HTTPHeader: http.Header{"Origin": []string{"https://evil.example"}},
 	})
+	if allowedResp != nil && allowedResp.Body != nil {
+		_ = allowedResp.Body.Close()
+	}
 	if err != nil {
 		t.Fatalf("the allowlisted origin was rejected: %v", err)
 	}

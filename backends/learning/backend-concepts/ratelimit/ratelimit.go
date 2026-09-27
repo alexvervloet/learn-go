@@ -495,9 +495,15 @@ func Middleware(l Limiter, keyFunc func(*http.Request) string) func(http.Handler
 				// The same rounding as the Retry-After header, because a body and a
 				// header that disagree about the wait is the kind of detail a client
 				// author notices and nobody fixes.
-				fmt.Fprintf(w, `{"type":"about:blank","title":"Too Many Requests",`+
-					`"status":429,"detail":"retry in %ds"}`+"\n",
-					ceilSeconds(d.RetryAfter))
+				// The error is captured rather than ignored, and there is nothing to do
+				// with it: the status is already written, so the response cannot change.
+				// Discarding it explicitly says that was a decision.
+				if _, err := fmt.Fprintf(w,
+					`{"type":"about:blank","title":"Too Many Requests",`+
+						`"status":429,"detail":"retry in %ds"}`+"\n",
+					ceilSeconds(d.RetryAfter)); err != nil {
+					_ = err
+				}
 				return
 			}
 

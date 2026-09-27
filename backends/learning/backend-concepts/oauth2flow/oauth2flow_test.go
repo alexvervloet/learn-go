@@ -277,6 +277,19 @@ func TestTheWholeFlow(t *testing.T) {
 
 	callback := walkTheFlow(t, authURL)
 
+	// What the provider actually received, which is the assertion that survives a refactor of how
+	// the URL is built. Asserting on the URL alone would pass if AuthCodeURL stopped sending a
+	// parameter the provider needs.
+	received := p.lastAuthRequest(t)
+
+	if received.Get("code_challenge") != q.Get("code_challenge") {
+		t.Errorf("the provider received challenge %q and the URL carried %q",
+			received.Get("code_challenge"), q.Get("code_challenge"))
+	}
+	if received.Get("client_id") != f.Config.ClientID {
+		t.Errorf("the provider received client_id %q", received.Get("client_id"))
+	}
+
 	token, got, err := f.Callback(ctx, callback)
 	if err != nil {
 		t.Fatal(err)

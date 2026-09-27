@@ -1,0 +1,22 @@
+{
+  "created_at": "<normalised>",
+  "customer": {
+    "email": "a@example.test",
+    "id": "cust_42"
+  },
+  "id": "ord_1",
+  "lines": [
+    {
+      "price": 999,
+      "quantity": 2,
+      "sku": "BOOK-1"
+    },
+    {
+      "price": 1,
+      "quantity": 1,
+      "sku": "BOOK-2"
+    }
+  ],
+  "status": "paid",
+  "total": 1999
+}

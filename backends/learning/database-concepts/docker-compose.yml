@@ -1,0 +1,73 @@
+# The database every test in this module needs.
+#
+#   docker compose up -d
+#   go test ./...
+#
+# With no database running, every test SKIPS rather than fails. That is dbtest's decision and the reason
+# is in its package doc.
+
+services:
+  postgres:
+    # pgvector's own image, which is postgres:17 with the vector extension already built. The plain
+    # postgres image does not have it, and CREATE EXTENSION vector then fails with "could not open
+    # extension control file", which is a confusing error for a missing image rather than a missing
+    # database.
+    image: pgvector/pgvector:pg17
+    container_name: learn-go-db
+
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: learn_go_db
+
+    ports:
+      # 5433, not 5432. A developer with a local Postgres already has 5432 bound, and a compose file
+      # that refuses to start is worse than one that needs DATABASE_URL set.
+      - "5433:5432"
+
+    # The tests create one database per package (see dbtest), so the container needs to allow more than
+    # the default number of connections: nine packages times a pool of ten is ninety, plus the
+    # maintenance connections.
+    command:
+      - postgres
+      - -c
+      - max_connections=200
+      # Small enough to be honest about, large enough that the planner's choices resemble a real
+      # server's. The default 128MB shared_buffers on a container with the default 25% rule is
+      # usually smaller.
+      - -c
+      - shared_buffers=256MB
+      # Off, because a test database that loses the last transaction on a crash costs nothing and
+      # this roughly doubles write throughput on the bulk loads.
+      - -c
+      - fsync=off
+      - -c
+      - synchronous_commit=off
+      # So the query plans in the tests resemble what an SSD-backed server would choose. The default
+      # of 4.0 assumes a spinning disk and makes the planner avoid indexes it should use. The
+      # fulltext package measures what this setting does.
+      - -c
+      - random_page_cost=1.1
+      # Logs every statement slower than this, which makes a slow test findable.
+      - -c
+      - log_min_duration_statement=500
+
+    healthcheck:
+      # pg_isready rather than a psql query: it is what the image ships for this and it does not need
+      # a password.
+      test: ["CMD-SHELL", "pg_isready -U postgres -d learn_go_db"]
+      interval: 2s
+      timeout: 3s
+      # 30 retries at 2s, because a cold volume on a slow disk takes longer than the default 3 allows
+      # and a failing healthcheck looks like a broken compose file.
+      retries: 30
+      start_period: 5s
+
+    volumes:
+      # A named volume, so the data survives `docker compose down` and does not survive
+      # `docker compose down -v`. The tests truncate and reseed what they need, so nothing here has
+      # to persist; keeping it means a second run does not re-migrate.
+      - learn-go-pgdata:/var/lib/postgresql/data
+
+volumes:
+  learn-go-pgdata:

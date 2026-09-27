@@ -68,6 +68,15 @@ import (
 // is how someone loses work.
 const DefaultURL = "postgres:///learn_go_db?sslmode=disable"
 
+// ComposeURL is what docker-compose.yml in this directory serves, on port 5433 so it does not collide
+// with a locally installed Postgres.
+//
+// Not the default, because a developer with their own Postgres should not need Docker. Set DATABASE_URL to
+// this when using the compose file:
+//
+//	DATABASE_URL="postgres://postgres:postgres@localhost:5433/learn_go_db?sslmode=disable" go test ./...
+const ComposeURL = "postgres://postgres:postgres@localhost:5433/learn_go_db?sslmode=disable"
+
 // URL returns the connection string, from the environment or the default.
 func URL() string {
 	if url := os.Getenv("DATABASE_URL"); url != "" {
@@ -97,9 +106,10 @@ func Pool(t testing.TB) *pgxpool.Pool {
 
 	if poolErr != nil {
 		t.Skipf("no database available (%v)\n"+
-			"  start one with: docker compose up -d\n"+
-			"  or point DATABASE_URL at your own: DATABASE_URL=postgres:///mydb go test ./...",
-			poolErr)
+			"  with Docker:  docker compose up -d && DATABASE_URL=%q go test ./...\n"+
+			"  with a local Postgres: createdb learn_go_db && go test ./...\n"+
+			"  or point it anywhere: DATABASE_URL=postgres:///mydb go test ./...",
+			poolErr, ComposeURL)
 	}
 
 	return pool

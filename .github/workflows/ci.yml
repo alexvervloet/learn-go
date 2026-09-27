@@ -213,6 +213,128 @@ jobs:
           echo "$(grep -c '^--- PASS' "$RUNNER_TEMP/db-tests.log") tests passed, none skipped"
 
   # ---------------------------------------------------------------------------
+  # Backend — the module that needs Postgres, Redis and a Kafka broker.
+  #
+  # Separate from the `database` job because it needs three services rather than
+  # one, and separate from the test matrix because service containers only run
+  # on Linux runners.
+  #
+  # Every test in backends/learning/backend-concepts that needs a service SKIPS
+  # when it cannot reach one, which is what keeps the matrix green without them.
+  # This job is what stops "skips everywhere" from counting as passing.
+  # ---------------------------------------------------------------------------
+  backend:
+    name: Backend (Postgres + Redis + Kafka)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: learn_go_db
+
+        ports:
+          - 5432:5432
+
+        options: >-
+          --health-cmd "pg_isready -U postgres -d learn_go_db"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+
+      redis:
+        image: redis:7-alpine
+
+        ports:
+          - 6379:6379
+
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27"
+          cache: true
+
+      # Redpanda as a `docker run` step rather than a service container, and the
+      # reason is a real limitation: a service container takes an image and
+      # `options` (docker run flags) and CANNOT override the command. Redpanda
+      # needs `redpanda start` with its listener flags, so it does not fit.
+      #
+      # The alternative is apache/kafka in KRaft mode, which is configured
+      # entirely through environment variables and does fit. It is also six
+      # variables that have to agree with each other, and a broker that starts
+      # and advertises the wrong address looks like a client bug.
+      - name: Start Redpanda
+        run: |
+          docker run -d --name redpanda -p 19092:19092 \
+            docker.redpanda.com/redpandadata/redpanda:latest \
+            redpanda start \
+              --overprovisioned --smp 1 --memory 512M --reserve-memory 0M \
+              --node-id 0 --check=false \
+              --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092 \
+              --advertise-kafka-addr internal://localhost:9092,external://localhost:19092
+
+          # Poll rather than sleep. A fixed sleep is either too short on a slow
+          # runner or wasted time on a fast one, and the failure mode of too
+          # short is a suite that skips every Kafka test and passes.
+          for i in $(seq 1 60); do
+            if docker exec redpanda rpk cluster info --brokers localhost:9092 >/dev/null 2>&1; then
+              echo "Redpanda ready after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+
+          echo "::error::Redpanda did not become ready"
+          docker logs redpanda
+          exit 1
+
+      - name: Test against the real services
+        working-directory: backends/learning/backend-concepts
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/learn_go_db?sslmode=disable
+          REDIS_ADDR: localhost:6379
+          KAFKA_BROKERS: localhost:19092
+        run: |
+          set -o pipefail
+          go test -count=1 -p 4 -timeout 10m -v ./... 2>&1 | tee "$RUNNER_TEMP/backend-tests.log"
+
+      # A skip is not a pass. Three services means three ways for a connection
+      # string to be wrong, and each one turns a third of the module green while
+      # running none of it.
+      - name: Fail if anything skipped for want of a service
+        run: |
+          missing=0
+
+          for pattern in "no database available" "no Redis available" "no Kafka broker"; do
+            if grep -q "$pattern" "$RUNNER_TEMP/backend-tests.log"; then
+              echo "::error::tests skipped: $pattern"
+              grep -n "$pattern" "$RUNNER_TEMP/backend-tests.log" | head -3
+              missing=1
+            fi
+          done
+
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+          echo "$(grep -c '^--- PASS' "$RUNNER_TEMP/backend-tests.log") tests passed, none skipped"
+
+      - name: Stop Redpanda
+        if: always()
+        run: docker rm -f redpanda
+
+  # ---------------------------------------------------------------------------
   # Race — the race detector on its own job, because it is 5-10x slower than a
   # normal run and does not need the full matrix to be useful. One platform,
   # current Go.

@@ -44,13 +44,20 @@ type Plan struct {
 	RelationName string  `json:"Relation Name"`
 	IndexName    string  `json:"Index Name"`
 	ActualRows   float64 `json:"Actual Rows"`
-	ActualLoops  float64 `json:"Actual Loops"`
-	TotalCost    float64 `json:"Total Cost"`
-	ActualTotal  float64 `json:"Actual Total Time"`
-	Filter       string  `json:"Filter"`
-	IndexCond    string  `json:"Index Cond"`
-	RowsRemoved  float64 `json:"Rows Removed by Filter"`
-	Plans        []Plan  `json:"Plans"`
+
+	// PlanRows is what the planner ESTIMATED, and the ratio between it and ActualRows is the
+	// first number to look at in a plan that makes no sense. An estimate off by 1000x means the
+	// statistics are stale or the predicate is one Postgres cannot estimate, and every join
+	// choice above that node was made on a wrong number.
+	PlanRows float64 `json:"Plan Rows"`
+
+	ActualLoops float64 `json:"Actual Loops"`
+	TotalCost   float64 `json:"Total Cost"`
+	ActualTotal float64 `json:"Actual Total Time"`
+	Filter      string  `json:"Filter"`
+	IndexCond   string  `json:"Index Cond"`
+	RowsRemoved float64 `json:"Rows Removed by Filter"`
+	Plans       []Plan  `json:"Plans"`
 }
 
 // explainResult is EXPLAIN's top-level JSON shape.

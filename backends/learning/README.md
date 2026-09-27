@@ -12,7 +12,7 @@ mapping is stated rather than forced.
 | [backend-concepts/](backend-concepts/) | done | `backend-concepts` | pagination, rate limiting, caching, webhooks, JWT, OAuth, observability, WebSockets, Kafka |
 | [grpc-concepts/](grpc-concepts/) | done | `grpc-concepts` | the four RPC patterns, status codes, metadata, interceptors |
 | [graphql-concepts/](graphql-concepts/) | done | `graphql-concepts` | gqlgen, the N+1 and dataloaders, error models, complexity limiting |
-| jobs-concepts/ | not started | `celery-concepts` | asynq, retries, scheduling, idempotency |
+| [jobs-concepts/](jobs-concepts/) | done | `celery-concepts` | asynq, retries, timeouts, scheduling, idempotency, inspection |
 | email-concepts/ | not started | `email-concepts` | SMTP, templates, testing outbound mail |
 | docker-concepts/ | not started | `docker-concepts` | multi-stage builds, distroless, `CGO_ENABLED=0` |
 | aws-concepts/ | not started | `aws-concepts` | the AWS SDK v2, S3, SQS, local testing |

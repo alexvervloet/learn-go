@@ -224,7 +224,7 @@ jobs:
   # This job is what stops "skips everywhere" from counting as passing.
   # ---------------------------------------------------------------------------
   backend:
-    name: Backend (Postgres + Redis + Kafka)
+    name: Backend and jobs (Postgres + Redis + Kafka)
     runs-on: ubuntu-latest
 
     services:
@@ -298,6 +298,21 @@ jobs:
           echo "::error::Redpanda did not become ready"
           docker logs redpanda
           exit 1
+
+      - name: Test the jobs module
+        working-directory: backends/learning/jobs-concepts
+        env:
+          REDIS_ADDR: localhost:6379
+        run: |
+          set -o pipefail
+          go test -count=1 -timeout 10m -v ./... 2>&1 | tee "$RUNNER_TEMP/jobs-tests.log"
+
+      - name: Fail if the jobs tests skipped
+        run: |
+          if grep -q "no Redis at" "$RUNNER_TEMP/jobs-tests.log"; then
+            echo "::error::jobs tests skipped for want of a Redis"
+            exit 1
+          fi
 
       - name: Test against the real services
         working-directory: backends/learning/backend-concepts

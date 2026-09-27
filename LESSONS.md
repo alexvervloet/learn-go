@@ -1762,3 +1762,36 @@ a struct drifting apart, which is worth the noise.
 error in one author's books propagates to the list, to the field, and to `data`, which becomes null. Whether a
 failure costs one field or everything is decided by exclamation marks in the schema, and it is not obvious when
 writing them.
+
+## asynq stores every time value in whole seconds, and three tests found it separately
+
+**`asynq.Timeout(300 * time.Millisecond)` becomes a 30-minute timeout.** The value is serialised as
+`int64(timeout.Seconds())` in client.go, so anything under a second rounds to zero, zero means "unset", and
+unset means the 30-minute default. Measured: a 600ms handler given `Timeout(300ms)` received a 30m0s budget and
+ran to completion; the same handler given `Timeout(1s)` was cancelled at one second. The option is accepted and
+nothing is logged.
+
+**A scheduled task can run up to a second EARLY.** `processAt.Unix()` truncates to the second, so a task asked
+for 800ms from now at wall-clock X.9 gets the score `floor(X + 1.7) = X + 1` and is promoted 100ms after the
+enqueue. The first version of that test asserted "not before 700ms" and failed one run in six with the task
+running after 665ms, which I took for a flaky test before reading the source.
+
+**And it can run seconds late**, because the forwarder that promotes scheduled tasks is a poll on
+`DelayedTaskCheckInterval`, five seconds by default. Nothing wakes up when a task becomes due.
+
+**Next time.** Before asserting a timing bound against a library, find out what granularity it stores the value
+at. All three of these are one decision (`Unix()` and `int64(d.Seconds())`) surfacing in three places, and none
+of them is documented where you would look.
+
+## Two of my own mistakes from the same module
+
+**A helper that only filled in a default when the field was nil.** `setup` set the worker's queue map with
+`if cfg.Queues == nil`, and `DefaultServerConfig` fills it with critical/default/low. So the worker listened on
+three queues, every test enqueued to a fourth, and nine tests timed out waiting for a task nothing was going to
+pick up. A test helper that is meant to control a field should set it unconditionally; "fill in if absent" is
+for a constructor, not a fixture.
+
+**A clock started after the thing being measured.** The scheduled-task test took `start := time.Now()` after an
+inspector call that itself took 300ms, so an 800ms delay measured as 508ms and the test reported asynq running
+tasks early. Anything measuring a delay starts its clock at the moment the delay is requested, before any
+diagnostic call.

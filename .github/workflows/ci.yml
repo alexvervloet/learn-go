@@ -141,6 +141,78 @@ jobs:
         run: go test -count=1 -tags debug $(go list -m -f '{{.Dir}}/...')
 
   # ---------------------------------------------------------------------------
+  # Database — the one module that needs a real Postgres.
+  #
+  # Its own job rather than a service on the test matrix, because service
+  # containers only run on Linux runners and the matrix includes macOS and
+  # Windows. Adding `services:` there fails the workflow rather than skipping.
+  #
+  # Every test in backends/learning/database-concepts SKIPS when no database is
+  # reachable, which is what keeps the matrix green without one. This job is
+  # what stops "skips everywhere" from counting as passing.
+  # ---------------------------------------------------------------------------
+  database:
+    name: Database (Postgres 17 + pgvector)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        # pgvector's image rather than the official postgres one, because the
+        # vectors package needs CREATE EXTENSION vector and the official image
+        # does not ship it.
+        image: pgvector/pgvector:pg17
+
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: learn_go_db
+
+        ports:
+          - 5432:5432
+
+        # A service container's config cannot be overridden with `command:`, so
+        # max_connections stays at the default 100. That is why the test step
+        # below passes -p 4: the harness gives each package its own database
+        # with a pool of 10, and eleven packages at once would ask for 110.
+        options: >-
+          --health-cmd "pg_isready -U postgres -d learn_go_db"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27"
+          cache: true
+
+      # One run, not two. -v so the skip messages are visible, tee so the output
+      # reaches the log whether the run passes or fails.
+      #
+      # The grep is the point of the step. Every test in this module skips when
+      # no database is reachable, which is what keeps the test matrix green
+      # without one, and it means a typo in DATABASE_URL would turn this job
+      # green while running nothing. A skip is not a pass.
+      - name: Test against Postgres
+        working-directory: backends/learning/database-concepts
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/learn_go_db?sslmode=disable
+        run: |
+          set -o pipefail
+          go test -count=1 -p 4 -timeout 10m -v ./... 2>&1 | tee "$RUNNER_TEMP/db-tests.log"
+
+      - name: Fail if anything skipped for want of a database
+        run: |
+          if grep -q "no database available" "$RUNNER_TEMP/db-tests.log"; then
+            echo "::error::tests skipped for want of a database"
+            grep -n "no database available" "$RUNNER_TEMP/db-tests.log" | head
+            exit 1
+          fi
+          echo "$(grep -c '^--- PASS' "$RUNNER_TEMP/db-tests.log") tests passed, none skipped"
+
+  # ---------------------------------------------------------------------------
   # Race — the race detector on its own job, because it is 5-10x slower than a
   # normal run and does not need the full matrix to be useful. One platform,
   # current Go.

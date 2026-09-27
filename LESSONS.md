@@ -1231,3 +1231,59 @@ coverage percentages into the README before measuring, and all five were wrong â
 and I guessed 76.9%. And `golangci-lint` flagged `buggyDecode` as unused, because its only caller is
 behind a build tag; the fix was a documented `//nolint`, but the interesting part is that a coverage
 target would have pushed me to delete the most instructive file in the package to get the number up.
+
+## A test that mixes a DDL transaction with a pool query deadlocks against itself
+
+**Expected.** `dbtest.Tx` gives a transaction that rolls back, and `dbtest.Pool` gives the shared
+pool. A test can use both: the transaction for changes it wants undone, the pool for read-only
+queries that do not care.
+
+**What happened.** `TestPartialIndexIsSmaller` ran `REINDEX INDEX idx_orders_pending` inside the
+transaction, then ran an `EXPLAIN` of a query on `orders` through the pool. It hung until the 120s
+timeout. `pg_stat_activity` showed it exactly: one backend `active`, waiting on `Lock`/`relation`,
+and one `idle in transaction`. The REINDEX holds `ACCESS EXCLUSIVE` on the index until the
+transaction ends, which is when the test ends, and planning a query on `orders` needs `ACCESS SHARE`
+on the same index. So the pool query waited for the transaction, and the transaction waited for the
+test, which was waiting for the pool query.
+
+**Next time.** Once a test opens a transaction that does DDL, every statement in that test goes
+through the transaction. A transaction is not just an isolation trick, it holds locks, and the other
+connection in the same test is as much a stranger as another process. When a database test hangs,
+`SELECT pid, state, wait_event_type, wait_event, query FROM pg_stat_activity` names the culprit in
+one query.
+
+## An index built during a bulk load is 43% slack
+
+**Expected.** The partial index `WHERE status = 'pending'` covers 1/7 of the orders, so it should be
+roughly 1/7 the size of the equivalent full index.
+
+**What happened.** It was 47%, not 14%. The reason is not the partial predicate. `CREATE INDEX` sorts
+the entries and packs the leaf pages to about 90% fill, while an index that already exists during a
+bulk load grows one row at a time and splits pages as it goes. `REINDEX` took it from 57344 bytes to
+32768 for 680 entries. 27% of the full index, and the remaining gap over 14% is the metapage and
+root, which every index pays whatever its size.
+
+**Next time.** Drop the indexes before a bulk load and create them after, which is faster to load and
+gives a smaller index. When comparing two index sizes, check they were built the same way first.
+
+## `go test ./...` runs packages concurrently, and one shared database is not enough
+
+**Expected.** Rollback isolation through `dbtest.Tx` handles test isolation, so the packages in the
+module can all point at `learn_go_db`.
+
+**What happened.** `go test ./...` passed for each package alone and failed when run together. `seed`
+reported `deadlock detected` on its TRUNCATE, and `indexes` reported a Seq Scan where an index scan
+had been verified minutes earlier. Both are the same cause: `go test` builds one binary per package
+and runs up to GOMAXPROCS of them at once, and two packages that truncate and reload the same tables
+are two processes editing one file.
+
+The second symptom is the dangerous one. The deadlock is loud. A query plan that silently changes
+because another package emptied the table is a test that reports a wrong fact about Postgres, which is
+worse than a failure.
+
+**Next time.** A database test harness needs isolation at two levels, not one: a transaction per test,
+and a database per test binary. `dbtest` now derives a name from `os.Args[0]` (which ends in
+`<pkg>.test`) and creates `learn_go_db_<pkg>` on first use. `CREATE DATABASE` has no `IF NOT EXISTS`
+and cannot run in a transaction, so it is a check-then-create, and two packages starting together both
+try, so `42P04 duplicate_database` counts as success. It costs about 120ms per package and it keeps
+`-p` at its default.

@@ -1422,3 +1422,36 @@ with a 200ms timeout instead of a hang.
 16.3ms cold against 1.3 to 2.0ms warm, over a unix socket with no TLS. I assumed handshake cost would be
 invisible locally. It is five to ten times, and on a managed database over TLS it is the first request
 after a quiet period showing up as a p99 spike that gets blamed on the database.
+
+## Four things pgvector does that nothing warns you about
+
+**`hnsw.ef_search` below the `LIMIT` silently returns fewer rows.** `LIMIT 50` with `ef_search = 10`
+returns 10 rows. Not 50 worse rows: 10 rows, no error, no warning. `ef_search` is the size of the
+candidate list the graph walk keeps, and the index cannot return more than it kept. pgvector's default is
+40, so any query asking for more than 40 results is quietly truncated until someone raises it.
+
+**Turning `ef_search` up far enough turns the index off.** At 400 the planner's cost estimate for the
+index exceeded a sequential scan, so it scanned. Recall read 100% and the query got 25x slower. "Raise
+ef_search until recall is acceptable" can silently stop using the index, and the plan is the only place
+that says so.
+
+**Recall by ID is meaningless when the data has ties.** My first measurement read 20%, 74%, 56%, 100% as
+`ef_search` rose, which is not a tradeoff curve. The seeded titles come from 8 adjectives and 8 nouns, so
+the exact top 50 held 4 distinct distances and "the exact top 50" was an arbitrary 50 of hundreds of
+equidistant rows. Comparing against the distance of the worst row in the exact answer, with a 1e-6
+tolerance for float32 non-associativity, gives 20%, 80%, 100%, 100%.
+
+Ties also explain why L2 and cosine returned different first rows while agreeing on every distance. Third
+time in this module that a missing tiebreaker caused a surprise, after keyset pagination and the ROWS
+window frame. The difference: vector search cannot have one, because adding `, id` to the `ORDER BY`
+stops the expression matching the index.
+
+**An IVFFlat index built before the data is twice as big and twice as slow, and recall does not show
+it.** I expected the one-cluster index to be smaller, having no centres to store. 33.3 MB against 16.9,
+and 0.33ms against 0.17ms per query. It was grown one INSERT at a time rather than built, so it carries
+the same page-split slack as the partial index earlier in this module, and a probe walks all of it
+because there is nothing to skip. Recall was 100% both ways.
+
+**And a savepoint does not isolate the parent from the child.** The first version of that comparison used
+`tx.Begin` to build the second index, and `tx` saw the savepoint's changes, so both halves queried the
+same index and reported identical numbers. Two states on one connection have to be measured sequentially.

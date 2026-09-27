@@ -1350,3 +1350,27 @@ get told, which is better than the alternative and is not behaviour I would have
 the pool and the savepoint case. That is not an oversight: a savepoint has no isolation level of its
 own, because the isolation level belongs to the whole transaction. The signature is telling you
 something true.
+
+## "Do it in the database" did not survive being measured
+
+**Expected.** A running total computed by a window function beats fetching the rows and looping in Go,
+and the gap widens with the row count. That is the advice everywhere, and I wrote it into the package
+doc before measuring.
+
+**What happened.** The Go loop is faster at every size: 1.5x at 10 customers, 2.1x at 100, 1.6x at
+1000. Both return identical results. The window function sends four extra columns per row, and on a
+unix socket that costs more than the accumulation saves.
+
+So I built the case it was supposed to win, where the window function FILTERS and fewer rows cross the
+wire: top 3 orders per customer, 2,830 rows instead of 5,000. Still slower. 3.39ms against 2.35ms. What
+it does win is memory: 932 KB and 5,679 allocations against 1.92 MB and 10,021.
+
+**Next time.** The advice is a claim about a REMOTE database, where rows on the wire set the latency,
+and it does not transfer to a local socket. Same trap as the N+1 measurement in the same module, from
+the opposite direction: locally, network cost is near zero, so anything justified by network cost looks
+wrong and anything justified by CPU looks right.
+
+The rule that comes out of both: for a database comparison, assert the machine-independent quantity
+(round trips, rows transferred, plan node types) and log the timing next to it. Then the test says
+something true on a laptop and in CI and on a managed database, and the reader can do the arithmetic for
+their own latency.

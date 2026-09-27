@@ -1,0 +1,165 @@
+# The schema. This file is the source of truth, and that is the first decision gqlgen makes for you.
+#
+# # Schema-first against code-first
+#
+# gqlgen is SCHEMA-FIRST: you write this file, run a generator, and implement the interfaces it produces. The
+# Python mirror uses Strawberry, which is CODE-FIRST: you write Python classes with type annotations and the
+# schema is derived.
+#
+# The trade is real and it is not about taste. Schema-first means the schema is a reviewable artefact that a
+# frontend team can read and a breaking change is a diff in this file. Code-first means no generator and no
+# stale generated code, and the schema is whatever the types happen to produce, so a refactor can change the
+# API without anything saying so.
+#
+# For a public API, schema-first. For an internal one that changes weekly, code-first is less friction.
+
+"""
+An author of books.
+"""
+type Author {
+  id: ID!
+  name: String!
+
+  """
+  Every book by this author.
+
+  This field is the whole N+1 story. Resolving it means a query per author, so a list of 50 authors asking for
+  their books is 51 queries unless something batches them. The dataloader package does, and the tests count
+  the queries to prove it.
+  """
+  books: [Book!]!
+
+  bookCount: Int!
+}
+
+"""
+A book.
+"""
+type Book {
+  id: ID!
+  title: String!
+  priceCents: Int!
+
+  """
+  The author, resolved separately. The same N+1 from the other direction: a list of books asking for their
+  authors is one query per book.
+  """
+  author: Author!
+
+  """
+  A deliberately expensive field, for the complexity tests. Nothing in a schema says a field is expensive, which
+  is exactly the problem complexity limiting solves.
+  """
+  similar(limit: Int = 5): [Book!]!
+}
+
+"""
+A page of books, Relay style.
+"""
+type BookConnection {
+  edges: [BookEdge!]!
+  pageInfo: PageInfo!
+
+  """
+  The total, which is optional in the Relay spec and expensive in practice. See the pagination package: an exact
+  count is a full scan every time, so a real API either omits it or returns an estimate.
+  """
+  totalCount: Int!
+}
+
+type BookEdge {
+  cursor: String!
+  node: Book!
+}
+
+"""
+Relay's page metadata. The four fields are named by the spec and two of them are commonly wrong.
+"""
+type PageInfo {
+  hasNextPage: Boolean!
+  hasPreviousPage: Boolean!
+  startCursor: String
+  endCursor: String
+}
+
+type Query {
+  author(id: ID!): Author
+  authors(limit: Int = 10): [Author!]!
+
+  book(id: ID!): Book
+
+  """
+  Relay-style pagination. first/after for forward, last/before for backward.
+  """
+  books(first: Int, after: String, last: Int, before: String): BookConnection!
+
+  """
+  Returns an error, so the error tests can ask for one. The `nullable` argument picks whether the field itself
+  is nullable, which decides how far up the response the null propagates.
+  """
+  failing(nullable: Boolean! = true): String
+}
+
+"""
+The input for creating a book.
+
+A separate INPUT type rather than reusing Book, because the two are genuinely different: Book has an id and an
+author object, and the input has neither. GraphQL enforces the distinction (an input type cannot be used as an
+output type or the reverse), which is one of the places the type system stops a mistake REST does not.
+"""
+input CreateBookInput {
+  title: String!
+  authorId: ID!
+  priceCents: Int!
+
+  """
+  The idempotency key, carried in the INPUT rather than in a header.
+
+  GraphQL has one endpoint and one HTTP request can carry several mutations, so a header applies to all of them
+  or none. Per-mutation idempotency has to be in the arguments, and that is a difference from REST worth
+  stating.
+  """
+  idempotencyKey: String
+}
+
+"""
+A mutation result that carries its own errors.
+
+# Why not just return Book and use the errors array
+
+Because GraphQL's top-level `errors` array is untyped: a message, a path and an optional extensions map. A
+client cannot switch on it without parsing strings, and a schema change to the error shape is invisible.
+
+A result union or a result type with a typed errors field puts the expected failures in the SCHEMA, where they
+are typed, documented and versioned. The top-level array is then reserved for the unexpected: a bug, a timeout,
+a permission failure.
+
+This is the single most consequential GraphQL design decision and it has no REST equivalent, because REST has
+status codes.
+"""
+type CreateBookResult {
+  book: Book
+  errors: [UserError!]!
+}
+
+type UserError {
+  field: String
+  message: String!
+  code: ErrorCode!
+}
+
+enum ErrorCode {
+  VALIDATION
+  NOT_FOUND
+  CONFLICT
+  PERMISSION_DENIED
+}
+
+type Mutation {
+  createBook(input: CreateBookInput!): CreateBookResult!
+
+  """
+  The same mutation without the result type, so the tests can compare the two error models.
+  """
+  createBookOrError(input: CreateBookInput!): Book!
+}

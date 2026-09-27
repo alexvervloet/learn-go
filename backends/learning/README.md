@@ -9,7 +9,7 @@ mapping is stated rather than forced.
 | [http-tutorial/](http-tutorial/) | done | `fast-api-tutorial` | `net/http` with Go 1.22 routing, middleware, request decoding, RFC 9457 errors, graceful shutdown |
 | [testing-concepts/](testing-concepts/) | done | `testing-concepts` | table-driven tests, `testing/synctest`, golden files, fuzzing, the race detector |
 | [database-concepts/](database-concepts/) | done | `database-concepts` | pgx, indexes, N+1, transactions, window functions, full text, pgvector, goose |
-| backend-concepts/ | not started | `backend-concepts` | auth, caching, rate limiting, pagination, validation |
+| [backend-concepts/](backend-concepts/) | done | `backend-concepts` | pagination, rate limiting, caching, webhooks, JWT, OAuth, observability, WebSockets, Kafka |
 | grpc-concepts/ | not started | `grpc-concepts` | grpc-go, protobuf, streaming, interceptors |
 | graphql-concepts/ | not started | `graphql-concepts` | gqlgen, resolvers, dataloaders, the N+1 again |
 | jobs-concepts/ | not started | `celery-concepts` | asynq, retries, scheduling, idempotency |

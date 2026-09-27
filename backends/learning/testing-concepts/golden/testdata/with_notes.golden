@@ -1,0 +1,14 @@
+INVOICE INV-002
+Customer: Globex
+Issued:   2026-03-14
+
+Description    Qty        Unit       Total
+------------------------------------------
+Consulting      10      150.00     1500.00
+------------------------------------------
+                                   1500.00
+
+Notes:
+  contact: ada@globex.example
+  reference: PO-4471
+  terms: net 30

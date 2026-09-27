@@ -2,6 +2,7 @@ go 1.27
 
 use (
 	./backends/learning/http-tutorial
+	./backends/learning/testing-concepts
 	./dsa
 	./go-concepts
 )

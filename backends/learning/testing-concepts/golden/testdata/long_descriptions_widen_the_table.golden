@@ -1,0 +1,10 @@
+INVOICE INV-003
+Customer: Initech
+Issued:   2026-03-14
+
+Description                                      Qty        Unit       Total
+----------------------------------------------------------------------------
+A description long enough to widen the column      1        1.00        1.00
+Short                                              3        0.50        1.50
+----------------------------------------------------------------------------
+                                                                        2.50

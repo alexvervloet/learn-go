@@ -1,0 +1,10 @@
+INVOICE INV-001
+Customer: Acme Ltd
+Issued:   2026-03-14
+
+Description    Qty        Unit       Total
+------------------------------------------
+Widget           2       12.50       25.00
+Gadget           1       99.99       99.99
+------------------------------------------
+                                    124.99

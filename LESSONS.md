@@ -1198,3 +1198,36 @@ careful version of something and then also use a library's version, check they a
 deprecation warnings as noise to clear at the end of a module. This one carried three CVEs and a
 one-paragraph explanation of the vulnerability in the deprecation notice itself. Reading the
 message rather than just satisfying the linter is what turned it into a finding.
+
+## My own worker pool deadlocked, and the arithmetic was 2n not n
+
+**Expected.** `testing-concepts/concurrency` needed a worker pool with enough moving parts to test:
+shared state for the race detector, owned goroutines for the leak check. I wrote one with a bounded
+results channel, then a test that submits twenty jobs to a pool of four and drains afterwards.
+
+**What happened.** The test hung until the 120-second timeout. The bounded results channel holds
+four, so once it fills the workers block trying to deliver, nothing reads from the jobs channel, and
+`Submit` blocks forever. The obvious usage order — submit, then read — deadlocks.
+
+Then I wrote a test to pin the contract down and got the arithmetic wrong. With n workers and an
+n-slot buffer, `2n` submits succeed before the next one blocks: n results fill the buffer, and n more
+are picked up by workers that then get stuck trying to deliver. I asserted it wedged after n, and the
+test failed by reporting success.
+
+**Next time.** The design lesson first: **a pool whose obvious usage order deadlocks is a bad API**,
+and the honest response is not a comment. I shipped both — `TestPoolDeadlocksIfResultsAreNotDrained`
+so the contract cannot be rediscovered, and `Collect`, which starts the drain before submitting so
+there is nothing to get wrong. Documenting a trap and providing the version without it are different
+amounts of help.
+
+The smaller lesson is about counting buffer capacity. "How many sends fit before this blocks" is
+capacity **plus** the number of receivers currently able to take one, because a receiver that has
+taken a value and is blocked delivering it has consumed a slot from the sender's point of view. I
+have got that wrong before with a `chan` handoff between stages and will again; the fix is to write
+the blocking test rather than reason about it.
+
+Two smaller things from the same module, both the same shape as earlier entries. I wrote five
+coverage percentages into the README before measuring, and all five were wrong — `basics` was 100.0%
+and I guessed 76.9%. And `golangci-lint` flagged `buggyDecode` as unused, because its only caller is
+behind a build tag; the fix was a documented `//nolint`, but the interesting part is that a coverage
+target would have pushed me to delete the most instructive file in the package to get the number up.

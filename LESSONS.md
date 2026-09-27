@@ -1397,3 +1397,28 @@ the inside.
 
 The measurement that did survive: reading the stored generated column is 18x faster than recomputing
 `to_tsvector(title)` per row, 0.81ms against 14.68ms, and that gap has nothing to do with any index.
+
+## `pgxpool.Pool.Close` blocks until every connection is released
+
+**Expected.** A test that deliberately leaks connections, asserts the pool is exhausted, and closes the
+pool in `t.Cleanup` is a clean test.
+
+**What happened.** Every assertion passed and then the run sat there for 156 seconds until I killed it.
+`Close` waits for acquired connections, the leaked ones are never released, and the connection is
+reachable only from the pool so nothing in the test can release it. From the outside it looks exactly
+like the test hanging rather than the cleanup.
+
+That is the right behaviour, not a bug: `Close` waiting is what drains in-flight queries during a
+graceful shutdown, the same decision `http.Server.Shutdown` makes. The consequence is the part worth
+keeping. A leaked connection does not only exhaust the pool, it also blocks shutdown, so a service with
+one leak has to be killed rather than stopped, and "we had to SIGKILL the pods" is a symptom of a
+missing `defer conn.Release()`.
+
+**Next time.** When a database test hangs after its assertions pass, suspect the cleanup before the
+test body. `pgxdemo.TestClosingAPoolWithLeakedConnectionsBlocks` now pins the behaviour deliberately,
+with a 200ms timeout instead of a hang.
+
+**Also measured, and larger than expected.** `MinConns: 0` against `MinConns: 5`, five acquires: 8.5 to
+16.3ms cold against 1.3 to 2.0ms warm, over a unix socket with no TLS. I assumed handshake cost would be
+invisible locally. It is five to ten times, and on a managed database over TLS it is the first request
+after a quiet period showing up as a p99 spike that gets blamed on the database.

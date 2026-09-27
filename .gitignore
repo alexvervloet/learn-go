@@ -18,12 +18,32 @@ coverage.html
 cpu.pprof
 mem.pprof
 
-# Generated code — regenerate rather than commit.
-# gRPC stubs:   backends/learning/grpc-concepts/generate_protos.sh
-# sqlc queries: `sqlc generate` in each database module
-# gqlgen:       `go run github.com/99designs/gqlgen generate`
-*.pb.go
-*_grpc.pb.go
+# Generated code IS committed, deliberately, and this is where the reasoning lives
+# because it is the kind of decision that gets reversed by whoever touches the
+# file next.
+#
+# The rule for a private service with a build pipeline is "regenerate, do not
+# commit": the generator runs in CI, the tree stays small, and a stale checked-in
+# file cannot drift from its source.
+#
+# The rule for a repo someone CLONES is the opposite, and this is one of those.
+# `git clone && go build ./...` has to work with nothing but a Go toolchain. With
+# the stubs ignored it needs protoc, protoc-gen-go, protoc-gen-go-grpc and a
+# matching gqlgen, which is four installs and four versions to agree on before
+# the first line compiles. That is the difference between a repo you can read and
+# a repo you have to set up.
+#
+# It is also the Go community's convention: the standard library commits its
+# generated files, and every gRPC project on pkg.go.dev ships its .pb.go, because
+# `go get` runs no generators.
+#
+# So: the stubs are committed, each generator has a script next to it, and the
+# check that they have not drifted is a CI step that regenerates and diffs rather
+# than a .gitignore entry.
+#
+#   gRPC stubs:   backends/learning/grpc-concepts/generate.sh
+#   sqlc queries: `sqlc generate` in each database module
+#   gqlgen:       `go generate ./...` in graphql-concepts
 
 # Environment / secrets
 .env

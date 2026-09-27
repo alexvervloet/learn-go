@@ -1634,3 +1634,28 @@ Two more from the same package. `Conn.Close` dereferenced the socket uncondition
 when the overflow policy is Disconnect, so a Conn whose upgrade failed segfaulted inside whichever goroutine
 was broadcasting. And a test helper that reports every accept failure through `t.Errorf` cannot be used to test
 that an accept SHOULD fail, which is how the origin check test failed on its own success.
+
+## Committing a Kafka offset with the loop's context loses it on every graceful shutdown
+
+**Expected.** `Run(ctx, handle)` fetches with `ctx`, calls the handler, and commits with `ctx`. One context for
+the whole loop is the obvious shape.
+
+**What happened.** Four tests failed with `committing after processing: context canceled`. They cancel the
+context from inside the handler once they have read enough, which is exactly what a shutdown signal does.
+
+The consequence in production is worse than a failing test. When the context is cancelled the work for the
+message in hand is already finished and the offset still has to be written. Committing with the cancelled
+context fails, the offset is never stored, and the message is redelivered on the next start. So every graceful
+shutdown produces a duplicate, invisible until someone asks why the same order id appears twice in the logs
+every time you deploy.
+
+**Next time.** The commit gets `context.Background()` with its own short timeout. The loop's context is the
+shutdown signal, not the deadline for the work that shutdown interrupted. The timeout still matters: a commit
+that hangs holds the process past whatever the orchestrator allows, and then it is a SIGKILL rather than a
+clean stop.
+
+Two smaller ones from the same package. A `t.Cleanup` that reuses a connection closed by a `defer` in the
+enclosing function fails on every test with "use of closed network connection": cleanups run long after the
+function returns, so they dial their own. And `kafka.Writer`'s zero value for `RequiredAcks` is `RequireNone`,
+so a Writer built from an empty config returns success before the broker has the message and a broker restart
+loses it silently. That is the most dangerous default in the library and it is what you get by not deciding.

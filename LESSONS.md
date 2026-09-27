@@ -1161,3 +1161,40 @@ problem statement, and it happens to be the regime where the trie is the wrong c
 only run the large configuration I would have reported a clean 2x win and never learned there
 was a crossover. The benchmark now runs both on purpose, because one showing only the winning
 case is an argument rather than a measurement.
+
+## I wrote the correct version of a bug thirty lines from where I imported the bug
+
+**Expected.** The `http-tutorial` module picks chi's middleware with the standard library's
+router, on the reasoning that chi's router has been largely redundant since Go 1.22 and its
+middleware has not. `Production()` assembled a chain from both.
+
+**What happened.** Two of chi's middleware had to be replaced, and neither was found by reading
+the code.
+
+`chimw.CleanPath` **panics** with a nil pointer dereference on every request when there is no chi
+router in the chain, because it writes the cleaned path into `chi.RouteContext` and there is no
+route context without chi's router. A benchmark crashed. I then tested all seventeen of chi's
+middleware against a bare stdlib handler, and it is the only one that does this, which made the
+finding worth a test of its own rather than a quiet workaround.
+
+`chimw.RealIP` is **deprecated as IP-spoofable**, with three GitHub advisories against it. It
+takes the *leftmost* `X-Forwarded-For` value, and a proxy appends, so the leftmost entry is
+whatever the client sent. `staticcheck` found it.
+
+The part worth writing down: I had already written the correct version of that exact logic in the
+same module. `request.ClientIP` takes the rightmost entry and has a paragraph explaining why,
+because a proxy appends and an attacker prepends. I wrote that, then imported `chimw.RealIP`
+into the production chain thirty lines later without noticing they were the same decision made
+two different ways.
+
+**Next time.** Two things.
+
+**A dependency's function does not inherit the reasoning I applied to my own.** I had the
+argument, in writing, in the same package. What I did not do was ask whether the library
+function I reached for made the same choice. That is a specific habit to build: when I write a
+careful version of something and then also use a library's version, check they agree.
+
+**`staticcheck`'s SA1019 is a security tool, not a tidiness one.** I have been treating
+deprecation warnings as noise to clear at the end of a module. This one carried three CVEs and a
+one-paragraph explanation of the vulnerability in the deprecation notice itself. Reading the
+message rather than just satisfying the linter is what turned it into a finding.

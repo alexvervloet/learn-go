@@ -1,0 +1,409 @@
+package resolvers
+
+// This file implements the generated interfaces. gqlgen regenerates the SIGNATURES and copies the bodies
+// through, so editing it is expected; the `// Code generated` marker at the top of generated.go is what marks
+// the file that must not be touched.
+
+import (
+	"context"
+	"encoding/base64"
+	"errors"
+	"fmt"
+	"strings"
+
+	"github.com/alexvervloet/learn-go/backends/learning/graphql-concepts/graph/generated"
+	"github.com/alexvervloet/learn-go/backends/learning/graphql-concepts/graph/model"
+	"github.com/alexvervloet/learn-go/backends/learning/graphql-concepts/store"
+)
+
+// Books is the resolver for the books field.
+//
+// This one method is the whole N+1 story. It is called once per author in the parent list, and whether that
+// becomes one query or fifty depends entirely on which branch runs.
+func (r *authorResolver) Books(ctx context.Context, obj *model.Author) ([]model.Book, error) {
+	if r.UseLoaders {
+		loaders, err := For(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		books, err := loaders.BooksByAuthor.Load(ctx, obj.ID)
+		if err != nil {
+			// A missing key means the author has no books, which is not an error: the schema
+			// says [Book!]!, so the answer is an empty list.
+			if strings.Contains(err.Error(), "no result for key") {
+				return []model.Book{}, nil
+			}
+
+			return nil, wrap("loading books", err)
+		}
+
+		return toBooks(books), nil
+	}
+
+	// The naive path: one query per author.
+	books, err := r.Store.BooksByAuthor(ctx, obj.ID)
+	if err != nil {
+		return nil, wrap("loading books", err)
+	}
+
+	return toBooks(books), nil
+}
+
+// BookCount is the resolver for the bookCount field.
+//
+// Asking for bookCount AND books costs two queries per author without loaders and shares the loader's batch with
+// them when there are loaders, which is the cache half of a dataloader doing its job.
+func (r *authorResolver) BookCount(ctx context.Context, obj *model.Author) (int, error) {
+	books, err := r.Books(ctx, obj)
+	if err != nil {
+		return 0, err
+	}
+
+	return len(books), nil
+}
+
+// Author is the resolver for the author field.
+func (r *bookResolver) Author(ctx context.Context, obj *model.Book) (*model.Author, error) {
+	if r.UseLoaders {
+		loaders, err := For(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		author, err := loaders.AuthorByID.Load(ctx, obj.AuthorID)
+		if err != nil {
+			return nil, wrap("loading author", err)
+		}
+
+		return toAuthor(author), nil
+	}
+
+	author, err := r.Store.AuthorByID(ctx, obj.AuthorID)
+	if err != nil {
+		return nil, wrap("loading author", err)
+	}
+
+	return toAuthor(author), nil
+}
+
+// Similar is the resolver for the similar field.
+//
+// Deliberately expensive: it fetches the author's books and returns some. The point is that nothing in the
+// schema marks it as costing more than `title`, which is why complexity limiting exists.
+func (r *bookResolver) Similar(ctx context.Context, obj *model.Book, limit *int) ([]model.Book, error) {
+	n := 5
+	if limit != nil {
+		n = *limit
+	}
+
+	books, err := r.Store.BooksByAuthor(ctx, obj.AuthorID)
+	if err != nil {
+		return nil, wrap("loading similar", err)
+	}
+
+	out := make([]model.Book, 0, n)
+
+	for _, b := range books {
+		if b.ID == obj.ID {
+			continue
+		}
+
+		out = append(out, model.Book{
+			ID:         b.ID,
+			Title:      b.Title,
+			PriceCents: b.PriceCents,
+			AuthorID:   b.AuthorID,
+		})
+
+		if len(out) >= n {
+			break
+		}
+	}
+
+	return out, nil
+}
+
+// CreateBook is the resolver for the createBook field.
+//
+// Returns a RESULT TYPE, so expected failures are in the schema where a client can switch on them.
+func (r *mutationResolver) CreateBook(ctx context.Context, input model.CreateBookInput) (*model.CreateBookResult, error) {
+	// []model.UserError, not []*model.UserError, because gqlgen.yml sets omit_slice_element_pointers.
+	// Without it a [UserError!]! becomes a slice of pointers, so every element can be nil for something
+	// the schema says cannot be null, and every loop over it needs a nil check the compiler will not
+	// ask for.
+	var problems []model.UserError
+
+	if strings.TrimSpace(input.Title) == "" {
+		problems = append(problems, model.UserError{
+			Field:   strPtr("title"),
+			Message: "title must not be empty",
+			Code:    model.ErrorCodeValidation,
+		})
+	}
+
+	if input.PriceCents < 0 {
+		problems = append(problems, model.UserError{
+			Field:   strPtr("priceCents"),
+			Message: "priceCents must not be negative",
+			Code:    model.ErrorCodeValidation,
+		})
+	}
+
+	if len(problems) > 0 {
+		// A successful GraphQL response carrying typed errors. The HTTP status is 200 and the top
+		// level `errors` array is absent, which is the point: this is not an exceptional condition,
+		// it is a documented outcome.
+		return &model.CreateBookResult{Errors: problems}, nil
+	}
+
+	book, err := r.Store.CreateBook(ctx, store.Book{
+		Title:      input.Title,
+		AuthorID:   input.AuthorID,
+		PriceCents: int32(input.PriceCents),
+	})
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return &model.CreateBookResult{
+				Errors: []model.UserError{{
+					Field:   strPtr("authorId"),
+					Message: fmt.Sprintf("no author with id %s", input.AuthorID),
+					Code:    model.ErrorCodeNotFound,
+				}},
+			}, nil
+		}
+
+		// An UNEXPECTED failure goes in the top-level errors array, which is what that array is for.
+		return nil, wrap("creating a book", err)
+	}
+
+	return &model.CreateBookResult{Book: toBook(book)}, nil
+}
+
+// CreateBookOrError is the same mutation with the other error model, for comparison.
+func (r *mutationResolver) CreateBookOrError(ctx context.Context, input model.CreateBookInput) (*model.Book, error) {
+	if strings.TrimSpace(input.Title) == "" {
+		// A plain error. It lands in the top-level errors array as a message string, the data field
+		// for this mutation is null, and a client has to match on the text to tell a validation
+		// failure from a database outage.
+		return nil, errors.New("title must not be empty")
+	}
+
+	book, err := r.Store.CreateBook(ctx, store.Book{
+		Title:      input.Title,
+		AuthorID:   input.AuthorID,
+		PriceCents: int32(input.PriceCents),
+	})
+	if err != nil {
+		return nil, wrap("creating a book", err)
+	}
+
+	return toBook(book), nil
+}
+
+// Author is the resolver for the author field.
+func (r *queryResolver) Author(ctx context.Context, id string) (*model.Author, error) {
+	author, err := r.Store.AuthorByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			// A NULL rather than an error, because the schema says `author: Author` and not
+			// `Author!`. Returning an error here would work and would put a message in the
+			// errors array for something that is a normal outcome.
+			return nil, nil
+		}
+
+		return nil, wrap("loading author", err)
+	}
+
+	return toAuthor(author), nil
+}
+
+// Authors is the resolver for the authors field.
+func (r *queryResolver) Authors(ctx context.Context, limit *int) ([]model.Author, error) {
+	n := 10
+	if limit != nil {
+		n = *limit
+	}
+
+	authors, err := r.Store.Authors(ctx, n)
+	if err != nil {
+		return nil, wrap("listing authors", err)
+	}
+
+	out := make([]model.Author, 0, len(authors))
+	for _, a := range authors {
+		out = append(out, model.Author{ID: a.ID, Name: a.Name})
+	}
+
+	return out, nil
+}
+
+// Book is the resolver for the book field.
+func (r *queryResolver) Book(ctx context.Context, id string) (*model.Book, error) {
+	book, err := r.Store.BookByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return nil, nil
+		}
+
+		return nil, wrap("loading book", err)
+	}
+
+	return toBook(book), nil
+}
+
+// Books is the resolver for the books field.
+//
+// Relay-style forward pagination. `last`/`before` are accepted by the schema and rejected here, because backward
+// pagination over a forward-only store cannot be implemented correctly and pretending otherwise is worse than
+// saying so.
+func (r *queryResolver) Books(ctx context.Context, first *int, after *string, last *int, before *string) (*model.BookConnection, error) {
+	if last != nil || before != nil {
+		return nil, errors.New("backward pagination is not supported; use first and after")
+	}
+
+	n := 10
+	if first != nil {
+		n = *first
+	}
+
+	// A cap, because `first: 100000` is a denial of service with no syntax error. Every connection
+	// needs one and the Relay spec does not mention it.
+	const maxPageSize = 100
+
+	if n < 0 {
+		return nil, errors.New("first must not be negative")
+	}
+	if n > maxPageSize {
+		n = maxPageSize
+	}
+
+	cursor := ""
+	if after != nil {
+		decoded, err := decodeCursor(*after)
+		if err != nil {
+			return nil, err
+		}
+		cursor = decoded
+	}
+
+	books, hasMore, err := r.Store.BooksPage(ctx, cursor, n)
+	if err != nil {
+		return nil, wrap("listing books", err)
+	}
+
+	edges := make([]model.BookEdge, 0, len(books))
+	for _, b := range books {
+		edges = append(edges, model.BookEdge{
+			Cursor: encodeCursor(b.ID),
+			Node:   toBook(b),
+		})
+	}
+
+	info := &model.PageInfo{
+		HasNextPage: hasMore,
+
+		// hasPreviousPage is true when a cursor was given, which is the spec's answer and is weaker
+		// than it sounds: it means "you came from somewhere", not "there are rows before this one".
+		// Computing the stronger version needs a second query.
+		HasPreviousPage: after != nil,
+	}
+
+	if len(edges) > 0 {
+		info.StartCursor = &edges[0].Cursor
+		info.EndCursor = &edges[len(edges)-1].Cursor
+	}
+
+	total, err := r.Store.CountBooks(ctx)
+	if err != nil {
+		return nil, wrap("counting books", err)
+	}
+
+	return &model.BookConnection{
+		Edges:      edges,
+		PageInfo:   info,
+		TotalCount: total,
+	}, nil
+}
+
+// Failing returns an error, so the error-propagation tests can ask for one.
+func (r *queryResolver) Failing(ctx context.Context, nullable bool) (*string, error) {
+	return nil, errors.New("this field always fails")
+}
+
+// Author returns generated.AuthorResolver implementation.
+func (r *Resolver) Author() generated.AuthorResolver { return &authorResolver{r} }
+
+// Book returns generated.BookResolver implementation.
+func (r *Resolver) Book() generated.BookResolver { return &bookResolver{r} }
+
+// Mutation returns generated.MutationResolver implementation.
+func (r *Resolver) Mutation() generated.MutationResolver { return &mutationResolver{r} }
+
+// Query returns generated.QueryResolver implementation.
+func (r *Resolver) Query() generated.QueryResolver { return &queryResolver{r} }
+
+type authorResolver struct{ *Resolver }
+type bookResolver struct{ *Resolver }
+type mutationResolver struct{ *Resolver }
+type queryResolver struct{ *Resolver }
+
+func toAuthor(a store.Author) *model.Author {
+	return &model.Author{ID: a.ID, Name: a.Name}
+}
+
+func toBook(b store.Book) *model.Book {
+	return &model.Book{
+		ID:         b.ID,
+		Title:      b.Title,
+		PriceCents: b.PriceCents,
+		AuthorID:   b.AuthorID,
+	}
+}
+
+func toBooks(books []store.Book) []model.Book {
+	out := make([]model.Book, 0, len(books))
+
+	for _, b := range books {
+		out = append(out, model.Book{
+			ID:         b.ID,
+			Title:      b.Title,
+			PriceCents: b.PriceCents,
+			AuthorID:   b.AuthorID,
+		})
+	}
+
+	return out
+}
+
+func strPtr(s string) *string { return &s }
+
+// encodeCursor turns an id into an opaque cursor.
+//
+// # Why base64 and why opaque
+//
+// The Relay spec says a cursor is an opaque String. Opaque is the operative word: a client that can read it will
+// parse it, and then the cursor format is a public API that cannot change. Base64 does not prevent that, it makes
+// it obviously a bad idea.
+//
+// The prefix is there for the same reason a database has typed ids: a cursor from the books connection handed to
+// the authors connection is a client bug, and decoding it into a plausible author id is the worst possible
+// outcome. With a prefix it is a clear error.
+func encodeCursor(id string) string {
+	return base64.RawURLEncoding.EncodeToString([]byte("book:" + id))
+}
+
+// decodeCursor parses one.
+func decodeCursor(cursor string) (string, error) {
+	raw, err := base64.RawURLEncoding.DecodeString(cursor)
+	if err != nil {
+		return "", fmt.Errorf("invalid cursor: not base64: %w", err)
+	}
+
+	id, ok := strings.CutPrefix(string(raw), "book:")
+	if !ok {
+		return "", errors.New("invalid cursor: not a book cursor")
+	}
+
+	return id, nil
+}

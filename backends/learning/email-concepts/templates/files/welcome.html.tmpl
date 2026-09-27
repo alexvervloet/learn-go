@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Welcome</title></head>
+<body>
+  <p>Hello {{ .Name }},</p>
+  <p>Your account is ready. Your plan is <strong>{{ .Plan }}</strong>.</p>
+  <p><a href="{{ .ConfirmURL }}">Confirm your address</a></p>
+  {{ if .Trial }}<p>Your trial ends on {{ .TrialEnds.Format "2 January 2006" }}.</p>{{ end }}
+  <p><small>{{ .Footer }}</small></p>
+</body>
+</html>

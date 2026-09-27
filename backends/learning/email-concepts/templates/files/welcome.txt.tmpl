@@ -1,0 +1,9 @@
+Hello {{ .Name }},
+
+Your account is ready. Your plan is {{ .Plan }}.
+
+Confirm your address: {{ .ConfirmURL }}
+{{ if .Trial }}
+Your trial ends on {{ .TrialEnds.Format "2 January 2006" }}.
+{{ end }}
+{{ .Footer }}

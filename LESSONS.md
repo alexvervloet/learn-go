@@ -1455,3 +1455,54 @@ because there is nothing to skip. Recall was 100% both ways.
 **And a savepoint does not isolate the parent from the child.** The first version of that comparison used
 `tx.Begin` to build the second index, and `tx` saw the savepoint's changes, so both halves queried the
 same index and reported identical numbers. Two states on one connection have to be measured sequentially.
+
+## A header helper that calls `time.Now` cannot be tested
+
+**Expected.** `Decision{ResetAt: time.Time}` and a `WriteHeaders` method that computes the
+`RateLimit-Reset` header with `time.Until(d.ResetAt)`. Obvious, and it reads well.
+
+**What happened.** The middleware test injects a fake clock set to 2025-06-01 and the real clock says
+2026-09-27, so `time.Until` on the limiter's `ResetAt` produced `RateLimit-Reset: -41721007`. Two clocks in
+one subtraction.
+
+**Next time.** Whichever component knows what time it is does the subtraction. `Decision` now carries
+`ResetIn time.Duration`, set by the limiter, and `WriteHeaders` only formats. A formatter that reads a clock
+has a hidden input, and a hidden input is either untestable or wrong.
+
+## `rate.Limiter` refuses before the deadline arrives, so joining `ctx.Err()` joins nothing
+
+**Expected.** `TokenBucket.Wait` wraps `rate.Limiter.Wait`, and on a context deadline the returned error
+matches `context.DeadlineExceeded` via `errors.Is`, either directly or by joining `ctx.Err()`.
+
+**What happened.** Two surprises in one test. `rate.Limiter.Wait` returns
+`rate: Wait(n=1) would exceed context deadline`, which is a plain error and does not wrap
+`context.DeadlineExceeded`, so `errors.Is` is false. And `ctx.Err()` is `nil` at that point, because
+`rate.Limiter` does not wait and then give up: it works out up front that the token cannot arrive in time and
+returns immediately, measured at 0ns of fake time under `synctest`.
+
+That is better behaviour than waiting. It also means the obvious fix joins nothing, and the test failed twice
+with the same message before I read it properly.
+
+**Next time.** The fix is to check `ctx.Deadline()` rather than `ctx.Err()`: a context with a deadline plus a
+refusal from a limiter with a positive burst means the refusal was about the deadline. And the general
+lesson, which has now come up with pgx and with `rate`: whether a library's error is matchable with
+`errors.Is` is a fact to verify in a test, never to assume from the error's wording.
+
+## The sliding log is the fastest limiter, not the slowest
+
+**Expected.** Keeping a timestamp per request is the expensive algorithm, so it should be the slowest as well
+as the hungriest.
+
+**What happened.** 63.6ns per Allow, the fastest of the four, against 69.6 for a fixed window, 74.4 for a
+sliding counter and 132.5 for `x/time/rate`'s token bucket. In the steady state it reslices a prefix and
+appends, with no allocation.
+
+Its cost is memory, and only memory: one timestamp per request inside the window, per key. At 100,000 keys
+and a limit of 1,000 that is 100 million timestamps. Which means for a LOW limit on a hot endpoint, a login
+form at 10 per minute, it is both exactly correct and the cheapest thing available, and the usual advice to
+avoid it does not apply there.
+
+And the number that decides the real question: the Redis limiter is 32.1µs against the in-memory fixed
+window's 69.6ns, **461x**. A PING alone is 20.2µs of that, so the Lua script costs about 12µs. That 461x is
+what someone is implicitly choosing when they leave a per-process limiter in a service that scales out, where
+five replicas with a limit of 10 enforce a limit of 50.

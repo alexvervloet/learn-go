@@ -1506,3 +1506,60 @@ And the number that decides the real question: the Redis limiter is 32.1µs agai
 window's 69.6ns, **461x**. A PING alone is 20.2µs of that, so the Lua script costs about 12µs. That 461x is
 what someone is implicitly choosing when they leave a per-process limiter in a service that scales out, where
 five replicas with a limit of 10 enforce a limit of 50.
+
+## An API that means different things per algorithm signed tokens with the wrong key
+
+**Expected.** `AddVerifyKey(kid, key)` then `SetActiveKID(kid)` is a clean way to express JWT key rotation:
+register the new key, switch to it.
+
+**What happened.** `TestKeyRotation` failed with "the new token failed during the overlap: signature is
+invalid", on a token the service had just minted. `SetActiveKID` changed which kid went into the header and did
+not change the key used to sign, so every new token was signed with the old secret and labelled with the new
+one.
+
+The tempting fix is for `SetActiveKID` to look the key up in the verify map and sign with it. That works for
+HS256, where both are the same shared secret, and cannot work for RS256, where the verify key is public and the
+signing key is private with no way from one to the other. An API that works for one algorithm and silently
+signs with the wrong key for the other is worse than an extra argument.
+
+**Next time.** `Rotate(kid, signKey, verifyKey)` takes both, and the asymmetry between HS256 and RS256 is
+visible at the call site. When one method has to mean different things depending on a field set in the
+constructor, that is the signal to split the argument out rather than to branch inside.
+
+## RS256 verification costs more than the Redis lookup it was supposed to replace
+
+**Expected.** "A JWT saves you a database round trip per request" is the standard argument, and I wrote it into
+a benchmark comment before running the benchmark.
+
+**What happened.** Measured on an M2 Max:
+
+| | mint | verify |
+| --- | --- | --- |
+| HS256 | 2.94µs | 4.12µs |
+| RS256-2048 | 890µs | 31.95µs |
+| RS256-4096 | 5.54ms | 148.67µs |
+
+A Redis round trip is 20.2µs, from `BenchmarkRedisAllow` in the same module. So HS256 verification at 4.1µs
+saves about 16µs per request, and RS256-2048 verification at 32µs costs MORE than the session lookup it
+replaces.
+
+**Next time.** The reason to choose RS256 is that many services can verify without any of them being able to
+mint. That is an authority argument. Stating it as a performance win is a claim that does not survive a
+benchmark, and the same goes for "stateless scales better" when the stateful alternative is one 20µs lookup.
+
+Two smaller things from the same run. HS256 **verify** (4.12µs) is slower than HS256 **mint** (2.94µs), because
+the HMAC is not the expensive part: verification also parses three base64 segments, unmarshals the claims and
+validates exp, nbf, iss and aud. And RSA signing is 303x HMAC signing at 2048 bits while verification is only
+7.8x, because signing exponentiates by a 2048-bit private exponent and verification uses the public exponent
+65537.
+
+## `time.Duration` runs out at 292 years
+
+**Expected.** `975 * 365 * 24 * time.Hour` as a test fixture for "a timestamp from the year 3000".
+
+**What happened.** It does not compile: "constant 30747600000000000000 of int64 type time.Duration overflows
+int64". A `time.Duration` is an int64 count of nanoseconds, so the maximum is about 292 years.
+
+**Next time.** Express a far-future instant as a `time.Time`, not as an offset. Relevant beyond fixtures: a
+"never expire" sentinel written as a huge duration silently overflows to a negative number, and a negative
+timeout usually means "already expired".

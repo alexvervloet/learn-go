@@ -1,0 +1,75 @@
+// greeter.proto is the unary RPC, plus the error and metadata surface.
+//
+// Every choice in this file is one that is expensive to change later, which is what makes a .proto worth reading
+// carefully. The comments say which ones and why.
+
+syntax = "proto3";
+
+package greeter.v1;
+
+// The v1 in the package is not decoration. A breaking change to a message means a NEW package (greeter.v2)
+// served alongside the old one, because the wire format has no version negotiation: a client built against v1
+// and a server serving v2 will decode each other's bytes into the wrong fields and report success.
+//
+// Putting the version in the package rather than in the service name means the whole file can be copied and
+// edited, which is what a v2 usually is.
+option go_package = "github.com/alexvervloet/learn-go/backends/learning/grpc-concepts/gen/greeterv1;greeterv1";
+
+service Greeter {
+  // SayHello is the unary call: one request, one response.
+  rpc SayHello(HelloRequest) returns (HelloReply);
+
+  // SayHelloTwice exists to show that a method returning the same types is still a separate method on the
+  // wire. The method name is part of the path (/greeter.v1.Greeter/SayHelloTwice), so renaming a method is a
+  // breaking change even when its signature is identical.
+  rpc SayHelloTwice(HelloRequest) returns (HelloReply);
+
+  // Fail returns a chosen status code, so the error tests can ask for each one.
+  rpc Fail(FailRequest) returns (HelloReply);
+}
+
+message HelloRequest {
+  // Field NUMBERS are the wire format. The name is not transmitted at all: a field is identified on the wire by
+  // its number and its type, which is why renaming a field is FREE and renumbering one is a silent
+  // incompatibility.
+  //
+  // 1 to 15 encode their tag in one byte and 16 to 2047 take two, so the fields on every message go first.
+  string name = 1;
+
+  // repeated is a list. In proto3 a repeated scalar is packed by default, which means one length-delimited run
+  // rather than a tag per element, and that is a wire-format difference from proto2 that only matters if
+  // something old is reading it.
+  repeated string titles = 2;
+
+  // optional in proto3 makes the field's presence detectable: the generated Go type is a POINTER, so nil and
+  // "" are different. Without it, a string field that arrives empty is indistinguishable from one that was
+  // never set, and "clear this field" cannot be expressed.
+  //
+  // This is the single most useful thing that came back to proto3 (in 3.15), and the field it is on here is the
+  // one a partial update would need.
+  optional string nickname = 3;
+}
+
+message HelloReply {
+  string message = 1;
+
+  // A reserved range, which is what a deleted field leaves behind. Without it, the next person adds a field and
+  // reuses number 2, and an old client decodes the new field as the deleted one.
+  //
+  // reserved is the only way to say "this number is burnt", and it costs nothing.
+  reserved 2;
+  reserved "greeting_count";
+
+  int32 served_by = 3;
+}
+
+message FailRequest {
+  // The numeric gRPC status code to return. int32 rather than an enum, because the test wants to ask for codes
+  // this file does not enumerate, including ones that are not valid.
+  int32 code = 1;
+  string message = 2;
+
+  // When true, the server attaches error DETAILS, which is the part of gRPC error handling that has no HTTP
+  // equivalent: a structured payload alongside the code and message.
+  bool with_details = 3;
+}

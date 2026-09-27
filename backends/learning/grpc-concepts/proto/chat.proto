@@ -1,0 +1,23 @@
+// chat.proto is bidirectional streaming: both directions at once.
+
+syntax = "proto3";
+
+package chat.v1;
+
+option go_package = "github.com/alexvervloet/learn-go/backends/learning/grpc-concepts/gen/chatv1;chatv1";
+
+service Chat {
+  // Join opens a stream in both directions.
+  //
+  // `stream` on both sides. The two directions are INDEPENDENT: the client can send after the server has
+  // finished sending, and the server can send without having received anything. That independence is the point
+  // and it is also why a naive implementation deadlocks, because a server that reads until EOF before sending
+  // anything requires the client to close before it will reply.
+  rpc Join(stream ChatMessage) returns (stream ChatMessage);
+}
+
+message ChatMessage {
+  string from = 1;
+  string text = 2;
+  int32 sequence = 3;
+}

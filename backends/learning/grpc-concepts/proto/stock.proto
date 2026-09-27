@@ -1,0 +1,46 @@
+// stock.proto is server streaming: one request, many responses.
+
+syntax = "proto3";
+
+package stock.v1;
+
+option go_package = "github.com/alexvervloet/learn-go/backends/learning/grpc-concepts/gen/stockv1;stockv1";
+
+import "google/protobuf/timestamp.proto";
+
+service StockTicker {
+  // Watch streams prices until the client hangs up or the server stops.
+  //
+  // The `stream` keyword on the RESPONSE makes this server streaming. The generated Go signature changes shape
+  // completely: instead of returning (*Reply, error) the server method takes a stream and returns only an
+  // error, and the client gets a Recv loop.
+  rpc Watch(WatchRequest) returns (stream Price);
+
+  // WatchWithDeadline is the same thing, and exists so a test can show what a deadline does to a stream: the
+  // server's context is cancelled and Send starts failing, which is how a server learns its client is gone.
+  rpc WatchWithDeadline(WatchRequest) returns (stream Price);
+}
+
+message WatchRequest {
+  repeated string symbols = 1;
+
+  // How many ticks to send before completing. Zero means stream until cancelled, which is the realistic case
+  // and the harder one to test.
+  int32 limit = 2;
+}
+
+message Price {
+  string symbol = 1;
+
+  // Money as an integer number of the smallest unit, never a float. A double cannot represent 0.10 exactly, so
+  // a price that round-trips through JSON or through arithmetic accumulates error. protobuf offers `double` and
+  // it is the wrong type for money in any language.
+  int64 cents = 2;
+
+  // google.protobuf.Timestamp rather than an int64 of seconds. It carries nanoseconds, it renders as RFC 3339
+  // in JSON, and every language's generated code maps it to a native time type. An int64 field named
+  // "timestamp" is a unit nobody documented.
+  google.protobuf.Timestamp observed_at = 3;
+
+  int32 sequence = 4;
+}

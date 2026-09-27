@@ -1,0 +1,44 @@
+// upload.proto is client streaming: many requests, one response.
+
+syntax = "proto3";
+
+package upload.v1;
+
+option go_package = "github.com/alexvervloet/learn-go/backends/learning/grpc-concepts/gen/uploadv1;uploadv1";
+
+service Uploader {
+  // Upload receives a stream of chunks and replies once, at the end.
+  //
+  // The `stream` is on the REQUEST. The client gets a Send/CloseAndRecv pair and the server gets a Recv loop
+  // that ends with io.EOF, which is the one place gRPC leaks a Go idiom into its API: the stream's end is
+  // reported as an error value that is not an error.
+  rpc Upload(stream Chunk) returns (UploadSummary);
+}
+
+message Chunk {
+  // The first message carries the metadata and the rest carry data. This is the standard shape for a client
+  // stream and it is a workaround: protobuf has no way to say "the first message is different", so the server
+  // has to check.
+  //
+  // The alternative is putting the filename in gRPC metadata (headers), which is cleaner and caps it at the
+  // header size limit. Both appear in real APIs.
+  oneof payload {
+    UploadMetadata metadata = 1;
+    bytes data = 2;
+  }
+}
+
+message UploadMetadata {
+  string filename = 1;
+  string content_type = 2;
+}
+
+message UploadSummary {
+  string filename = 1;
+  int64 bytes_received = 2;
+  int32 chunks = 3;
+
+  // The SHA-256 of what arrived, so a test can assert the bytes survived reassembly rather than just counting
+  // them.
+  string sha256 = 4;
+}

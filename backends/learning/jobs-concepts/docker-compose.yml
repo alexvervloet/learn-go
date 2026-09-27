@@ -1,0 +1,52 @@
+# Redis, which is the only thing asynq needs.
+#
+#   docker compose up -d
+#   REDIS_ADDR=localhost:6381 go test ./...
+#
+# Without it every test SKIPS. The harness in jobtest/ makes that decision and says why.
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: learn-go-jobs-redis
+
+    ports:
+      # 6381, so this can run alongside a local Redis and alongside backend-concepts' 6380.
+      - "6381:6379"
+
+    command:
+      - redis-server
+      # asynq keeps queue state, task payloads and statistics in Redis, so losing them on a restart
+      # loses queued work. In production that argues for appendonly; here it is a test database and
+      # persistence is pure cost.
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+      # asynq's own guidance: it uses Redis as a durable queue, so an eviction policy that can
+      # discard keys would silently drop tasks. noeviction makes Redis return an error when it is
+      # full instead, which is a visible failure rather than a lost job.
+      - --maxmemory-policy
+      - noeviction
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # asynqmon is the web dashboard, and it is the same API the Inspector tests use.
+  #
+  # Commented out rather than deleted: it is genuinely useful when working on this module and it is
+  # one more image to pull for a test suite that does not need it.
+  #
+  # asynqmon:
+  #   image: hibiken/asynqmon:latest
+  #   container_name: learn-go-jobs-asynqmon
+  #   ports:
+  #     - "8090:8080"
+  #   command:
+  #     - --redis-addr=redis:6379
+  #   depends_on:
+  #     redis:
+  #       condition: service_healthy

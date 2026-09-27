@@ -1,0 +1,37 @@
+# backends/learning
+
+Thirteen modules, one per concept, each a Go module of its own with its own `go.mod`. They mirror the
+Python repo's `backends/learning/` directory, and where a Python module has no sensible Go equivalent the
+mapping is stated rather than forced.
+
+| module | status | mirrors | what it covers |
+| --- | --- | --- | --- |
+| [http-tutorial/](http-tutorial/) | done | `fast-api-tutorial` | `net/http` with Go 1.22 routing, middleware, request decoding, RFC 9457 errors, graceful shutdown |
+| [testing-concepts/](testing-concepts/) | done | `testing-concepts` | table-driven tests, `testing/synctest`, golden files, fuzzing, the race detector |
+| [database-concepts/](database-concepts/) | done | `database-concepts` | pgx, indexes, N+1, transactions, window functions, full text, pgvector, goose |
+| backend-concepts/ | not started | `backend-concepts` | auth, caching, rate limiting, pagination, validation |
+| grpc-concepts/ | not started | `grpc-concepts` | grpc-go, protobuf, streaming, interceptors |
+| graphql-concepts/ | not started | `graphql-concepts` | gqlgen, resolvers, dataloaders, the N+1 again |
+| jobs-concepts/ | not started | `celery-concepts` | asynq, retries, scheduling, idempotency |
+| email-concepts/ | not started | `email-concepts` | SMTP, templates, testing outbound mail |
+| docker-concepts/ | not started | `docker-concepts` | multi-stage builds, distroless, `CGO_ENABLED=0` |
+| aws-concepts/ | not started | `aws-concepts` | the AWS SDK v2, S3, SQS, local testing |
+| github-actions/ | not started | `github-actions` | the workflow this repo already runs, explained |
+| makefile-concepts/ | not started | `makefile-concepts` | the Makefile this repo already uses, explained |
+| ai-concepts/ | not started | `ai-concepts` | calling models from Go, streaming, structured output |
+
+## What every module here has
+
+- its own `go.mod`, added to the workspace with `go work use`, so a reader can clone one directory and
+  build it
+- a package doc explaining the decision each file makes, not what the code does
+- tests that assert on something machine-independent, with the timings logged beside them
+- a `README.md` with every number measured rather than looked up
+- benchmarks where a claim about cost is being made
+
+## The convention that took a while to settle
+
+Numbers in prose are written **after** the measurement, never before. The repo's `LESSONS.md` has six
+separate entries where a figure written from memory turned out to be wrong, and two where the measurement
+contradicted advice that is repeated everywhere. That is now the rule: write the demo, run the tools, then
+write the paragraph.

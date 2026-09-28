@@ -119,7 +119,7 @@ func Get(ctx context.Context, client *s3.Client, bucket, key string) ([]byte, er
 // ErrNotFound is returned when a key does not exist.
 var ErrNotFound = errors.New("s3demo: object not found")
 
-// GetIfMatch reads an object only if its etag is still the one you saw.
+// GetIfNoneMatch reads an object only if its etag has changed since the one you saw.
 //
 // # The read half of optimistic concurrency
 //

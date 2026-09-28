@@ -415,10 +415,24 @@ jobs:
           cache: true
 
       - name: Install protoc
-        # apt rather than a release download: the generated code does not depend
-        # on the protoc version, only on the plugins, so the distribution's build
-        # is fine and it is one line.
-        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+        # The pinned release, not apt.
+        #
+        # apt was the first attempt, with a comment claiming the generated code
+        # does not depend on the protoc version. It does: every .pb.go header
+        # records `// protoc vX.Y.Z`, so Ubuntu's 3.21.12 against a developer's
+        # 36.2 is an 8-file diff that says nothing about the schema. This job
+        # then fails for a reason it was not built to catch.
+        #
+        # .protoc-version is the single source of truth and generate.sh warns
+        # when the local protoc does not match it.
+        run: |
+          version="$(cat backends/learning/grpc-concepts/.protoc-version)"
+          curl -fsSL -o /tmp/protoc.zip \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v${version}/protoc-${version}-linux-x86_64.zip"
+          unzip -q /tmp/protoc.zip -d /tmp/protoc
+          sudo cp /tmp/protoc/bin/protoc /usr/local/bin/protoc
+          sudo cp -r /tmp/protoc/include/* /usr/local/include/
+          protoc --version
 
       - name: Install the protoc plugins
         # @latest matches what generate.sh tells a developer to install. A pinned

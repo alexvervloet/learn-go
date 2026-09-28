@@ -16,7 +16,7 @@ mapping is stated rather than forced.
 | [email-concepts/](email-concepts/) | done | `email-concepts` | MIME building, SMTP with TLS, two template packages, a mail catcher |
 | [docker-concepts/](docker-concepts/) | done | `docker-concepts` | seven Dockerfiles measured, signals, scratch, ldflags, runtime limits |
 | [aws-concepts/](aws-concepts/) | done | `aws-concepts` | S3, DynamoDB, SQS, SNS against LocalStack, with the request counts measured |
-| github-actions/ | not started | `github-actions` | the workflow this repo already runs, explained |
+| [github-actions/](github-actions/) | done | `github-actions` | a workflow checker in Go, pointed at this repo's own CI |
 | [makefile-concepts/](makefile-concepts/) | done | `makefile-concepts` | rules are files, expansion, the traps, and Makefiles in a Go workspace |
 | ai-concepts/ | not started | `ai-concepts` | calling models from Go, streaming, structured output |
 

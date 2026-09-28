@@ -71,10 +71,26 @@ func TestUnbufferedIsAHandshake(t *testing.T) {
 			}
 		}
 
-		// THE guarantee: an unbuffered send does not return until a receiver
-		// has taken the value.
+		// THE guarantee, stated as a chain the memory model actually gives:
+		//
+		//   "about to receive" is written before <-ch,
+		//   <-ch completes before ch <- 1 returns,
+		//   ch <- 1 returns before "sent" is written.
+		//
+		// So the receiver reaching the channel is ordered before the sender
+		// leaving it, and the 20ms sleep in the receiver is what makes the
+		// ordering mean something: the sender is parked in its send for all
+		// of it.
+		if aboutToReceive > sent {
+			t.Errorf("the send returned before the receiver even arrived, which an unbuffered channel forbids:\n  %v", got)
+		}
+
+		// And the one NOT to assert. `received` is written after <-ch
+		// completes, in a goroutine the scheduler can park at that moment,
+		// so the sender can write "sent" first. It usually does not. It did
+		// in CI. See the comment on unbufferedIsAHandshake.
 		if received > sent {
-			t.Errorf("receive logged after send returned, which an unbuffered channel forbids:\n  %v", got)
+			t.Logf("the receiver was descheduled between taking the value and logging it: %v", got)
 		}
 
 		// Each goroutine's own events are ordered within that goroutine.

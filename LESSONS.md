@@ -2008,3 +2008,23 @@ already exists with different attributes`, which describes the symptom and not t
 **Next time.** A name derived from the test name is unique per TEST, not per CALL. Any helper a test can call
 twice needs a discriminator in its signature, and the idempotent-creation APIs (SNS topics, S3 buckets in
 us-east-1) hide the collision instead of reporting it.
+
+## A channel orders the channel operations, not the statements after them
+
+**Expected.** The Go memory model says a receive from an unbuffered channel happens before the send completes,
+so in a test where both sides append to a slice, the receiver's line lands before the sender's. The comment on
+the function said as much: "guaranteed by the memory model, not by timing, so the test can assert it exactly."
+
+**What happened.** CI failed with `receive logged after send returned, which an unbuffered channel forbids`. It
+does not forbid it. The guarantee covers `<-ch` completing before `ch <- 1` returns. The receiver's NEXT
+statement, the one that writes the line, is in a goroutine the scheduler is free to park at exactly that moment
+while the sender runs on. Roughly one run in a few hundred.
+
+**Next time.** Write the happens-before chain out before asserting on an ordering, and check that every link is
+a channel operation rather than a statement next to one. The assertion that does hold here is
+`"receiver: about to receive"` before `"sender: sent"`, because that chain is ordered end to end:
+write, then receive, then the send returns, then write. The one that failed is now a `t.Log`, which is the
+honest place for something that is usually true.
+
+The broader tell: a comment claiming a guarantee is a claim, and this repository's rule is that claims get
+tested. This one had a test. The test asserted the wrong half.

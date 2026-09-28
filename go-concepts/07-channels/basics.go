@@ -19,11 +19,30 @@ import (
 )
 
 // unbufferedIsAHandshake records the order of events on both sides. The sender
-// cannot proceed past its send until the receiver has taken the value, so the
-// receive is always logged before the sender's "sent" line.
+// cannot proceed past its send until a receiver has taken the value.
 //
-// This ordering is guaranteed by the memory model, not by timing, so the test
-// can assert it exactly.
+// # What the memory model actually promises, and what it does not
+//
+// The guarantee is: "A receive from an unbuffered channel happens before the
+// send on that channel completes." So `<-ch` completes before `ch <- 1`
+// returns, and the chain
+//
+//	record("receiver: about to receive")
+//	  -> <-ch
+//	  -> ch <- 1 returns
+//	  -> record("sender: sent")
+//
+// is ordered end to end. That one a test can assert.
+//
+// What is NOT ordered is `record("receiver: received")` against
+// `record("sender: sent")`. The receiver can be descheduled between taking the
+// value and writing its line, while the sender runs on and writes first. The
+// first version of this test asserted that ordering and called it "guaranteed
+// by the memory model". It fails roughly once in a few hundred runs, and CI
+// found it.
+//
+// The distinction is the whole point: the channel orders the channel
+// OPERATIONS, not the statements that happen to follow them.
 func unbufferedIsAHandshake() []string {
 	var (
 		mu     sync.Mutex

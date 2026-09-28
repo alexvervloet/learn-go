@@ -1795,3 +1795,28 @@ for a constructor, not a fixture.
 inspector call that itself took 300ms, so an 800ms delay measured as 508ms and the test reported asynq running
 tasks early. Anything measuring a delay starts its clock at the moment the delay is requested, before any
 diagnostic call.
+
+## Four email findings, three of them about the tools rather than the code
+
+**`smtp.SendMail` sends in the clear when the server does not advertise STARTTLS, silently.** No error, no
+warning. So a server that stops advertising it after a certificate expires starts sending every message and every
+password in plaintext, and nothing reports it. `net/smtp` also has no timeout at all: `SendMail` against a black
+hole hangs forever and there is no option for it. Both are why the sender here drives `smtp.Client` by hand over
+a `net.Dialer` rather than calling the four-line convenience function.
+
+**`textproto.MIMEHeader.Set` canonicalises the key.** `Content-ID` is stored as `Content-Id`, which is correct
+(header names are case-insensitive) and makes a test grepping for the spelling it wrote fail.
+
+**quoted-printable encodes `=` as `=3D`, always**, because `=` is its own escape character. So `src="cid:logo"`
+appears in the raw message as `src=3D"cid:logo"`, and grepping raw bytes for HTML finds nothing, which looks like
+the body was never written.
+
+**Mailpit's "raw" message is not what was on the wire.** It prepends `Bcc` reconstructed from the envelope, plus
+`Message-ID`, `Return-Path` and `Received`. An assertion that the raw message contains no Bcc header therefore
+fails against Mailpit while the builder is right. The only place to answer "what did we send" is the builder's own
+output, and the message-level test is where that assertion belongs.
+
+**Next time.** A mail catcher tests that a message PARSES; it does not test what was transmitted, because it
+rewrites what it stores. The same shape as the earlier finding about `pg_stat_activity` and the one about
+`asynq`'s second granularity: when a test about a library fails, read what the library actually does before
+assuming the code is wrong.

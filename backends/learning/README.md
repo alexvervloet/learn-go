@@ -13,7 +13,7 @@ mapping is stated rather than forced.
 | [grpc-concepts/](grpc-concepts/) | done | `grpc-concepts` | the four RPC patterns, status codes, metadata, interceptors |
 | [graphql-concepts/](graphql-concepts/) | done | `graphql-concepts` | gqlgen, the N+1 and dataloaders, error models, complexity limiting |
 | [jobs-concepts/](jobs-concepts/) | done | `celery-concepts` | asynq, retries, timeouts, scheduling, idempotency, inspection |
-| email-concepts/ | not started | `email-concepts` | SMTP, templates, testing outbound mail |
+| [email-concepts/](email-concepts/) | done | `email-concepts` | MIME building, SMTP with TLS, two template packages, a mail catcher |
 | docker-concepts/ | not started | `docker-concepts` | multi-stage builds, distroless, `CGO_ENABLED=0` |
 | aws-concepts/ | not started | `aws-concepts` | the AWS SDK v2, S3, SQS, local testing |
 | github-actions/ | not started | `github-actions` | the workflow this repo already runs, explained |

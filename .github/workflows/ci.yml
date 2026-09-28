@@ -224,7 +224,7 @@ jobs:
   # This job is what stops "skips everywhere" from counting as passing.
   # ---------------------------------------------------------------------------
   backend:
-    name: Backend and jobs (Postgres + Redis + Kafka)
+    name: Services (Postgres + Redis + Kafka + Mailpit)
     runs-on: ubuntu-latest
 
     services:
@@ -253,6 +253,26 @@ jobs:
 
         options: >-
           --health-cmd "redis-cli ping"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+
+      # Mailpit fits as a service container where Redpanda does not, because it is
+      # configured entirely through environment variables and needs no command.
+      mailpit:
+        image: axllent/mailpit:latest
+
+        env:
+          MP_DATABASE: ""
+          MP_SMTP_AUTH_ACCEPT_ANY: "true"
+          MP_SMTP_AUTH_ALLOW_INSECURE: "true"
+
+        ports:
+          - 1025:1025
+          - 8025:8025
+
+        options: >-
+          --health-cmd "wget --spider -q http://localhost:8025/readyz"
           --health-interval 2s
           --health-timeout 3s
           --health-retries 30
@@ -311,6 +331,22 @@ jobs:
         run: |
           if grep -q "no Redis at" "$RUNNER_TEMP/jobs-tests.log"; then
             echo "::error::jobs tests skipped for want of a Redis"
+            exit 1
+          fi
+
+      - name: Test the email module
+        working-directory: backends/learning/email-concepts
+        env:
+          MAILPIT_SMTP_PORT: 1025
+          MAILPIT_API_URL: http://localhost:8025
+        run: |
+          set -o pipefail
+          go test -count=1 -timeout 5m -v ./... 2>&1 | tee "$RUNNER_TEMP/email-tests.log"
+
+      - name: Fail if the email tests skipped
+        run: |
+          if grep -q "no Mailpit at" "$RUNNER_TEMP/email-tests.log"; then
+            echo "::error::email tests skipped for want of a Mailpit"
             exit 1
           fi
 

@@ -393,6 +393,113 @@ jobs:
         run: docker rm -f redpanda
 
   # ---------------------------------------------------------------------------
+  # Capstones — the finished services, against real Postgres and Redis.
+  #
+  # Its own job because a capstone is where the modules meet: if the database
+  # module's isolation trick and the caching module's invalidation and the jobs
+  # module's retry policy disagree with each other, this is where it shows.
+  #
+  # Every test that needs a service skips without one, so the step after the run
+  # greps for the skip message. A skip is not a pass.
+  # ---------------------------------------------------------------------------
+  capstones:
+    name: Capstones (Postgres + Redis)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: learn_go_db
+
+        ports:
+          - 5432:5432
+
+        options: >-
+          --health-cmd "pg_isready -U postgres -d learn_go_db"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+
+      redis:
+        image: redis:7-alpine
+
+        ports:
+          - 6379:6379
+
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27"
+          cache: true
+
+      - name: Test the url-shortener
+        working-directory: capstones/url-shortener
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/learn_go_db?sslmode=disable
+          REDIS_ADDR: localhost:6379
+        run: |
+          set -o pipefail
+          go test -count=1 -timeout 10m -v ./... 2>&1 | tee "$RUNNER_TEMP/url-shortener.log"
+
+      - name: Fail if the capstone tests skipped
+        run: |
+          missing=0
+
+          for pattern in "no database available" "no Redis at"; do
+            if grep -q "$pattern" "$RUNNER_TEMP/url-shortener.log"; then
+              echo "::error::url-shortener tests skipped: $pattern"
+              grep -n "$pattern" "$RUNNER_TEMP/url-shortener.log" | head -3
+              missing=1
+            fi
+          done
+
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+          echo "$(grep -c '^--- PASS' "$RUNNER_TEMP/url-shortener.log") tests passed, none skipped"
+
+      - name: Build the image
+        working-directory: capstones/url-shortener
+        run: |
+          docker build \
+            --build-arg VERSION="$GITHUB_REF_NAME" \
+            --build-arg COMMIT="$GITHUB_SHA" \
+            -t url-shortener:ci .
+
+          # The image has no shell, so `docker run ... sh -c` cannot inspect it.
+          # `docker image inspect` reads the metadata instead, which is where
+          # the user and the entrypoint live.
+          user=$(docker image inspect url-shortener:ci --format '{{.Config.User}}')
+          entrypoint=$(docker image inspect url-shortener:ci --format '{{json .Config.Entrypoint}}')
+          size=$(docker image inspect url-shortener:ci --format '{{.Size}}')
+
+          echo "user=$user entrypoint=$entrypoint size=$((size / 1024 / 1024))MB"
+
+          if [ "$user" = "" ] || [ "$user" = "root" ] || [ "$user" = "0" ]; then
+            echo "::error::the image runs as root"
+            exit 1
+          fi
+
+          if [ "$entrypoint" = "null" ]; then
+            echo "::error::no exec-form ENTRYPOINT, so sh would be PID 1 and SIGTERM would not reach the binary"
+            exit 1
+          fi
+
+
+  # ---------------------------------------------------------------------------
   # AWS — the aws-concepts module against LocalStack.
   #
   # Its own job because LocalStack is a single container serving every AWS API,

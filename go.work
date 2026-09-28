@@ -1,6 +1,7 @@
 go 1.27.1
 
 use (
+	./backends/learning/ai-concepts
 	./backends/learning/aws-concepts
 	./backends/learning/backend-concepts
 	./backends/learning/database-concepts

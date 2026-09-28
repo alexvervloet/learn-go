@@ -445,6 +445,44 @@ jobs:
           echo "generated code matches the .proto files"
 
   # ---------------------------------------------------------------------------
+  # Images — build every Dockerfile and run the containers.
+  #
+  # Its own job because it is slow (a cold run pulls golang and distroless) and
+  # because it needs nothing else: no database, no Redis, no broker. The runner
+  # already has Docker.
+  # ---------------------------------------------------------------------------
+  images:
+    name: Docker images
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27"
+          cache: true
+
+      # BuildKit, for the cache-mount Dockerfile. It is the default since Docker
+      # 23 and the runner has a newer one, so this is belt and braces and it
+      # documents the requirement.
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and run every image
+        working-directory: backends/learning/docker-concepts
+        run: |
+          set -o pipefail
+          go test -count=1 -timeout 20m -v ./... 2>&1 | tee "$RUNNER_TEMP/image-tests.log"
+
+      - name: Fail if the image tests skipped
+        run: |
+          if grep -q "Docker is not available" "$RUNNER_TEMP/image-tests.log"; then
+            echo "::error::image tests skipped for want of a Docker daemon"
+            exit 1
+          fi
+
+  # ---------------------------------------------------------------------------
   # Race — the race detector on its own job, because it is 5-10x slower than a
   # normal run and does not need the full matrix to be useful. One platform,
   # current Go.

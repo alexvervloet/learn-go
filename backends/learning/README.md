@@ -14,7 +14,7 @@ mapping is stated rather than forced.
 | [graphql-concepts/](graphql-concepts/) | done | `graphql-concepts` | gqlgen, the N+1 and dataloaders, error models, complexity limiting |
 | [jobs-concepts/](jobs-concepts/) | done | `celery-concepts` | asynq, retries, timeouts, scheduling, idempotency, inspection |
 | [email-concepts/](email-concepts/) | done | `email-concepts` | MIME building, SMTP with TLS, two template packages, a mail catcher |
-| docker-concepts/ | not started | `docker-concepts` | multi-stage builds, distroless, `CGO_ENABLED=0` |
+| [docker-concepts/](docker-concepts/) | done | `docker-concepts` | seven Dockerfiles measured, signals, scratch, ldflags, runtime limits |
 | aws-concepts/ | not started | `aws-concepts` | the AWS SDK v2, S3, SQS, local testing |
 | github-actions/ | not started | `github-actions` | the workflow this repo already runs, explained |
 | makefile-concepts/ | not started | `makefile-concepts` | the Makefile this repo already uses, explained |

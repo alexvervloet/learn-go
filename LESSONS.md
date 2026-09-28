@@ -1820,3 +1820,38 @@ output, and the message-level test is where that assertion belongs.
 rewrites what it stores. The same shape as the earlier finding about `pg_stat_activity` and the one about
 `asynq`'s second granularity: when a test about a library fails, read what the library actually does before
 assuming the code is wrong.
+
+## The Docker measurements, and two things I had backwards
+
+**Seven Dockerfiles for the same Go binary:** 1.01 GB naive, 115 MB with CGO, 16.4 MB on alpine, 8.8 MB
+distroless, 7.53 MB scratch with the certificates and zone database, 6.68 MB scratch with nothing. The naive
+image is **115x** the distroless one, and the whole gap between scratch and distroless is 1.3 MB of certificates
+and zoneinfo.
+
+**Shell form costs the full grace period.** `docker stop -t 10` against `ENTRYPOINT ["/server"]` exits in 0.4s
+with code 0; against `CMD /app/server` it exits after 10.2s with code 137. `/bin/sh` is PID 1 in the second and
+does not forward SIGTERM. Every in-flight request is dropped on every deploy and the only symptom is that deploys
+are slow.
+
+**An empty scratch image is not broken.** I expected it to fail to start; a static Go binary needs no files at
+all, so it starts and serves traffic. What it gets wrong is outbound HTTPS (`x509: certificate signed by unknown
+authority` for every host, which reads like the remote server's problem) and time zones.
+
+**And the time zone case is better than I wrote.** I had commented that `time.LoadLocation` silently returns UTC
+without the zone database. It returns an ERROR: `unknown time zone Europe/London`. The test corrected the comment.
+
+**`-X` on a variable that does not exist is not an error.** The build succeeds, the variable keeps its default,
+and the other `-X` flags still apply. So one typo produces one wrong field in a health endpoint and nothing else.
+That is why the build variables default to `"unknown"` rather than `""`.
+
+## A test that searched a file for the instruction its own comments discussed
+
+**Expected.** Checking that a Dockerfile copies `go.mod` before running `go mod download` is a matter of comparing
+two `strings.Index` results.
+
+**What happened.** The Dockerfile's COMMENTS explain the caching, so "go mod download" appears in prose 150 bytes
+before the `RUN` line that does it. The ordering assertion failed on a file that was correct.
+
+**Next time.** Parse the instructions: drop comment and blank lines, join backslash continuations, then compare
+indices in that list. A file whose comments discuss its own contents cannot be checked by substring position, and
+this repo's files all have comments like that by design.

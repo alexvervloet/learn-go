@@ -1,0 +1,51 @@
+# Everything the service needs to run locally.
+#
+#   docker compose up -d
+#   DATABASE_URL="postgres://postgres:postgres@localhost:5434/learn_go_db?sslmode=disable" \
+#     REDIS_ADDR=localhost:6383 go test ./...
+#
+# Or, with a local Postgres and Redis on their usual ports, just `go test ./...`.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+
+    container_name: bookmark-manager-db
+
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: learn_go_db
+
+    ports:
+      # 5434: 5432 is a local Postgres, 5433 is the url-shortener's container. Every module in this repository
+      # picks a port nobody else uses, because Docker binds *:5432 while a local Postgres binds
+      # 127.0.0.1:5432, `localhost` resolves to the second, and the resulting failure looks like a broken
+      # container rather than a port collision.
+      - "5434:5432"
+
+    healthcheck:
+      # pg_isready against the database, not just the port. The port accepts connections a second before
+      # Postgres answers, and a test connecting in that window fails or, worse, skips.
+      test: ["CMD-SHELL", "pg_isready -U postgres -d learn_go_db"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+
+    container_name: bookmark-manager-redis
+
+    ports:
+      - "6383:6379"
+
+    # No persistence: this Redis holds rate-limit counters, and counters that survive a restart are worse than
+    # counters that start empty.
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30

@@ -1,0 +1,26 @@
+# Line endings.
+#
+# Git on Windows checks out text files with CRLF by default. That is right for source a human edits in Notepad
+# and wrong for anything a test compares byte for byte, which is what broke the golden-file tests on the Windows
+# CI job: the file on disk had \r\n, the server rendered \n, and the diff was every line.
+#
+# `text=auto eol=lf` normalises on commit and checks out LF everywhere. Go source, Makefiles, shell scripts and
+# golden files all want that, and none of them care about Windows conventions.
+* text=auto eol=lf
+
+# Shell scripts and Makefiles are broken by CRLF rather than merely inconvenienced: a recipe line ending in \r
+# makes make invoke a command whose name has a carriage return in it, and #!/usr/bin/env bash\r is a "bad
+# interpreter" error that reads like the file does not exist. Stated explicitly so the rule survives someone
+# relaxing the line above.
+*.sh text eol=lf
+*.mk text eol=lf
+Makefile text eol=lf
+
+# Golden files are compared byte for byte. Marking them keeps the intent visible next to the rule.
+*.golden text eol=lf
+*.golden.json text eol=lf
+
+# Generated Go code is still Go. Marking it as generated collapses it in GitHub diffs, which matters because
+# regenerating a .pb.go can be a two thousand line diff nobody should have to scroll past.
+*.pb.go linguist-generated=true
+generated.go linguist-generated=true

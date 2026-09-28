@@ -28,6 +28,12 @@ tests clean on Go 1.27.
 | [capstones/](capstones/) | ✅ 2 of 2 services |
 | [utilities/](utilities/) | ✅ 3 standalone packages |
 
+## Where to start
+
+[WALKTHROUGH.md](WALKTHROUGH.md) is the intended path through the repository: what to run, in what
+order, what each stage needs, and the things that surprised me while building it. Every command in it was run
+before it was written down.
+
 ## Setup
 
 ```bash

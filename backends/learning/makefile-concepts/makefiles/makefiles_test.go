@@ -41,6 +41,21 @@ var (
 func requireMake(t testing.TB) string {
 	t.Helper()
 
+	// Windows has GNU make, on the GitHub runner and anywhere MSYS or Chocolatey
+	// has been near. What it does not have is a POSIX shell for the recipes.
+	//
+	// make picks its shell from $SHELL on Unix and from COMSPEC on Windows, so every recipe here runs under
+	// cmd.exe: `cd` changes the directory and does not persist the way the test asserts, `pwd` is not a command,
+	// and `grep` is not either. Three tests failed in CI on Windows for three different spellings of that one
+	// fact.
+	//
+	// Setting SHELL in the Makefile would paper over it and would then require sh.exe to exist. These examples
+	// are about GNU make on a Unix shell, which is where a Go project's Makefile runs, so the honest answer is
+	// to say so and skip.
+	if runtime.GOOS == "windows" {
+		t.Skip("the example recipes need a POSIX shell; make on Windows runs them under cmd.exe")
+	}
+
 	once.Do(func() {
 		for _, candidate := range []string{"gmake", "make"} {
 			path, err := exec.LookPath(candidate)

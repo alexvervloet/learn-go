@@ -393,6 +393,77 @@ jobs:
         run: docker rm -f redpanda
 
   # ---------------------------------------------------------------------------
+  # AWS — the aws-concepts module against LocalStack.
+  #
+  # Its own job because LocalStack is a single container serving every AWS API,
+  # and because these tests create and destroy real resources in it. Mixing them
+  # into the services job would mean one container's failure hiding four
+  # modules.
+  #
+  # Every test here skips without LocalStack, so the step after the run greps
+  # for the skip message. A skip is not a pass.
+  # ---------------------------------------------------------------------------
+  aws:
+    name: AWS (LocalStack)
+    runs-on: ubuntu-latest
+
+    services:
+      localstack:
+        # LocalStack fits as a service container: it is configured entirely
+        # through environment variables and needs no command override.
+        image: localstack/localstack:3
+
+        env:
+          SERVICES: s3,sqs,sns,dynamodb,iam
+          DEFAULT_REGION: us-east-1
+          DEBUG: "0"
+          PERSISTENCE: "0"
+          # Without this LocalStack never checks an S3 signature, so a presigned
+          # URL works after it has expired and the expiry test asserts nothing.
+          S3_SKIP_SIGNATURE_VALIDATION: "0"
+
+        ports:
+          - 4566:4566
+
+        options: >-
+          --health-cmd "curl -fsS http://localhost:4566/_localstack/health"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 40
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27"
+          cache: true
+
+      - name: Test against LocalStack
+        working-directory: backends/learning/aws-concepts
+        env:
+          AWS_ENDPOINT_URL: http://localhost:4566
+        run: |
+          set -o pipefail
+
+          # -p 1 rather than the default. LocalStack is ONE namespace shared by
+          # every package, and while the resource names are unique per test, the
+          # SQS tests wait out real visibility timeouts and four packages racing
+          # through one emulator makes the timings unreliable.
+          go test -count=1 -p 1 -timeout 15m -v ./... 2>&1 | tee "$RUNNER_TEMP/aws-tests.log"
+
+      - name: Fail if the AWS tests skipped
+        run: |
+          if grep -q "LocalStack is not reachable" "$RUNNER_TEMP/aws-tests.log"; then
+            echo "::error::AWS tests skipped for want of a LocalStack"
+            grep -n "LocalStack is not reachable" "$RUNNER_TEMP/aws-tests.log" | head -3
+            exit 1
+          fi
+
+          echo "$(grep -c '^--- PASS' "$RUNNER_TEMP/aws-tests.log") tests passed, none skipped"
+
+
+  # ---------------------------------------------------------------------------
   # Generated — regenerate the protobuf stubs and fail if they differ.
   #
   # The stubs are COMMITTED, so `git clone && go build ./...` works with nothing

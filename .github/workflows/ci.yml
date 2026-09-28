@@ -140,6 +140,13 @@ jobs:
       - name: Test with build tags
         run: go test -count=1 -tags debug $(go list -m -f '{{.Dir}}/...')
 
+      # The Makefile examples need GNU make, which ubuntu-latest has (4.3) and
+      # macos-latest ships as 3.81. The test detects the version and skips the
+      # one feature 3.81 lacks, so both run and neither is a false pass.
+      - name: make --version
+        if: runner.os != 'Windows'
+        run: make --version | head -1
+
   # ---------------------------------------------------------------------------
   # Database — the one module that needs a real Postgres.
   #

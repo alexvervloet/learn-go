@@ -17,7 +17,7 @@ mapping is stated rather than forced.
 | [docker-concepts/](docker-concepts/) | done | `docker-concepts` | seven Dockerfiles measured, signals, scratch, ldflags, runtime limits |
 | aws-concepts/ | not started | `aws-concepts` | the AWS SDK v2, S3, SQS, local testing |
 | github-actions/ | not started | `github-actions` | the workflow this repo already runs, explained |
-| makefile-concepts/ | not started | `makefile-concepts` | the Makefile this repo already uses, explained |
+| [makefile-concepts/](makefile-concepts/) | done | `makefile-concepts` | rules are files, expansion, the traps, and Makefiles in a Go workspace |
 | ai-concepts/ | not started | `ai-concepts` | calling models from Go, streaming, structured output |
 
 ## What every module here has

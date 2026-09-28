@@ -7,7 +7,7 @@ and a distroless image.
 ```bash
 docker compose up -d
 
-DATABASE_URL="postgres://postgres:postgres@localhost:5433/learn_go_db?sslmode=disable" \
+DATABASE_URL="postgres://postgres:postgres@localhost:5435/learn_go_db?sslmode=disable" \
   REDIS_ADDR=localhost:6382 \
   go test ./...
 ```
@@ -191,7 +191,7 @@ refactor: the first version handed every caller an obligation and the linter fou
 ```bash
 docker compose up -d
 
-export DATABASE_URL="postgres://postgres:postgres@localhost:5433/learn_go_db?sslmode=disable"
+export DATABASE_URL="postgres://postgres:postgres@localhost:5435/learn_go_db?sslmode=disable"
 export REDIS_ADDR=localhost:6382
 export JWT_SECRET="a-secret-that-is-at-least-thirty-two-bytes"
 export BASE_URL="http://localhost:8080"

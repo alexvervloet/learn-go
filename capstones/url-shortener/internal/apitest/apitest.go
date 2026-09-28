@@ -61,13 +61,18 @@ const DefaultURL = "postgres:///learn_go_db?sslmode=disable"
 
 // ComposeURL is what docker-compose.yml in this directory serves.
 //
-// Port 5433, so the container does not collide with a local Postgres on 5432. The collision is worth avoiding
-// precisely because it is invisible: Docker binds *:5432 and a local Postgres binds 127.0.0.1:5432, `localhost`
-// resolves to the second, and every test skips with "role postgres does not exist" while a healthy container
-// sits there.
+// Port 5435, which is this module's and nobody else's.
 //
-//	DATABASE_URL="postgres://postgres:postgres@localhost:5433/learn_go_db?sslmode=disable" go test ./...
-const ComposeURL = "postgres://postgres:postgres@localhost:5433/learn_go_db?sslmode=disable"
+// Every compose file in this repository picks a port nothing else uses, and the map is in WALKTHROUGH.md. Two
+// containers cannot bind the same host port, so a reader running database-concepts and this at the same time
+// gets "port is already allocated" from whichever starts second.
+//
+// The reason to avoid 5432 specifically is different and worse, because it is invisible: Docker binds *:5432
+// while a local Postgres binds 127.0.0.1:5432, `localhost` resolves to the second, and every test skips with
+// "role postgres does not exist" while a healthy container sits there doing nothing.
+//
+//	DATABASE_URL="postgres://postgres:postgres@localhost:5435/learn_go_db?sslmode=disable" go test ./...
+const ComposeURL = "postgres://postgres:postgres@localhost:5435/learn_go_db?sslmode=disable"
 
 // URL returns the connection string.
 func URL() string {

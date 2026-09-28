@@ -10,7 +10,7 @@ folders, which is set out under [what did not translate](#what-did-not-translate
 
 ```sh
 docker compose up -d
-DATABASE_URL="postgres://postgres:postgres@localhost:5433/learn_go_db?sslmode=disable" \
+DATABASE_URL="postgres://postgres:postgres@localhost:5436/learn_go_db?sslmode=disable" \
   REDIS_ADDR=localhost:6380 \
   KAFKA_BROKERS=localhost:19092 \
   go test ./...

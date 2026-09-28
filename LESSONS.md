@@ -2182,3 +2182,26 @@ workspace whose modules ship together.
 The real fix for the original failure was smaller: exclude `go.work.sum` from the generated-code diff. `go run`
 adds hashes for the platform it runs on, so a developer on darwin/arm64 and a runner on linux/amd64 legitimately
 differ, and that job is about generated code rather than about a lock file a tool touched on its way past.
+
+## Three compose files wanted the same host port, and only one could have it
+
+**Expected.** Each module's `docker-compose.yml` picks a Postgres port that is not 5432, so it does not collide
+with a locally installed Postgres. Each one said so in a comment.
+
+**What happened.** Writing the walkthrough meant listing the ports, and three files bound **5433**:
+database-concepts, backend-concepts and the url-shortener capstone. Two containers cannot bind one host port,
+so starting a second is `port is already allocated`, and the url-shortener's own compose file claimed it ran
+"alongside the learning modules' own containers".
+
+Nothing caught it because CI uses service containers on the default ports and never runs two compose files, and
+locally I only ever had one up at a time.
+
+**Next time.** A port is a global resource in a repository of independent modules, so the allocation belongs in
+one place. WALKTHROUGH.md now has the map, every compose file points at it, and the check is one line:
+
+```sh
+find . -name docker-compose.yml | xargs grep -ohE '"[0-9]{4}:[0-9]{4}"' | tr -d '"' | cut -d: -f1 | sort | uniq -d
+```
+
+The deeper point is that the claim in each comment was locally true and globally false. A per-file comment
+cannot assert something about every other file.

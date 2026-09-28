@@ -1,7 +1,7 @@
 # Everything the service needs to run locally.
 #
 #   docker compose up -d
-#   DATABASE_URL="postgres://postgres:postgres@localhost:5433/learn_go_db?sslmode=disable" \
+#   DATABASE_URL="postgres://postgres:postgres@localhost:5435/learn_go_db?sslmode=disable" \
 #     REDIS_ADDR=localhost:6382 go test ./...
 #
 # Or, with a local Postgres and Redis on their usual ports, just:
@@ -22,11 +22,14 @@ services:
       POSTGRES_DB: learn_go_db
 
     ports:
-      # 5433, so this runs alongside a local Postgres and alongside the learning modules' own containers.
-      # Every module in this repository picks a port nobody else uses, for the same reason: a developer with
-      # a brew-installed Postgres on 5432 otherwise gets a confusing "role postgres does not exist" instead
-      # of a connection to this container.
-      - "5433:5432"
+      # 5435, which is this module's and nobody else's. The full port map is in WALKTHROUGH.md at the repo
+      # root: two containers cannot bind the same host port, so sharing one means "port is already allocated"
+      # for whichever starts second.
+      #
+      # Not 5432, for a different and worse reason. Docker binds *:5432 while a local Postgres binds
+      # 127.0.0.1:5432, `localhost` resolves to the second, and every test then skips with a confusing
+      # "role postgres does not exist" while a healthy container sits there doing nothing.
+      - "5435:5432"
 
     healthcheck:
       # pg_isready against the actual database, not just the port. The port accepts connections a second or

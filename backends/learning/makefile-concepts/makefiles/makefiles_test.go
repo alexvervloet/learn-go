@@ -122,15 +122,28 @@ func runMake(t testing.TB, file, target string, args ...string) string {
 
 	root := moduleRoot(t)
 
-	argv := append([]string{"-f", filepath.Join("examples", file), target}, args...)
+	// --no-print-directory, always.
+	//
+	// GNU make prints "Entering directory" and "Leaving directory" when it believes it is a SUB-make,
+	// which it decides from MAKELEVEL. Running `make test` at the repository root sets MAKELEVEL=1,
+	// go test inherits it, and this child make then wraps its output in two extra lines.
+	//
+	// That broke two tests and neither failure pointed at the cause. TestParallelOutputInterleaves
+	// saw "a1 a2 a3 b1 b2 b3 gmake[1]: Leaving directory ..." and counted a second prefix change, so
+	// grouped output looked interleaved. TestWorkspaceModuleExpansion counted the words in those
+	// lines as modules and reported 26 instead of 18.
+	//
+	// Both passed when the package was tested on its own and failed under `make test`, which is the
+	// worst shape a test failure can have.
+	argv := append([]string{"--no-print-directory", "-f", filepath.Join("examples", file), target}, args...)
 
 	cmd := exec.Command(make, argv...)
 	cmd.Dir = root
 
-	// A clean-ish environment, so a developer's MAKEFLAGS (which can contain -j) does not change the
-	// result. MAKEFLAGS is inherited and it is the one variable that silently makes a serial test
-	// parallel.
-	cmd.Env = append(os.Environ(), "MAKEFLAGS=")
+	// A clean-ish environment. MAKEFLAGS is inherited and can contain -j, which silently makes a
+	// serial test parallel. MAKELEVEL is inherited too and is what the directory lines above key on,
+	// so both are cleared and the flag is belt and braces.
+	cmd.Env = append(os.Environ(), "MAKEFLAGS=", "MAKELEVEL=")
 
 	out, err := cmd.CombinedOutput()
 	if err != nil {

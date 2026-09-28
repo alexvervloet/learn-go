@@ -2239,3 +2239,38 @@ The general rule this repository follows is to assert the machine-independent qu
 there is no machine-independent quantity, because the whole claim is about elapsed time. When that happens, the
 honest thing is to say so in the test and stop asserting where the measurement is not trustworthy, rather than
 widening the bound until it passes.
+
+## `MAKELEVEL` leaks into a child make, and two tests failed only under `make test`
+
+**Expected.** `runMake` already cleared `MAKEFLAGS`, so a developer's `-j` could not turn a serial example
+parallel. That seemed like the whole environment problem.
+
+**What happened.** Verifying the walkthrough meant running `make test` at the repository root, which is how CI
+runs it and not how I had been running these tests. Two makefile-concepts tests failed there and passed when the
+package was tested on its own.
+
+GNU make prints `Entering directory` and `Leaving directory` when it believes it is a SUB-make, and it decides
+that from `MAKELEVEL`. `make test` sets `MAKELEVEL=1`, `go test` inherits it, and the child make wraps its
+output in two extra lines. `TestParallelOutputInterleaves` then counted `gmake[1]: Leaving directory ...` as a
+second prefix change, so correctly grouped output looked interleaved. `TestWorkspaceModuleExpansion` counted the
+words in those lines as module paths and reported 26 modules instead of 18.
+
+**Next time.** Clearing `MAKEFLAGS` is half the job; `MAKELEVEL` is the other half, and
+`--no-print-directory` makes it explicit. The broader point is that a test which passes standalone and fails
+under the project's own runner is the worst shape a failure can have, and the only way to find it is to run the
+command the README tells people to run.
+
+## `go test ./...` does not work at the root of a workspace
+
+**Expected.** The walkthrough's opening command is `go test ./...`, because that is what it is everywhere else.
+
+**What happened.** `pattern ./...: directory prefix . does not contain modules listed in go.work or their
+selected dependencies`. The repository root is not itself a module, so `./...` matches nothing at all.
+
+I had written the line without running it, in a document whose first paragraph says every command was run.
+
+**Next time.** `make test`, which expands `go list -m -f '{{.Dir}}/...'` the way every target in the Makefile
+already did. `go test ./go-concepts/...` works because that directory IS inside a module, which is why the
+mistake survived: the specific forms are fine and only the root one is not. This repository has a test for it,
+`TestWorkspaceModuleExpansion`, which asserts the failure and explains the workaround, and I still wrote the
+broken command.

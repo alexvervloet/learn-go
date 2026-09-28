@@ -25,7 +25,7 @@ tests clean on Go 1.27.
 | [go-concepts/](go-concepts/) | ✅ 18 of 18 lessons |
 | [dsa/](dsa/) | ✅ 11 structures and algorithms, 11 interview patterns |
 | [backends/learning/](backends/learning/) | ✅ 13 of 13 modules |
-| [capstones/](capstones/) | 🟨 1 of 2 services |
+| [capstones/](capstones/) | ✅ 2 of 2 services |
 
 ## Setup
 

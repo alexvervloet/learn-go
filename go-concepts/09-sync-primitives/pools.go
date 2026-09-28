@@ -116,22 +116,71 @@ func leakIsObservable(attempts int) (leaked string, observed bool) {
 
 // gcClearsThePool is the property that rules out using it as a resource pool.
 // After a garbage collection, what you put in is usually gone.
+//
+// # The retry is not paranoia, it is the race detector
+//
+// Under -race, sync.Pool.Put DELIBERATELY throws the value away one time in
+// four. The code is in sync/pool.go and the comment there reads "Randomly drop
+// x on floor". It is there to break exactly the assumption this function would
+// otherwise make: that a Put is followed by a successful Get.
+//
+// So a single Put/Get pair is a test that passes normally and fails about 25%
+// of the time under -race, which is how CI found it. The loop below asks
+// several times, and the probability of every attempt being dropped is
+// (1/4)^attempts.
+//
+// The lesson is larger than the test. A Pool promises NOTHING about retention.
+// Anything that needs a value back needs to hold it, and the standard library
+// ships a deliberate saboteur to make that visible.
 func gcClearsThePool() (beforeGC, afterGC bool) {
 	pool := sync.Pool{} // no New, so Get returns nil when empty
 
 	marker := new(bytes.Buffer)
 	marker.WriteString("marker")
-	pool.Put(marker)
 
-	beforeGC = pool.Get() != nil
+	const attempts = 20
+
+	for range attempts {
+		pool.Put(marker)
+
+		if pool.Get() != nil {
+			beforeGC = true
+			break
+		}
+	}
 
 	pool.Put(marker)
 	runtime.GC()
 	runtime.GC() // two cycles: the first moves to victim cache, the second clears
 
+	// No retry here, and none is needed. A dropped Put and a GC-cleared Pool
+	// both leave the Pool empty, so every path gives the answer this asserts.
 	afterGC = pool.Get() != nil
 
 	return beforeGC, afterGC
+}
+
+// raceDetectorDropsSomePuts measures the drop rate, so the claim above is a
+// number rather than an assertion about someone else's source code.
+//
+// Without -race it returns 0 and every Put comes back. With -race it returns
+// something near n/4.
+func raceDetectorDropsSomePuts(n int) (dropped int) {
+	marker := new(bytes.Buffer)
+
+	for range n {
+		// A fresh Pool each time, so one iteration cannot hand its value to
+		// the next and a drop is visible as an empty Get.
+		pool := sync.Pool{}
+
+		pool.Put(marker)
+
+		if pool.Get() == nil {
+			dropped++
+		}
+	}
+
+	return dropped
 }
 
 // whatAPoolMustNeverHold is the rule, stated.

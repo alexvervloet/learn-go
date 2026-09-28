@@ -110,8 +110,39 @@ func TestGCClearsThePool(t *testing.T) {
 		t.Error("an item Put into a pool should be retrievable straight away")
 	}
 	if afterGC {
-		t.Error("pool contents should not survive two GC cycles — this is why a Pool is not a resource pool")
+		t.Error("pool contents should not survive two GC cycles, which is why a Pool is not a resource pool")
 	}
+}
+
+// TestPoolRetainsNothing pins the drop behaviour that broke the test above.
+//
+// Under -race the standard library drops roughly one Put in four on purpose.
+// Under a normal build it drops none. The assertion is written so that both
+// builds pass and so that the -race build proves the drops are real: it is not
+// a flake, it is a feature, and finding it is the point of running the race
+// detector over code that touches a Pool.
+func TestPoolRetainsNothing(t *testing.T) {
+	const n = 400
+
+	dropped := raceDetectorDropsSomePuts(n)
+
+	if !raceEnabled {
+		if dropped != 0 {
+			t.Errorf("without -race every Put should come back, got %d/%d dropped", dropped, n)
+		}
+
+		t.Skip("the interesting half of this test needs -race")
+	}
+
+	// A fifth to a third, rather than exactly a quarter: this is 400 samples of
+	// a Bernoulli trial, and pinning it tighter is asking for a flake to fix a
+	// flake. The range is wide enough that a build dropping nothing, or
+	// dropping everything, still fails.
+	if dropped < n/5 || dropped > n/3 {
+		t.Errorf("expected roughly %d of %d Puts to be dropped under -race, got %d", n/4, n, dropped)
+	}
+
+	t.Logf("-race dropped %d of %d Puts (%.1f%%)", dropped, n, 100*float64(dropped)/float64(n))
 }
 
 func TestPoolGuidanceIsDocumented(t *testing.T) {

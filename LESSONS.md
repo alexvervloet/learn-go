@@ -1906,3 +1906,35 @@ the helpers were written.
 `graph/resolvers/convert.go`. The rule generalises past gqlgen: when a tool owns a file, hand-written code goes in
 a file it does not own, and the check is not "does it build" but "does it build after regenerating". A generator
 step in CI that regenerates and diffs is what makes that a caught error rather than a surprise months later.
+
+## The race detector throws away one `sync.Pool.Put` in four, on purpose
+
+**Expected.** `pool.Put(x)` followed immediately by `pool.Get()` on the same goroutine returns x. The value is in
+that P's private slot and nothing has run in between.
+
+**What happened.** `TestGCClearsThePool` failed in the `-race` CI job and nowhere else, on the assertion BEFORE
+the garbage collection. `sync/pool.go` has this, guarded by `race.Enabled`: `if runtime_randn(4) == 0 { // Randomly
+drop x on floor; return }`. The standard library sabotages a quarter of all Puts under the race detector,
+deliberately, to break code that assumes a Pool retains anything. Measured over 400 Puts it comes out at 23% to
+28%.
+
+**Next time.** A test that fails only under `-race` is not automatically a data race. Read what the library does
+under that build tag first. The fix here was to ask several times and to add a second test that MEASURES the drop
+rate, so the claim is a number this repo checks rather than a sentence about someone else's source. And
+`raceEnabled` is a constant in two files with opposite `//go:build race` constraints, because there is no runtime
+function that answers the question.
+
+## Generated code records the version of the generator, so CI has to pin it
+
+**Expected.** protoc is a compiler. Identical `.proto` files give identical `.pb.go` files, so a CI job that
+regenerates and diffs only fails when the schema and the committed stubs disagree. The workflow installed
+Ubuntu's `protobuf-compiler` and a comment said as much.
+
+**What happened.** Eight files differed, every one of them by a single line: `// protoc v7.36.2` locally against
+`// protoc v3.21.12` in CI. The job failed for a reason it was not built to catch and said nothing about the
+schema.
+
+**Next time.** Pin the generator wherever its version reaches the output. `.protoc-version` now holds the number,
+CI downloads that exact release rather than whatever apt has, and `generate.sh` warns when the local protoc does
+not match. The general shape: a regenerate-and-diff job is only as useful as the reproducibility of the tool, and
+every code generator that stamps its version into a header needs this.

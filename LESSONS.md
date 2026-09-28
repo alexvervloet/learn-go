@@ -1855,3 +1855,23 @@ before the `RUN` line that does it. The ordering assertion failed on a file that
 **Next time.** Parse the instructions: drop comment and blank lines, join backslash continuations, then compare
 indices in that list. A file whose comments discuss its own contents cannot be checked by substring position, and
 this repo's files all have comments like that by design.
+
+## `--output-sync` groups make's parallel output and does not order it
+
+**Expected.** `make -j2 --output-sync=target` on two targets produces `a1 a2 a3 b1 b2 b3`, so a test can assert
+that every a-line precedes every b-line.
+
+**What happened.** It produced `b1 b2 b3 a1 a2 a3`, which is correctly grouped, and the test failed on correct
+output. `--output-sync` guarantees that one target's lines are not interleaved with another's. Whichever target
+finishes first prints first.
+
+**Next time.** The check counts how many times the line prefix CHANGES: grouped output changes once whatever the
+order, interleaved output changes on nearly every line. When asserting on a concurrency guarantee, write down
+exactly what the guarantee is before writing the assertion, because "grouped" and "ordered" look the same in the
+happy case.
+
+Two smaller ones from the same module. macOS ships GNU make **3.81** from 2006 as `/usr/bin/make`, which lacks
+`--output-sync` entirely, so the test detects the feature rather than the version and skips with a message that
+says `brew install make`. And `gofmt -l` prints the offending files and **exits 0**, so a CI step that just runs
+it passes whatever it finds; turning a non-empty output into a failure is the whole trick and every project gets
+it wrong once.

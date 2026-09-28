@@ -547,20 +547,44 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Tier one: the targets something could actually be deployed to.
+          # Every module has to build for all of these.
           - goos: linux
             goarch: amd64
+            scope: all
           - goos: linux
             goarch: arm64
+            scope: all
           - goos: darwin
             goarch: arm64
+            scope: all
           - goos: windows
             goarch: amd64
+            scope: all
+
+          # Tier two: the targets that exist to prove the toolchain is doing
+          # real work, and that a dependency-free package is genuinely portable.
+          #
+          # These build the pure-Go modules ONLY, because the backend modules
+          # cannot build for them and never could. asynq calls
+          # Server.waitForSignals, which lives in a Unix-signal file with no
+          # plan9 build. kafka-go names syscall.ECONNREFUSED, which plan9's
+          # syscall package does not define. Neither is a bug in this repo and
+          # neither will be fixed, because nobody runs a Kafka consumer on
+          # plan9.
+          #
+          # Listing them as "all" is what the first version of this job did, and
+          # it failed on every commit for a reason that had nothing to do with
+          # the change being tested. A check that can never pass is noise.
           - goos: js
             goarch: wasm
+            scope: portable
           - goos: wasip1
             goarch: wasm
+            scope: portable
           - goos: plan9
             goarch: amd64
+            scope: portable
 
     steps:
       - uses: actions/checkout@v4
@@ -572,12 +596,21 @@ jobs:
 
       # Build only; these targets cannot all be RUN here, and a build failure
       # is what this job is looking for.
-      - name: Build for ${{ matrix.goos }}/${{ matrix.goarch }}
+      - name: Build for ${{ matrix.goos }}/${{ matrix.goarch }} (${{ matrix.scope }})
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: "0"
-        run: go build $(go list -m -f '{{.Dir}}/...')
+          SCOPE: ${{ matrix.scope }}
+        run: |
+          if [ "$SCOPE" = "all" ]; then
+            targets=$(go list -m -f '{{.Dir}}/...')
+          else
+            targets="./go-concepts/... ./dsa/..."
+          fi
+
+          echo "building: $targets"
+          go build $targets
 
   # ---------------------------------------------------------------------------
   # Coverage — informational. It writes a profile and prints the total, without

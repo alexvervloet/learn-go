@@ -1938,3 +1938,25 @@ schema.
 CI downloads that exact release rather than whatever apt has, and `generate.sh` warns when the local protoc does
 not match. The general shape: a regenerate-and-diff job is only as useful as the reproducibility of the tool, and
 every code generator that stamps its version into a header needs this.
+
+## Three Windows CI failures, one cause each, none of them about Windows
+
+**Expected.** A repo of pure-Go learning material builds and tests the same everywhere, so a `windows-latest`
+entry in the test matrix costs nothing.
+
+**What happened.** Six tests failed, in three groups.
+
+The makefile-concepts tests found GNU make on the runner and ran the examples under **cmd.exe**, because make
+takes its shell from COMSPEC on Windows rather than $SHELL. `cd` did not persist the way the test asserts, and
+`pwd` and `grep` are not commands there. Two golden-file tests failed because git checks out text files with CRLF
+on Windows, so the file on disk and the bytes the code produced differed on every line.
+
+And the cross-compile job listed plan9 and the two wasm targets as building EVERY module. asynq's
+`Server.waitForSignals` has no plan9 build and kafka-go names `syscall.ECONNREFUSED`, which plan9's syscall
+package does not define. That job had never passed and never could.
+
+**Next time.** `.gitattributes` with `* text=auto eol=lf` is not optional in a repo with golden files, and the
+line for `*.sh` is worth spelling out separately, because a shebang ending in `\r` reports itself as a missing
+interpreter. A test whose subject is a POSIX shell says so and skips. And a matrix entry that cannot pass is not
+a strict check, it is a red X everyone learns to ignore, so the exotic targets now build the dependency-free
+modules and the deployable targets build everything.

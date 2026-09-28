@@ -1980,3 +1980,31 @@ committing a scripted edit; one line would have said `1 file changed, 1668287 in
 Recovering it was `git show <previous-commit>:<path>`, then rebuilding the two commits on top of the last good
 one and force-pushing. The 57 MB blob compressed to 440 KB in the pack, so the cost of leaving it would have been
 small, but the repository is 1.9 MB rather than 12 MB now.
+
+## An HTTP middleware that reads a request body breaks every retry above it
+
+**Expected.** The request counter in `awstest` names each operation. DynamoDB puts it in `X-Amz-Target`; SNS uses
+the query protocol and puts it in a form-encoded body, so the counter called `req.ParseForm()` to read it.
+
+**What happened.** Every SNS operation started failing after three attempts with `ContentLength=93 with Body
+length 0`. `ParseForm` consumes the body. The SDK retried, the transport found a declared Content-Length and an
+empty reader, broke the connection, retried, broke it again, and gave up. The counter was observing the requests
+and destroying them.
+
+**Next time.** A client middleware that touches a request body reads it, and then puts it back:
+`io.ReadAll`, then `req.Body = io.NopCloser(bytes.NewReader(body))`. The same applies to a server middleware that
+logs a body before the handler runs. The tell in the error is that the byte count is right and the reader is
+empty, which means something upstream already drained it.
+
+## Two variables named the same topic, because CreateTopic is idempotent
+
+**Expected.** Two calls to a test helper that builds a topic build two topics.
+
+**What happened.** The topic name came from `awstest.Name(t, "topic")`, which is derived from the test name, so
+both calls used the same name. SNS's CreateTopic is idempotent on the name and returned the SAME ARN, silently.
+The second helper then subscribed the same queue with different attributes and SNS refused with `Subscription
+already exists with different attributes`, which describes the symptom and not the cause.
+
+**Next time.** A name derived from the test name is unique per TEST, not per CALL. Any helper a test can call
+twice needs a discriminator in its signature, and the idempotent-creation APIs (SNS topics, S3 buckets in
+us-east-1) hide the collision instead of reporting it.

@@ -21,9 +21,12 @@
 package awstest
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -211,10 +214,28 @@ func operation(req *http.Request) string {
 
 	// SQS and SNS in their query protocol put the action in the form body. The SDK's newer SQS client uses JSON
 	// and hits the branch above, so this is here for SNS.
-	if ct := req.Header.Get("Content-Type"); strings.HasPrefix(ct, "application/x-www-form-urlencoded") {
-		if err := req.ParseForm(); err == nil {
-			if action := req.PostForm.Get("Action"); action != "" {
-				return action
+	//
+	// # Why this reads the body by hand instead of calling req.ParseForm
+	//
+	// ParseForm CONSUMES the body. The first version of this called it, and SNS requests started failing on
+	// retry with `ContentLength=93 with Body length 0`: the SDK retried the request, the transport found a
+	// declared length and an empty reader, and the connection broke. Three attempts later the operation gave
+	// up. An HTTP client middleware that reads a request body and does not put it back breaks every retry
+	// above it, and this is the cheapest possible demonstration.
+	//
+	// So: read it, parse a copy, and hand the bytes back as a fresh reader before the request goes out.
+	if ct := req.Header.Get("Content-Type"); strings.HasPrefix(ct, "application/x-www-form-urlencoded") && req.Body != nil {
+		body, err := io.ReadAll(req.Body)
+
+		_ = req.Body.Close()
+
+		req.Body = io.NopCloser(bytes.NewReader(body))
+
+		if err == nil {
+			if values, err := url.ParseQuery(string(body)); err == nil {
+				if action := values.Get("Action"); action != "" {
+					return action
+				}
 			}
 		}
 	}

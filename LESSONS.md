@@ -1890,3 +1890,19 @@ database had the tables locally, left over from earlier work, and was empty on C
 publish the effective value itself, so `dbtest` now exports `EffectiveURL(t)` and building a pool from
 `Config().ConnString()` is wrong everywhere. The broader tell: a test that passes locally and fails on a fresh
 database is almost always reading state that a previous run left behind.
+
+## gqlgen rewrites the resolver file, so a helper at the bottom of it disappears
+
+**Expected.** gqlgen's `follow-schema` layout keeps hand-written code in `schema.resolvers.go`. It preserves the
+method bodies across regenerations, so a few small conversion helpers at the bottom of the same file are safe.
+
+**What happened.** It preserves the method BODIES. Everything else in the file is discarded and rewritten. A
+regenerate deleted `toBook`, `toBooks`, `toAuthor` and `strPtr`, and then gqlgen's own validation build of the
+output failed with `undefined: toBooks` in the resolver bodies that still called them. CI found this, not me,
+because the code compiled and the tests passed on the file I had by hand. Nothing locally had regenerated it since
+the helpers were written.
+
+**Next time.** Anything that is not a resolver method goes in a separate file in the same package, here
+`graph/resolvers/convert.go`. The rule generalises past gqlgen: when a tool owns a file, hand-written code goes in
+a file it does not own, and the check is not "does it build" but "does it build after regenerating". A generator
+step in CI that regenerates and diffs is what makes that a caught error rather than a surprise months later.

@@ -559,7 +559,14 @@ jobs:
       # 23 and the runner has a newer one, so this is belt and braces and it
       # documents the requirement.
       - name: Set up Buildx
-        uses: docker/setup-buildx-action@v3
+        # Pinned to a commit sha, not to @v3. This is the only third-party
+        # action in the file, and a tag is mutable: whoever controls the repo
+        # can repoint v3 at anything and every workflow using it picks that up
+        # on the next run. A sha cannot be repointed.
+        #
+        # The cost is that nothing bumps it for you, so the tag it corresponds
+        # to goes in the comment. This one is v3.
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
 
       - name: Build and run every image
         working-directory: backends/learning/docker-concepts

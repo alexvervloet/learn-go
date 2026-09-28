@@ -2110,3 +2110,58 @@ Dockerfile, and then failed on the cgo one with a bare `exit status 1`. Every Do
 general shape: a capability check should ask about the capability the test needs, not about the tool that
 usually provides it. "Docker exists" and "Docker can build what I am about to build" are different questions,
 and the gap between them cost six minutes and an unreadable error.
+
+## A JWT cannot express a sub-second TTL, and nothing tells you
+
+**Expected.** A test of "the access token expires and a refresh gets a new one" uses a very short access TTL so
+it does not have to wait. 50 milliseconds, then 300.
+
+**What happened.** Every token was expired the instant it was signed. `exp` and `iat` are NumericDate, and
+jwt/v5 truncates every date to `jwt.TimePrecision`, which is one SECOND. `now.Add(300ms)` and `now` truncate to
+the same value, so `exp == iat` and the token is born expired.
+
+Nothing reports it. `SignedString` succeeds, the token looks normal, and every request with it is a 401. The
+test failed twice for what looked like a timing problem before I checked the library.
+
+**Next time.** `IssueAccess` now returns an error below one second rather than minting a dead token, and a test
+asserts `jwt.TimePrecision == time.Second` so the guard can be removed if that ever changes. The general shape:
+when a duration goes into a format with a fixed resolution, the floor is part of the API. asynq has the same
+trap with whole seconds, and this repository has already recorded that one.
+
+## "Is the index used" has no answer without a row count
+
+**Expected.** A GIN index on a generated tsvector column, a test that searches, and an assertion that the plan
+uses the index.
+
+**What happened.** Three fixtures, three correct plans that were not the one asserted.
+
+500 bookmarks for one user: the planner read them through the btree on `(user_id, created_at, id)` and filtered
+by the tsvector, because 500 rows is nothing. Twenty users with 500 each: the same plan, because what matters is
+how many rows `user_id = $1` selects. 5,000 rows with identical titles: a sequential scan beat both indexes,
+partly because a term has no selectivity to be measured against when every row carries the same text.
+
+At 20,000 rows with varied text, the GIN scan wins on its own.
+
+**Next time.** A plan is a function of the schema, the query AND the data. A test asserting a plan is asserting
+something about its own fixture unless the fixture is the size the index exists for. `ANALYZE` after a bulk
+insert is not optional either: a bulk insert updates no statistics, autovacuum has not run, and the planner is
+working from defaults.
+
+The fix also earned a second test asserting the OPPOSITE on 200 rows, because "the plan depends on the row
+count" is a claim and claims get checked here.
+
+## One rate-limit bucket per path is two limits that together allow twice the traffic
+
+**Expected.** The rate-limit middleware keys on `r.URL.Path`, so `/register` and `/login` each get the limit.
+
+**What happened.** A test set the limit to 3, registered once and logged in twice, and expected the fourth
+credential request to be refused. It was allowed: registration had spent one of the register bucket and the
+logins had a bucket of their own.
+
+That is not just a test bug. Both endpoints run bcrypt and both are what a credential-stuffing run aims at, and
+an attacker told that login is full simply moves to register. Two buckets that each look right allow twice the
+work the limit was written to prevent.
+
+**Next time.** Key on the endpoint CLASS, not the path. The middleware now uses one `CredentialsKey` for both.
+A per-account limit is a separate feature with a different key and a different window, and putting both in one
+middleware is how both end up wrong.

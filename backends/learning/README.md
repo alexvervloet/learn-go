@@ -18,7 +18,7 @@ mapping is stated rather than forced.
 | [aws-concepts/](aws-concepts/) | done | `aws-concepts` | S3, DynamoDB, SQS, SNS against LocalStack, with the request counts measured |
 | [github-actions/](github-actions/) | done | `github-actions` | a workflow checker in Go, pointed at this repo's own CI |
 | [makefile-concepts/](makefile-concepts/) | done | `makefile-concepts` | rules are files, expansion, the traps, and Makefiles in a Go workspace |
-| ai-concepts/ | not started | `ai-concepts` | calling models from Go, streaming, structured output |
+| [ai-concepts/](ai-concepts/) | done | `ai-concepts` | the request shape, the tool loop, streaming, retrieval, and the cost of each |
 
 ## What every module here has
 

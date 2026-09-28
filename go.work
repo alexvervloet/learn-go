@@ -1,6 +1,7 @@
-go 1.27
+go 1.27.1
 
 use (
+	./backends/learning/aws-concepts
 	./backends/learning/backend-concepts
 	./backends/learning/database-concepts
 	./backends/learning/docker-concepts

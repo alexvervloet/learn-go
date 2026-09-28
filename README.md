@@ -26,6 +26,7 @@ tests clean on Go 1.27.
 | [dsa/](dsa/) | ✅ 11 structures and algorithms, 11 interview patterns |
 | [backends/learning/](backends/learning/) | ✅ 13 of 13 modules |
 | [capstones/](capstones/) | ✅ 2 of 2 services |
+| [utilities/](utilities/) | ✅ 3 standalone packages |
 
 ## Setup
 

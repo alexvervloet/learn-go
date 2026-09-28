@@ -18,4 +18,5 @@ use (
 	./capstones/url-shortener
 	./dsa
 	./go-concepts
+	./utilities
 )

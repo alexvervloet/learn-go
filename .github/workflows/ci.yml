@@ -471,32 +471,61 @@ jobs:
 
           echo "$(grep -c '^--- PASS' "$RUNNER_TEMP/url-shortener.log") tests passed, none skipped"
 
-      - name: Build the image
-        working-directory: capstones/url-shortener
+      - name: Test the bookmark-manager
+        working-directory: capstones/bookmark-manager
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/learn_go_db?sslmode=disable
+          REDIS_ADDR: localhost:6379
         run: |
-          docker build \
-            --build-arg VERSION="$GITHUB_REF_NAME" \
-            --build-arg COMMIT="$GITHUB_SHA" \
-            -t url-shortener:ci .
+          set -o pipefail
+          go test -count=1 -timeout 10m -v ./... 2>&1 | tee "$RUNNER_TEMP/bookmark-manager.log"
 
-          # The image has no shell, so `docker run ... sh -c` cannot inspect it.
-          # `docker image inspect` reads the metadata instead, which is where
-          # the user and the entrypoint live.
-          user=$(docker image inspect url-shortener:ci --format '{{.Config.User}}')
-          entrypoint=$(docker image inspect url-shortener:ci --format '{{json .Config.Entrypoint}}')
-          size=$(docker image inspect url-shortener:ci --format '{{.Size}}')
+      - name: Fail if the bookmark-manager tests skipped
+        run: |
+          missing=0
 
-          echo "user=$user entrypoint=$entrypoint size=$((size / 1024 / 1024))MB"
+          for pattern in "no database available" "no Redis at"; do
+            if grep -q "$pattern" "$RUNNER_TEMP/bookmark-manager.log"; then
+              echo "::error::bookmark-manager tests skipped: $pattern"
+              missing=1
+            fi
+          done
 
-          if [ "$user" = "" ] || [ "$user" = "root" ] || [ "$user" = "0" ]; then
-            echo "::error::the image runs as root"
+          if [ "$missing" -ne 0 ]; then
             exit 1
           fi
 
-          if [ "$entrypoint" = "null" ]; then
-            echo "::error::no exec-form ENTRYPOINT, so sh would be PID 1 and SIGTERM would not reach the binary"
-            exit 1
-          fi
+          echo "$(grep -c '^--- PASS' "$RUNNER_TEMP/bookmark-manager.log") tests passed, none skipped"
+
+      - name: Build the images
+        run: |
+          for service in url-shortener bookmark-manager; do
+            docker build \
+              --build-arg VERSION="$GITHUB_REF_NAME" \
+              --build-arg COMMIT="$GITHUB_SHA" \
+              -t "$service:ci" "capstones/$service"
+          done
+
+          # The images have no shell, so `docker run ... sh -c` cannot inspect
+          # them. `docker image inspect` reads the metadata instead, which is
+          # where the user and the entrypoint live.
+          for service in url-shortener bookmark-manager; do
+            user=$(docker image inspect "$service:ci" --format '{{.Config.User}}')
+            entrypoint=$(docker image inspect "$service:ci" --format '{{json .Config.Entrypoint}}')
+            size=$(docker image inspect "$service:ci" --format '{{.Size}}')
+
+            echo "$service: user=$user entrypoint=$entrypoint size=$((size / 1024 / 1024))MB"
+
+            if [ "$user" = "" ] || [ "$user" = "root" ] || [ "$user" = "0" ]; then
+              echo "::error::$service runs as root"
+              exit 1
+            fi
+
+            if [ "$entrypoint" = "null" ]; then
+              echo "::error::$service has no exec-form ENTRYPOINT, so sh would be PID 1 and SIGTERM would not reach the binary"
+              exit 1
+            fi
+          done
 
 
   # ---------------------------------------------------------------------------

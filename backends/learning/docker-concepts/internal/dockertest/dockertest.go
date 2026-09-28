@@ -51,15 +51,28 @@ func check() (bool, error) {
 
 	// `docker info`, not `docker version`. Version answers from the client alone, so it succeeds when
 	// the daemon is not running, which is exactly the case this has to catch.
-	cmd := exec.CommandContext(ctx, "docker", "info", "--format", "{{.ServerVersion}}")
+	//
+	// OSType as well as ServerVersion, because "is Docker there" is not the question. Every Dockerfile in
+	// this module is a LINUX image, and a Windows runner has a perfectly healthy Docker daemon in
+	// Windows-container mode that cannot build any of them.
+	//
+	// CI found this: the windows-latest job spent 350 seconds building, produced a 6.1 GB image for the naive
+	// Dockerfile, and then failed on the cgo one with a bare `exit status 1`. Checking the daemon's mode makes
+	// that a skip with a sentence instead of six minutes and a confusing failure.
+	cmd := exec.CommandContext(ctx, "docker", "info", "--format", "{{.ServerVersion}} {{.OSType}}")
 
 	out, err := cmd.Output()
 	if err != nil {
 		return false, err
 	}
 
-	if strings.TrimSpace(string(out)) == "" {
+	version, osType, found := strings.Cut(strings.TrimSpace(string(out)), " ")
+	if !found || version == "" {
 		return false, errors.New("the daemon reported no version")
+	}
+
+	if osType != "linux" {
+		return false, fmt.Errorf("the daemon is in %s-container mode and every Dockerfile here is linux", osType)
 	}
 
 	return true, nil

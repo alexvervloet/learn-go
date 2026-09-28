@@ -2096,3 +2096,17 @@ obligation inside the helper is usually both simpler and safer than documenting 
 
 The same refactor removed a second problem. Two tests built a raw request to set an exact header, so they
 bypassed the harness entirely; `DoWith` takes a customiser function and they go through one path now.
+
+## "Is Docker available" is not the question; "can it build a Linux image" is
+
+**Expected.** `docker info` succeeding means the image tests can run. The guard checked for a server version
+and skipped when there was none.
+
+**What happened.** The `windows-latest` test job has a healthy Docker daemon in **Windows-container mode**. It
+answered the version check, accepted the builds, spent 350 seconds producing a 6.1 GB image for the naive
+Dockerfile, and then failed on the cgo one with a bare `exit status 1`. Every Dockerfile in the module is Linux.
+
+**Next time.** `docker info --format "{{.ServerVersion}} {{.OSType}}"` and skip unless OSType is linux. The
+general shape: a capability check should ask about the capability the test needs, not about the tool that
+usually provides it. "Docker exists" and "Docker can build what I am about to build" are different questions,
+and the gap between them cost six minutes and an unreadable error.

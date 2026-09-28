@@ -2165,3 +2165,20 @@ work the limit was written to prevent.
 **Next time.** Key on the endpoint CLASS, not the path. The middleware now uses one `CredentialsKey` for both.
 A per-account limit is a separate feature with a different key and a different window, and putting both in one
 middleware is how both end up wrong.
+
+## `go work sync` and per-module `go mod tidy` pull in opposite directions
+
+**Expected.** CI's regenerate-and-diff job failed because `go.work.sum` gained one line, so `go work sync`
+should reconcile the workspace and make the file complete.
+
+**What happened.** It rewrote seventeen `go.mod` and `go.sum` files. `go work sync` pushes every module up to
+the workspace-wide maximum version of each dependency; `go mod tidy` pulls each module down to what it actually
+needs. Running one makes the other's check fail, and this repository checks `tidy -diff` on every module.
+
+**Next time.** In a workspace of independent teaching modules, per-module tidy is the invariant worth keeping,
+because a reader cloning one directory should get the versions that module needs. `go work sync` is for a
+workspace whose modules ship together.
+
+The real fix for the original failure was smaller: exclude `go.work.sum` from the generated-code diff. `go run`
+adds hashes for the platform it runs on, so a developer on darwin/arm64 and a runner on linux/amd64 legitimately
+differ, and that job is about generated code rather than about a lock file a tool touched on its way past.

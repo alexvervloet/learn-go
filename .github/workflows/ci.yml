@@ -663,11 +663,26 @@ jobs:
 
       - name: Fail if anything changed
         run: |
-          if ! git diff --quiet; then
+          # go.work.sum is excluded, deliberately.
+          #
+          # Running gqlgen and protoc-gen-go downloads modules, and `go run`
+          # adds their hashes to go.work.sum for the platform it is on. A
+          # developer on darwin/arm64 and a runner on linux/amd64 legitimately
+          # produce different entries, so the file grows by a line on CI and the
+          # job fails with a diff that says nothing about the schema.
+          #
+          # This job is about GENERATED CODE. A lock file that a tool touches as
+          # a side effect of being run is not that, and `go work sync` keeps it
+          # honest separately.
+          if ! git diff --quiet -- . ':!go.work.sum'; then
             echo "::error::the generated code is out of date; run ./generate.sh and commit"
-            git diff --stat
-            git diff
+            git diff --stat -- . ':!go.work.sum'
+            git diff -- . ':!go.work.sum'
             exit 1
+          fi
+
+          if ! git diff --quiet -- go.work.sum; then
+            echo "::notice::go.work.sum changed, which is a side effect of running the generators and not a drift"
           fi
 
           echo "generated code matches the .proto files"

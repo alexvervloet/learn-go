@@ -7,6 +7,11 @@ dist/
 *.test
 *.out
 
+# `go build ./cmd/api` with no -o writes a binary named after the package into the
+# working directory. There is no pattern that catches every such name, so the ones
+# this repo produces are listed.
+/backends/learning/docker-concepts/api
+
 # Go build and module caches live outside the repo, but `go work vendor`
 # and `go mod vendor` write here.
 vendor/

@@ -1960,3 +1960,23 @@ line for `*.sh` is worth spelling out separately, because a shebang ending in `\
 interpreter. A test whose subject is a POSIX shell says so and skips. And a matrix entry that cannot pass is not
 a strict check, it is a red X everyone learns to ignore, so the exotic targets now build the dependency-free
 modules and the deployable targets build everything.
+
+## `s.replace("", x)` inserts x between every character, and a slice from two searches can be empty
+
+**Expected.** Replacing one job in a 613-line workflow with a scripted edit: find the start marker, find the end
+marker, slice out the old block, swap in the new one.
+
+**What happened.** The end marker was `run: go build $(go list -m -f '{{.Dir}}/...')`, which also appears in the
+BUILD job 400 lines earlier. `str.index` returns the first occurrence, so the end index came before the start
+index, the slice was the empty string, and `s.replace("", new)` inserted the new block between every character of
+the file. 613 lines became 1,668,900, and 25 KB became 57 MB. I committed and pushed it before noticing, and
+GitHub's large-file warning was the first sign.
+
+**Next time.** Three things. Address a block by LINE INDEX with an assertion on what is at each end, not by
+searching for strings that may repeat. Never pass a computed slice to `replace` without checking it is non-empty,
+because the empty string is a legal argument with a pathological meaning. And look at `git diff --stat` before
+committing a scripted edit; one line would have said `1 file changed, 1668287 insertions`.
+
+Recovering it was `git show <previous-commit>:<path>`, then rebuilding the two commits on top of the last good
+one and force-pushing. The 57 MB blob compressed to 440 KB in the pack, so the cost of leaving it would have been
+small, but the repository is 1.9 MB rather than 12 MB now.

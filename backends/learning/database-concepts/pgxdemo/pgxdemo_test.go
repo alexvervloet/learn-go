@@ -41,11 +41,15 @@ func leakyPool(t *testing.T, cfg Config) *pgxpool.Pool {
 func openPool(t *testing.T, cfg Config, closeAtEnd bool) *pgxpool.Pool {
 	t.Helper()
 
-	// Skips if there is no database, and gives the URL this package's own database so it does not
-	// fight the others.
-	shared := dbtest.Pool(t)
+	// dbtest.EffectiveURL, not dbtest.Pool(t).Config().ConnString().
+	//
+	// ConnString returns the string the config was PARSED FROM, so it names the base database rather
+	// than the per-package one dbtest created and migrated. This passed locally, because the base
+	// database had the tables from earlier work, and failed in CI with
+	// `relation "books" does not exist` on a fresh Postgres.
+	url := dbtest.EffectiveURL(t)
 
-	p, err := Open(context.Background(), shared.Config().ConnString(), cfg)
+	p, err := Open(context.Background(), url, cfg)
 	if err != nil {
 		t.Fatalf("opening a pool: %v", err)
 	}

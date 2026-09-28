@@ -1875,3 +1875,18 @@ Two smaller ones from the same module. macOS ships GNU make **3.81** from 2006 a
 says `brew install make`. And `gofmt -l` prints the offending files and **exits 0**, so a CI step that just runs
 it passes whatever it finds; turning a non-empty output into a failure is the whole trick and every project gets
 it wrong once.
+
+## `pgxpool.Config.ConnString` returns the string it was parsed from, not the configuration
+
+**Expected.** `dbtest.Pool(t)` hands out a pool whose config has already been pointed at this package's own
+database, so a test that needs a SECOND pool can read the URL back off it with `pool.Config().ConnString()`.
+
+**What happened.** `pgxdemo`'s tests passed on my machine and failed in CI with `relation "books" does not exist`.
+`ConnString` returns the literal string the config was PARSED from. `dbtest` sets `cfg.ConnConfig.Database` after
+parsing, so the mutation is invisible to `ConnString` and the second pool connected to the base database. That
+database had the tables locally, left over from earlier work, and was empty on CI's fresh Postgres.
+
+**Next time.** A getter named after an input returns the input. Anything that rewrites a parsed config has to
+publish the effective value itself, so `dbtest` now exports `EffectiveURL(t)` and building a pool from
+`Config().ConnString()` is wrong everywhere. The broader tell: a test that passes locally and fails on a fresh
+database is almost always reading state that a previous run left behind.

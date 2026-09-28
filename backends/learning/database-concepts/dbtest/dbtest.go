@@ -45,6 +45,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -89,6 +90,19 @@ var (
 	poolOnce sync.Once
 	pool     *pgxpool.Pool
 	poolErr  error
+
+	// effectiveURL is the connection string the pool actually used, with the per-package database
+	// name substituted in.
+	//
+	// It exists because pgxpool.Config.ConnString() returns the string the config was PARSED FROM,
+	// not the effective configuration. So a caller that mutates cfg.ConnConfig.Database and then
+	// reads ConnString() gets the ORIGINAL database back.
+	//
+	// That cost a CI failure: pgxdemo builds its own pool from dbtest.Pool(t).Config().ConnString(),
+	// connected to the base database rather than the per-package one, and every query failed with
+	// `relation "books" does not exist`. Locally the base database had the tables from earlier work,
+	// so it passed on my machine and only on my machine.
+	effectiveURL string
 )
 
 // Pool returns a shared connection pool, or skips the test if there is no reachable database.
@@ -133,6 +147,8 @@ func connectAndMigrate() (*pgxpool.Pool, error) {
 	} else {
 		cfg.ConnConfig.Database = name
 	}
+
+	effectiveURL = rewriteDatabase(URL(), cfg.ConnConfig.Database)
 
 	// A small pool: the transactions package needs several real connections at once, and
 	// anything above a handful just hides a leak.
@@ -240,6 +256,50 @@ func binarySuffix() string {
 	}
 
 	return strings.Trim(b.String(), "_")
+}
+
+// EffectiveURL returns the connection string for the database this test binary is using.
+//
+// Use this rather than Pool(t).Config().ConnString() when building a second pool. ConnString returns the string
+// the config was parsed from, so it names the BASE database and not the per-package one.
+func EffectiveURL(t testing.TB) string {
+	t.Helper()
+
+	// Pool first, so the once has run and effectiveURL is set. Calling this before Pool would return
+	// an empty string, which would be a confusing way to fail.
+	Pool(t)
+
+	return effectiveURL
+}
+
+// rewriteDatabase replaces the database name in a connection string.
+//
+// Both forms have to work: a URL (postgres://host/dbname) and a keyword string (host=... dbname=...). pgx accepts
+// either and this repo's DefaultURL is the first while CI passes the first too, so the keyword branch is there
+// for anyone whose DATABASE_URL is the other kind.
+func rewriteDatabase(original, database string) string {
+	if parsed, err := url.Parse(original); err == nil && parsed.Scheme != "" {
+		parsed.Path = "/" + database
+		return parsed.String()
+	}
+
+	// A keyword string: replace dbname= if present, append it otherwise.
+	fields := strings.Fields(original)
+
+	replaced := false
+
+	for i, f := range fields {
+		if strings.HasPrefix(f, "dbname=") {
+			fields[i] = "dbname=" + database
+			replaced = true
+		}
+	}
+
+	if !replaced {
+		fields = append(fields, "dbname="+database)
+	}
+
+	return strings.Join(fields, " ")
 }
 
 // migrate applies the goose migrations.

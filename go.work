@@ -9,6 +9,7 @@ use (
 	./backends/learning/grpc-concepts
 	./backends/learning/http-tutorial
 	./backends/learning/jobs-concepts
+	./backends/learning/makefile-concepts
 	./backends/learning/testing-concepts
 	./dsa
 	./go-concepts

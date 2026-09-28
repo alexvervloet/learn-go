@@ -1,0 +1,69 @@
+# A nightly job that can also be run by hand.
+#
+# This file is an EXAMPLE. It lives in the module rather than .github/workflows.
+
+name: Nightly
+
+on:
+  schedule:
+    # UTC, always. There is no time zone field, so a job that has to run at 9am local moves by an hour twice a
+    # year and there is nothing in the file to explain it.
+    #
+    # GitHub also does not promise the minute. A cron entry is a request, and a run can be delayed or, on a
+    # busy hour, skipped entirely. Anything that must happen exactly on time does not belong here.
+    #
+    # The high-load minutes are on the hour, so :17 is a better choice than :00 for no other reason.
+    - cron: "17 3 * * *"
+
+  # The manual trigger. Without it, testing a scheduled workflow means waiting for tomorrow or pushing a
+  # temporary cron, and both are worse than a button.
+  workflow_dispatch:
+    inputs:
+      depth:
+        description: How far back to scan
+        required: false
+        default: "7"
+        type: choice
+        options: ["1", "7", "30"]
+
+permissions:
+  contents: read
+  issues: write
+
+# One run at a time. Without this, a nightly that takes longer than a day overlaps with itself.
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    name: Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27"
+
+      - name: Run the scan
+        env:
+          # A dispatch input is empty when the schedule fires it, so the default has to live here too. Reading
+          # `inputs.depth` directly gives "" on a scheduled run.
+          DEPTH: ${{ inputs.depth || '7' }}
+        run: go run ./cmd/scan -days "$DEPTH"
+
+      - name: Open an issue if the scan failed
+        # A scheduled workflow that fails silently is a workflow nobody reads. `if: failure()` is the whole
+        # notification system, because a red X on a schedule run sends no email to anyone but the file's last
+        # committer, and after a few weeks they stop looking.
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Nightly scan failed on $(date -u +%Y-%m-%d)" \
+            --body "See ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"

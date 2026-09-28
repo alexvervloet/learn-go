@@ -1,0 +1,112 @@
+# Release on a version tag: build for every platform, publish the binaries.
+#
+# This file is an EXAMPLE. It lives in the module rather than .github/workflows, so it is parsed and checked by
+# the tests and never actually runs.
+
+name: Release
+
+on:
+  push:
+    tags:
+      # A glob, not a regex. Actions filter patterns use `*` for "anything but /" and `**` for "anything", and
+      # there is no alternation and no character class. `v*` matches v1.0.0 and also vole, which is why the job
+      # below checks the tag's shape rather than trusting the filter.
+      - "v*"
+
+# Read by default, and the one job that needs to write says so. The alternative is trusting the repository's
+# default, which on a repository created before 2023 is write to everything.
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    strategy:
+      # The whole point of a release matrix is to know which platforms are broken. Cancelling the rest on the
+      # first failure tells you about one.
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27"
+
+      - name: Check the tag looks like a version
+        # The tag comes through as an environment variable rather than an interpolation. A tag name is
+        # attacker-controlled on a repository that accepts outside tags, and `${{ github.ref_name }}` inside a
+        # run block is a shell injection.
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::$TAG is not a semantic version"
+            exit 1
+          fi
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+          TAG: ${{ github.ref_name }}
+        run: |
+          mkdir -p dist
+
+          # -s -w strips the symbol table and DWARF, which is most of the size of a Go binary.
+          # -X writes the version into a variable, so `myapp --version` reports the tag it was built from
+          # rather than a constant somebody forgot to bump.
+          go build -trimpath \
+            -ldflags "-s -w -X main.version=$TAG -X main.commit=$GITHUB_SHA" \
+            -o "dist/myapp-${GOOS}-${GOARCH}" \
+            ./cmd/myapp
+
+      - uses: actions/upload-artifact@v4
+        with:
+          # A job gets a fresh machine, so dist/ is gone the moment this job ends. An artifact is the only way
+          # anything reaches the next job.
+          name: myapp-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/
+          retention-days: 7
+
+  publish:
+    name: Publish the release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # Without `needs`, this runs at the same time as the builds and publishes nothing.
+    needs: build
+
+    # Narrower than the workflow default, and only here.
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          # No name, so every artifact from the matrix is downloaded, each into its own directory.
+          path: dist
+          merge-multiple: true
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --generate-notes

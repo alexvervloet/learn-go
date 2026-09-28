@@ -1,0 +1,29 @@
+# What NOT to send to the daemon.
+#
+# The build context is tarred and uploaded before the first instruction runs, so everything here is time on every
+# build and, for anything secret, a layer in the image if a COPY picks it up.
+#
+# The .git directory is the big one: on a repo with history it can be larger than the source, and nothing in a Go
+# build needs it. The exception is a build that reads the commit with `go build -buildvcs`, which needs it and is
+# why this repo passes the commit as a build ARG instead.
+
+.git
+.gitignore
+
+# Anything a local run produced.
+*.test
+*.out
+coverage.*
+bin/
+dist/
+
+# The Dockerfiles themselves: changing one should not invalidate the build context of the others.
+dockerfiles/
+docker-compose.yml
+README.md
+*.md
+
+# Editor and OS noise.
+.DS_Store
+.vscode/
+.idea/

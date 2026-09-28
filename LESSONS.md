@@ -2205,3 +2205,37 @@ find . -name docker-compose.yml | xargs grep -ohE '"[0-9]{4}:[0-9]{4}"' | tr -d 
 
 The deeper point is that the claim in each comment was locally true and globally false. A per-file comment
 cannot assert something about every other file.
+
+## A 300ms JWT TTL is zero about 70% of the time and one second the rest
+
+**Expected.** Having established that jwt/v5 truncates `exp` and `iat` to one second, a test builds a token with
+a 300ms gap and asserts it parses as expired.
+
+**What happened.** It passed locally and failed in CI. `time.Now()` and `time.Now().Add(300ms)` truncate to the
+same second only when the current sub-second part is below 700ms. Land on 12:00:00.800 and they truncate to
+12:00:00 and 12:00:01, which is a perfectly valid token with a one-second life.
+
+So a sub-second TTL is not reliably broken, which is worse than always broken: it works on your machine and
+fails at random in production, and the failure rate depends on nothing you can see.
+
+**Next time.** `time.Now().Truncate(time.Second)` makes the collision certain, so the test asserts the mechanism
+rather than the roll of a clock. The test now also shows the other side of the coin at 800ms, which turns the
+lesson from "300ms means zero" into the accurate "300ms means zero or one second, depending on when you called
+it". That is the real argument for refusing the input rather than rounding it.
+
+## A wall-clock comparison on a shared runner measures the runner
+
+**Expected.** `TestConcurrencyIsNotParallelism` compares sequential work against the same work on one P and
+asserts the second is within 3x. Three times is a loose bound.
+
+**What happened.** CI measured 44ms against 8ms. That is not evidence that a single P added parallelism; it is
+evidence that the runner was busy during one of the two measurements.
+
+**Next time.** Best-of-N, because the fastest run is the one that got the CPU and the slow runs carry no
+information about the runtime. And log rather than assert on CI, which is what the sibling test
+`TestParallelismNeedsMoreThanOneP` already did for the same reason.
+
+The general rule this repository follows is to assert the machine-independent quantity and log the timing. Here
+there is no machine-independent quantity, because the whole claim is about elapsed time. When that happens, the
+honest thing is to say so in the test and stop asserting where the measurement is not trustworthy, rather than
+widening the bound until it passes.

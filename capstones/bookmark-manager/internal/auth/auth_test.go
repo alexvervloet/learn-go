@@ -246,10 +246,23 @@ func TestASubSecondTTLIsRefused(t *testing.T) {
 //
 // Building the claims by hand with a sub-second gap produces a token that parses as expired, which is the
 // behaviour IssueAccess now refuses to produce.
+//
+// # Why `now` is truncated first, and why the first version of this failed in CI
+//
+// `time.Now()` and `time.Now().Add(300ms)` truncate to the same second only when the current sub-second part is
+// below 700ms. Land on 12:00:00.800 and they truncate to 12:00:00 and 12:00:01, which is a VALID token with a
+// one-second life.
+//
+// So a 300ms TTL is not reliably zero. It is zero about 70% of the time and one second the rest, which is worse
+// than always broken: it works on your machine and fails at random in production. CI caught it as a flake in
+// this very test, which is a fair demonstration of the point.
+//
+// Truncating `now` to the second first makes the collision certain, so the test asserts the mechanism rather
+// than the roll of a clock.
 func TestTheTruncationIsWhatTheLibraryDoes(t *testing.T) {
 	require.Equal(t, time.Second, jwt.TimePrecision, "if this ever changes, the guard in IssueAccess can go")
 
-	now := time.Now()
+	now := time.Now().Truncate(time.Second)
 
 	doomed, err := jwt.NewWithClaims(jwt.SigningMethodHS256, Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -264,4 +277,23 @@ func TestTheTruncationIsWhatTheLibraryDoes(t *testing.T) {
 	_, err = ParseAccess(secret, doomed)
 	require.ErrorIs(t, err, jwt.ErrTokenExpired,
 		"exp and iat truncated to the same second, so the token was born expired")
+
+	// The other half of the coin flip, made explicit: 800ms past a second boundary, a 300ms TTL crosses into
+	// the next second and produces a token that lives for a whole one.
+	lucky := now.Add(800 * time.Millisecond)
+
+	valid, err := jwt.NewWithClaims(jwt.SigningMethodHS256, Claims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   "1",
+			Issuer:    Issuer,
+			IssuedAt:  jwt.NewNumericDate(lucky),
+			ExpiresAt: jwt.NewNumericDate(lucky.Add(300 * time.Millisecond)),
+		},
+	}).SignedString(secret)
+	require.NoError(t, err)
+
+	claims, err := ParseAccess(secret, valid)
+	require.NoError(t, err, "the same 300ms TTL, 800ms into a second, is a one-second token")
+	require.Equal(t, int64(1), claims.ExpiresAt.Unix()-claims.IssuedAt.Unix(),
+		"which is why a sub-second TTL is refused rather than rounded: the result depends on the clock")
 }

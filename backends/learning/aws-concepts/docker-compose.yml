@@ -1,0 +1,32 @@
+# LocalStack: the AWS APIs, on this machine, on one port.
+#
+# `docker compose up -d` then `go test ./...`. Without it every test in this module skips with the command to
+# start it.
+
+services:
+  localstack:
+    image: localstack/localstack:3
+    ports:
+      # One port for every service. The SDK routes by the request body and headers, not the host, so s3, sqs,
+      # sns and dynamodb all answer here.
+      - "4566:4566"
+    environment:
+      # Naming the services keeps the container lean. LocalStack lazy-loads a service on first use either way,
+      # so the practical effect is that the health endpoint reports these as "available" from the start.
+      - SERVICES=s3,sqs,sns,dynamodb,iam
+      - DEFAULT_REGION=us-east-1
+      - DEBUG=0
+      # Without this LocalStack keeps state in the container's filesystem and a restart is a clean slate, which
+      # is exactly what tests want. Set PERSISTENCE=1 only if you want to poke at leftovers by hand.
+      - PERSISTENCE=0
+      # LocalStack ships with S3 signature validation OFF, so every presigned URL works forever and an expired
+      # one returns 200. That turns the presigned-URL expiry test into a test of nothing. Turning it on makes
+      # LocalStack check the signature and the expiry the way S3 does.
+      - S3_SKIP_SIGNATURE_VALIDATION=0
+    healthcheck:
+      # The health endpoint is LocalStack's own, not an AWS API. An unsigned request to an AWS path returns a
+      # signature error, which looks the same as a broken client.
+      test: ["CMD", "curl", "-fsS", "http://localhost:4566/_localstack/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 20

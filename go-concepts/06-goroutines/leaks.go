@@ -5,8 +5,54 @@ import (
 	"fmt"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 )
+
+// -----------------------------------------
+// Counting the examples' own goroutines
+// -----------------------------------------
+//
+// # Why not runtime.NumGoroutine
+//
+// Because it counts EVERY goroutine in the process. The testing framework has
+// its own, the runtime has its own, and a goroutine from an earlier test that
+// is still on its way out subtracts from the delta a leak test is trying to
+// measure. That produced "expected a leak: 4 before, 4 after" in CI on a test
+// that was working: one goroutine leaked and one unrelated one exited, and the
+// total did not move.
+//
+// This counter is touched only by the examples in this file, so nothing else
+// can cancel out a leak.
+//
+// # Why the increment happens in the PARENT
+//
+//	started := track()
+//	go func() {
+//		defer started()
+//		...
+//	}()
+//
+// track() runs before the `go` statement, so by the time the function returns,
+// the count has already risen. Incrementing inside the goroutine would leave a
+// window where the parent has returned and the goroutine has not been
+// scheduled, and a test checking the count in that window sees nothing. This
+// is the same reason a WaitGroup's Add goes before the `go` and not inside it.
+var liveExampleGoroutines atomic.Int64
+
+// track records a goroutine about to start and returns the function that
+// records its exit.
+func track() func() {
+	liveExampleGoroutines.Add(1)
+
+	var once sync.Once
+
+	return func() { once.Do(func() { liveExampleGoroutines.Add(-1) }) }
+}
+
+// LiveExampleGoroutines is how many of this file's goroutines have not
+// returned.
+func LiveExampleGoroutines() int64 { return liveExampleGoroutines.Load() }
 
 // Goroutine leaks
 // ===============
@@ -47,7 +93,10 @@ func countGoroutines() int {
 func leakySender() int {
 	ch := make(chan int) // unbuffered: every send needs a live receiver
 
+	started := track()
 	go func() {
+		defer started()
+
 		for i := 0; ; i++ {
 			ch <- i // blocks forever once the caller stops reading
 		}
@@ -64,7 +113,10 @@ func fixedSenderWithContext() int {
 
 	ch := make(chan int)
 
+	started := track()
 	go func() {
+		defer started()
+
 		for i := 0; ; i++ {
 			select {
 			case ch <- i:
@@ -86,7 +138,10 @@ func fixedSenderWithContext() int {
 func fixedSenderWithBuffer() int {
 	ch := make(chan int, 1) // room for exactly the one send that happens
 
+	started := track()
 	go func() {
+		defer started()
+
 		ch <- 42 // completes immediately, goroutine returns
 	}()
 
@@ -105,7 +160,10 @@ func leakyReceiver() {
 	ch <- 3
 	// No close(ch).
 
+	started := track()
 	go func() {
+		defer started()
+
 		for range ch { //nolint:revive // the missing close is the bug
 			// Drains the three buffered values, then blocks forever.
 		}
@@ -120,7 +178,10 @@ func fixedReceiver() (received int) {
 
 	var wg sync.WaitGroup
 	wg.Add(1)
+	started := track()
 	go func() {
+		defer started()
+
 		defer wg.Done()
 		for range ch {
 			received++
@@ -142,7 +203,10 @@ func fixedReceiver() (received int) {
 // leakyWorker keeps working after its caller has given up, because nothing ever
 // tells it to stop. The caller's timeout protected the CALLER, not the work.
 func leakyWorker(work time.Duration) {
+	started := track()
 	go func() {
+		defer started()
+
 		time.Sleep(work) // no cancellation path
 	}()
 }

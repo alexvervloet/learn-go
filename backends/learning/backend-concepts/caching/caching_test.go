@@ -142,10 +142,20 @@ func TestStampedeIsCollapsed(t *testing.T) {
 
 	start := make(chan struct{})
 
+	// A readiness barrier as well as a start signal. Without it, close(start) fires while some goroutines
+	// have not run their first instruction, and those arrive at Get after the first flight has already
+	// finished, which starts a second one.
+	var ready sync.WaitGroup
+
+	ready.Add(callers)
+
 	for range callers {
 		wg.Add(1)
+
 		go func() {
 			defer wg.Done()
+
+			ready.Done()
 			<-start
 
 			if _, err := c.Get(ctx, "hot"); err != nil {
@@ -153,6 +163,8 @@ func TestStampedeIsCollapsed(t *testing.T) {
 			}
 		}()
 	}
+
+	ready.Wait()
 
 	began := time.Now()
 	close(start)
@@ -171,11 +183,24 @@ func TestStampedeIsCollapsed(t *testing.T) {
 		t.Errorf("%d callers got an error", errs.Load())
 	}
 
-	// The assertion, and it is exact: singleflight guarantees one call per key for the callers that
-	// arrive while it is running.
-	if src.calls.Load() != 1 {
-		t.Errorf("the source was called %d times for %d concurrent misses, want 1",
-			src.calls.Load(), callers)
+	// The assertion is a BOUND, not an exact 1, and the distinction is the whole subtlety of singleflight.
+	//
+	// It collapses the callers that arrive while a call is IN FLIGHT. A caller that reaches Get one
+	// microsecond after the first flight returns is not late to a flight, it is the start of a new one. With
+	// 500 goroutines, a 50ms source and a loaded machine, a straggler is possible, and CI produced exactly
+	// that: 2 calls, and a test that failed while the code was working.
+	//
+	// So: a handful rather than one, and nowhere near 500. That is the property worth having. Asserting 1
+	// asserts the scheduler.
+	const tolerated = 3
+
+	if calls := src.calls.Load(); calls > tolerated {
+		t.Errorf("the source was called %d times for %d concurrent misses, want at most %d",
+			calls, callers, tolerated)
+	}
+
+	if calls := src.calls.Load(); calls > 1 {
+		t.Logf("%d flights rather than 1: some callers arrived after the first finished", calls)
 	}
 
 	// And it took about one source call's time, not 500.

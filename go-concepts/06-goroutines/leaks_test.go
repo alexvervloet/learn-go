@@ -8,47 +8,68 @@ import (
 	"time"
 )
 
-// assertNoLeak runs fn and checks the goroutine count returns to where it
-// started. This is the poor-relation version of uber-go/goleak, and it is
-// worth writing once by hand to see what goleak is actually doing.
+// assertNoLeak runs fn and checks that every goroutine the examples started has
+// returned.
 //
-// The retry loop is not optional. A goroutine that has returned is not removed
-// from NumGoroutine instantly, so a single immediate check produces a test that
-// fails a few percent of the time. Polling with a deadline is the fix.
+// # Why this counts the examples' own goroutines and not runtime.NumGoroutine
+//
+// NumGoroutine counts the whole process, so an unrelated goroutine on its way
+// out changes the number this is trying to measure. CI failed a working leak
+// test with "4 before, 4 after": one goroutine leaked, one unrelated one
+// exited, and the total stayed put. The counter in leaks.go is touched only by
+// this file's examples, so nothing can cancel out.
+//
+// The poll is still needed in THIS direction. A goroutine that has been
+// unblocked has not necessarily run its deferred decrement yet, so a single
+// immediate check fails a few percent of the time. Polling with a deadline is
+// the fix, and it is what uber-go/goleak does too.
 func assertNoLeak(t *testing.T, fn func()) {
 	t.Helper()
 
-	before := runtime.NumGoroutine()
+	before := LiveExampleGoroutines()
 	fn()
 
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
 		runtime.Gosched()
-		if runtime.NumGoroutine() <= before {
+
+		if LiveExampleGoroutines() <= before {
 			return
 		}
+
 		time.Sleep(5 * time.Millisecond)
 	}
 
-	t.Errorf("leaked goroutines: %d before, %d after", before, runtime.NumGoroutine())
+	t.Errorf("leaked goroutines: %d live before, %d after", before, LiveExampleGoroutines())
 }
 
 // assertLeaks is the inverse, and it is what keeps the broken examples honest.
 // If someone "fixes" leakySender, this test fails and the README needs editing.
+//
+// # No poll, and no sleep
+//
+// The count rises in the PARENT, before the `go` statement, so by the time fn
+// returns the leak is already recorded. There is nothing to wait for, which is
+// the difference between a test that is deterministic and one that is merely
+// usually right.
 func assertLeaks(t *testing.T, fn func()) {
 	t.Helper()
 
-	before := runtime.NumGoroutine()
+	before := LiveExampleGoroutines()
 	fn()
 
-	// Give the leaked goroutine time to park where it will stay.
-	for i := 0; i < 50; i++ {
-		runtime.Gosched()
-		time.Sleep(time.Millisecond)
+	after := LiveExampleGoroutines()
+	if after <= before {
+		t.Errorf("expected a leak: %d live before, %d after", before, after)
 	}
 
-	if runtime.NumGoroutine() <= before {
-		t.Errorf("expected a leak: %d before, %d after", before, runtime.NumGoroutine())
+	// And it stays leaked. A goroutine that exits a moment later is not a leak,
+	// it is a slow return, and the two are worth telling apart.
+	time.Sleep(50 * time.Millisecond)
+
+	if LiveExampleGoroutines() < after {
+		t.Errorf("the goroutine returned after all, so this is not a leak: %d then %d",
+			after, LiveExampleGoroutines())
 	}
 }
 

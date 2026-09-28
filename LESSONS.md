@@ -2028,3 +2028,38 @@ honest place for something that is usually true.
 
 The broader tell: a comment claiming a guarantee is a claim, and this repository's rule is that claims get
 tested. This one had a test. The test asserted the wrong half.
+
+## `runtime.NumGoroutine` counts the whole process, so it cannot measure one leak
+
+**Expected.** A leak test takes `runtime.NumGoroutine()` before and after, and a leaked goroutine makes the
+second number larger.
+
+**What happened.** CI failed with `expected a leak: 4 before, 4 after` on code that leaks exactly as designed.
+The count includes the testing framework's goroutines and the runtime's, and one unrelated goroutine finished
+in the same window. One leaked, one exited, the total did not move.
+
+**Next time.** Count the goroutines you started. An `atomic.Int64`, incremented in the PARENT before the `go`
+statement and decremented by a deferred call inside, is touched by nothing else and cannot be cancelled out. The
+increment goes before the `go` for the same reason `WaitGroup.Add` does: incrementing inside leaves a window
+where the parent has returned and the goroutine has not been scheduled.
+
+The side benefit is that the leak assertion needs no sleep at all. The count has already risen by the time the
+function returns, so there is nothing to poll for. The no-leak direction still polls, because a goroutine that
+has been unblocked has not necessarily run its deferred decrement yet.
+
+## singleflight collapses the callers that are IN FLIGHT, which is not all of them
+
+**Expected.** 500 goroutines released at once against one expired key produce exactly one call to the source.
+The test asserted 1 and the comment called it exact.
+
+**What happened.** CI got 2. singleflight deduplicates callers that arrive while a call is running. A caller
+reaching `Get` a microsecond after the first flight returns is not late to that flight, it is the start of a new
+one, and on a loaded runner with a 50ms source one straggler is enough.
+
+**Next time.** Assert the property, which is "a handful, not 500", and not the number, which is the scheduler's
+to decide. The test now tolerates 3 and logs when more than one flight happened. A readiness barrier before the
+start signal tightens it in practice, because `close(start)` otherwise fires while some goroutines have not run
+their first instruction.
+
+The general form, which this repository keeps relearning: when a concurrency test asserts an exact count, check
+whether the guarantee is about a count or about a bound.

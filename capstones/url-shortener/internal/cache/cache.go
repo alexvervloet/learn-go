@@ -199,11 +199,15 @@ func (c *Cache) Lookup(ctx context.Context, slug string, fetch func(context.Cont
 			return Entry{}, err
 		}
 
-		if err := c.Put(ctx, slug, entry); err != nil {
-			// The store succeeded and the cache write did not, which is a degraded cache and a correct
-			// answer. Returning the entry is right; failing the request would not be.
-			return entry, nil
-		}
+		// The cache write's error is deliberately dropped.
+		//
+		// The store succeeded, so the caller has a correct answer. A failed Put is a degraded cache, and
+		// failing the request because the cache is unavailable is exactly what a cache must not do.
+		//
+		// Written as a bare `_ =` rather than an `if err != nil { return entry, nil }`, because the second
+		// form is indistinguishable from the bug where someone checks an error and forgets to return it. A
+		// linter cannot tell them apart either, and it told me so.
+		_ = c.Put(ctx, slug, entry)
 
 		return entry, nil
 	})

@@ -29,8 +29,8 @@ func create(t *testing.T, h *apitest.Harness, token string, body map[string]any)
 
 	var out map[string]any
 
-	apitest.DecodeJSON(t, resp, &out)
-	require.Equal(t, http.StatusCreated, resp.StatusCode, "%v", out)
+	resp.JSON(t, &out)
+	require.Equal(t, http.StatusCreated, resp.Status, "%v", out)
 
 	return out
 }
@@ -43,8 +43,8 @@ func TestHealthChecksTheDatabase(t *testing.T) {
 
 	var body map[string]string
 
-	apitest.DecodeJSON(t, resp, &body)
-	require.Equal(t, http.StatusOK, resp.StatusCode)
+	resp.JSON(t, &body)
+	require.Equal(t, http.StatusOK, resp.Status)
 	require.Equal(t, "ok", body["status"])
 }
 
@@ -68,8 +68,8 @@ func TestRegisterAndLogin(t *testing.T) {
 
 	var login map[string]any
 
-	apitest.DecodeJSON(t, resp, &login)
-	require.Equal(t, http.StatusOK, resp.StatusCode)
+	resp.JSON(t, &login)
+	require.Equal(t, http.StatusOK, resp.Status)
 	require.NotEmpty(t, login["token"])
 }
 
@@ -87,8 +87,8 @@ func TestEmailIsCaseInsensitive(t *testing.T) {
 
 	var problem map[string]any
 
-	apitest.DecodeJSON(t, resp, &problem)
-	require.Equal(t, http.StatusConflict, resp.StatusCode)
+	resp.JSON(t, &problem)
+	require.Equal(t, http.StatusConflict, resp.Status)
 
 	// And logging in with the other case works, without the handler lowercasing anything.
 	resp = h.Do(t, http.MethodPost, "/api/v1/login", "", map[string]string{
@@ -98,8 +98,8 @@ func TestEmailIsCaseInsensitive(t *testing.T) {
 
 	var login map[string]any
 
-	apitest.DecodeJSON(t, resp, &login)
-	require.Equal(t, http.StatusOK, resp.StatusCode, "%v", login)
+	resp.JSON(t, &login)
+	require.Equal(t, http.StatusOK, resp.Status, "%v", login)
 }
 
 // TestLoginFailuresAreIndistinguishable is the enumeration defence, at the HTTP layer.
@@ -114,7 +114,7 @@ func TestLoginFailuresAreIndistinguishable(t *testing.T) {
 
 	var a map[string]any
 
-	apitest.DecodeJSON(t, noSuchUser, &a)
+	noSuchUser.JSON(t, &a)
 
 	wrongPassword := h.Do(t, http.MethodPost, "/api/v1/login", "", map[string]string{
 		"email": "alex@example.com", "password": "a different password here",
@@ -122,10 +122,10 @@ func TestLoginFailuresAreIndistinguishable(t *testing.T) {
 
 	var b map[string]any
 
-	apitest.DecodeJSON(t, wrongPassword, &b)
+	wrongPassword.JSON(t, &b)
 
-	require.Equal(t, http.StatusUnauthorized, noSuchUser.StatusCode)
-	require.Equal(t, http.StatusUnauthorized, wrongPassword.StatusCode)
+	require.Equal(t, http.StatusUnauthorized, noSuchUser.Status)
+	require.Equal(t, http.StatusUnauthorized, wrongPassword.Status)
 	require.Equal(t, a, b, "the two failures are byte-identical, so a caller cannot enumerate accounts")
 }
 
@@ -147,8 +147,8 @@ func TestErrorsAreProblemJSON(t *testing.T) {
 		Detail string `json:"detail"`
 	}
 
-	apitest.DecodeJSON(t, resp, &problem)
-	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	resp.JSON(t, &problem)
+	require.Equal(t, http.StatusBadRequest, resp.Status)
 	require.Equal(t, http.StatusBadRequest, problem.Status, "the status is in the body as well as the line")
 	require.NotEmpty(t, problem.Type, "the type URI is the stable thing; the title is prose")
 }
@@ -162,9 +162,9 @@ func TestUnauthorizedSendsWWWAuthenticate(t *testing.T) {
 
 		var problem map[string]any
 
-		apitest.DecodeJSON(t, resp, &problem)
+		resp.JSON(t, &problem)
 
-		require.Equal(t, http.StatusUnauthorized, resp.StatusCode, "token %q", token)
+		require.Equal(t, http.StatusUnauthorized, resp.Status, "token %q", token)
 		require.Contains(t, resp.Header.Get("WWW-Authenticate"), "Bearer",
 			"RFC 7235 requires it on a 401, and it is what tells a client how to authenticate")
 	}
@@ -176,17 +176,12 @@ func TestTheBearerSchemeIsCaseInsensitive(t *testing.T) {
 
 	token := h.Register(t, "alex@example.com", goodPassword)
 
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, h.Server.URL+"/api/v1/urls", nil)
-	require.NoError(t, err)
+	resp := h.DoWith(t, http.MethodGet, "/api/v1/urls", nil, nil, func(req *http.Request) {
+		// Lowercase "bearer", which is what several HTTP clients send.
+		req.Header.Set("Authorization", "bearer "+token)
+	})
 
-	req.Header.Set("Authorization", "bearer "+token)
-
-	resp, err := h.Client().Do(req)
-	require.NoError(t, err)
-
-	defer func() { _ = resp.Body.Close() }()
-
-	require.Equal(t, http.StatusOK, resp.StatusCode, "RFC 7235 says the scheme is case-insensitive")
+	require.Equal(t, http.StatusOK, resp.Status, "RFC 7235 says the scheme is case-insensitive")
 }
 
 // TestCreateAndRedirect is the core of the product.
@@ -204,9 +199,7 @@ func TestCreateAndRedirect(t *testing.T) {
 
 	resp := h.Do(t, http.MethodGet, "/"+slug, "", nil)
 
-	defer func() { _ = resp.Body.Close() }()
-
-	require.Equal(t, http.StatusFound, resp.StatusCode,
+	require.Equal(t, http.StatusFound, resp.Status,
 		"302, not 301: a permanent redirect is cached by browsers and cannot be changed or deleted")
 	require.Equal(t, "https://example.com/a/very/long/path", resp.Header.Get("Location"))
 }
@@ -222,18 +215,12 @@ func TestTheRedirectEnqueuesAClick(t *testing.T) {
 
 	h.Enqueuer.Reset()
 
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, h.Server.URL+"/"+slug, nil)
-	require.NoError(t, err)
+	resp := h.DoWith(t, http.MethodGet, "/"+slug, nil, nil, func(req *http.Request) {
+		req.Header.Set("Referer", "https://news.example/story")
+		req.Header.Set("User-Agent", "test-agent/1.0")
+	})
 
-	req.Header.Set("Referer", "https://news.example/story")
-	req.Header.Set("User-Agent", "test-agent/1.0")
-
-	resp, err := h.Client().Do(req)
-	require.NoError(t, err)
-
-	defer func() { _ = resp.Body.Close() }()
-
-	require.Equal(t, http.StatusFound, resp.StatusCode)
+	require.Equal(t, http.StatusFound, resp.Status)
 
 	enqueued := h.Enqueuer.Tasks()
 	require.Len(t, enqueued, 1)
@@ -261,9 +248,7 @@ func TestAFailedEnqueueDoesNotBreakTheRedirect(t *testing.T) {
 
 	resp := h.Do(t, http.MethodGet, "/"+slug, "", nil)
 
-	defer func() { _ = resp.Body.Close() }()
-
-	require.Equal(t, http.StatusFound, resp.StatusCode,
+	require.Equal(t, http.StatusFound, resp.Status,
 		"a missing click is a wrong statistic; a failed redirect is a broken link")
 	require.Equal(t, "https://example.com/", resp.Header.Get("Location"))
 }
@@ -290,8 +275,8 @@ func TestCustomSlug(t *testing.T) {
 
 	var problem map[string]any
 
-	apitest.DecodeJSON(t, resp, &problem)
-	require.Equal(t, http.StatusConflict, resp.StatusCode)
+	resp.JSON(t, &problem)
+	require.Equal(t, http.StatusConflict, resp.Status)
 }
 
 // TestReservedSlugsCannotShadowARoute is the route-collision guard, end to end.
@@ -307,16 +292,14 @@ func TestReservedSlugsCannotShadowARoute(t *testing.T) {
 
 		var problem map[string]any
 
-		apitest.DecodeJSON(t, resp, &problem)
-		require.Equal(t, http.StatusBadRequest, resp.StatusCode, "slug %q", slug)
+		resp.JSON(t, &problem)
+		require.Equal(t, http.StatusBadRequest, resp.Status, "slug %q", slug)
 	}
 
 	// And the routes still work, which is what the guard protects.
 	resp := h.Do(t, http.MethodGet, "/healthz", "", nil)
 
-	defer func() { _ = resp.Body.Close() }()
-
-	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Equal(t, http.StatusOK, resp.Status)
 }
 
 // TestTargetSchemeIsAnAllowList is the security check.
@@ -341,8 +324,8 @@ func TestTargetSchemeIsAnAllowList(t *testing.T) {
 
 		var problem map[string]any
 
-		apitest.DecodeJSON(t, resp, &problem)
-		require.Equal(t, http.StatusBadRequest, resp.StatusCode,
+		resp.JSON(t, &problem)
+		require.Equal(t, http.StatusBadRequest, resp.Status,
 			"a deny-list would miss at least one of these: %q", target)
 	}
 }
@@ -360,8 +343,8 @@ func TestUnknownFieldsAreRejected(t *testing.T) {
 
 	var problem map[string]any
 
-	apitest.DecodeJSON(t, resp, &problem)
-	require.Equal(t, http.StatusBadRequest, resp.StatusCode,
+	resp.JSON(t, &problem)
+	require.Equal(t, http.StatusBadRequest, resp.Status,
 		"a typo in a client field name is caught at the first request rather than in production")
 }
 
@@ -373,8 +356,8 @@ func TestAMissingSlugIs404(t *testing.T) {
 
 	var problem map[string]any
 
-	apitest.DecodeJSON(t, resp, &problem)
-	require.Equal(t, http.StatusNotFound, resp.StatusCode)
+	resp.JSON(t, &problem)
+	require.Equal(t, http.StatusNotFound, resp.Status)
 }
 
 // TestAnExpiredLinkIs410 is the distinction that matters to a crawler.
@@ -400,8 +383,8 @@ func TestAnExpiredLinkIs410(t *testing.T) {
 
 	var problem map[string]any
 
-	apitest.DecodeJSON(t, resp, &problem)
-	require.Equal(t, http.StatusGone, resp.StatusCode,
+	resp.JSON(t, &problem)
+	require.Equal(t, http.StatusGone, resp.Status,
 		"410 means this existed and is finished; 404 means it never existed")
 }
 
@@ -418,8 +401,8 @@ func TestAPastExpiryIsRejected(t *testing.T) {
 
 	var problem map[string]any
 
-	apitest.DecodeJSON(t, resp, &problem)
-	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	resp.JSON(t, &problem)
+	require.Equal(t, http.StatusBadRequest, resp.Status)
 }
 
 // TestListPagesWithAKeyset is the pagination contract.
@@ -452,8 +435,8 @@ func TestListPagesWithAKeyset(t *testing.T) {
 			Next  string           `json:"next"`
 		}
 
-		apitest.DecodeJSON(t, resp, &page)
-		require.Equal(t, http.StatusOK, resp.StatusCode)
+		resp.JSON(t, &page)
+		require.Equal(t, http.StatusOK, resp.Status)
 
 		pages++
 
@@ -502,7 +485,7 @@ func TestAnInsertBetweenPagesDoesNotShiftTheWindow(t *testing.T) {
 		Next  string           `json:"next"`
 	}
 
-	apitest.DecodeJSON(t, resp, &first)
+	resp.JSON(t, &first)
 	require.Len(t, first.Items, 5)
 	require.NotEmpty(t, first.Next)
 
@@ -516,7 +499,7 @@ func TestAnInsertBetweenPagesDoesNotShiftTheWindow(t *testing.T) {
 		Items []map[string]any `json:"items"`
 	}
 
-	apitest.DecodeJSON(t, resp, &second)
+	resp.JSON(t, &second)
 	require.Len(t, second.Items, 5)
 
 	firstSlugs := map[string]bool{}
@@ -546,21 +529,19 @@ func TestAnotherUsersURLIsA404(t *testing.T) {
 
 	var problem map[string]any
 
-	apitest.DecodeJSON(t, resp, &problem)
-	require.Equal(t, http.StatusNotFound, resp.StatusCode)
+	resp.JSON(t, &problem)
+	require.Equal(t, http.StatusNotFound, resp.Status)
 
 	// And Sam cannot delete it.
 	resp = h.Do(t, http.MethodDelete, "/api/v1/urls/"+slug, sam, nil)
 
-	apitest.DecodeJSON(t, resp, &problem)
-	require.Equal(t, http.StatusNotFound, resp.StatusCode)
+	resp.JSON(t, &problem)
+	require.Equal(t, http.StatusNotFound, resp.Status)
 
 	// The redirect still works, because it is public.
 	redirect := h.Do(t, http.MethodGet, "/"+slug, "", nil)
 
-	defer func() { _ = redirect.Body.Close() }()
-
-	require.Equal(t, http.StatusFound, redirect.StatusCode)
+	require.Equal(t, http.StatusFound, redirect.Status)
 }
 
 // TestDeleteRemovesTheLink covers the last handler.
@@ -573,16 +554,14 @@ func TestDeleteRemovesTheLink(t *testing.T) {
 
 	resp := h.Do(t, http.MethodDelete, "/api/v1/urls/"+slug, token, nil)
 
-	defer func() { _ = resp.Body.Close() }()
-
-	require.Equal(t, http.StatusNoContent, resp.StatusCode)
+	require.Equal(t, http.StatusNoContent, resp.Status)
 
 	gone := h.Do(t, http.MethodGet, "/"+slug, "", nil)
 
 	var problem map[string]any
 
-	apitest.DecodeJSON(t, gone, &problem)
-	require.Equal(t, http.StatusNotFound, gone.StatusCode)
+	gone.JSON(t, &problem)
+	require.Equal(t, http.StatusNotFound, gone.Status)
 }
 
 // TestAnExpiredTokenIsRejectedByTheAPI ties the TTL to the HTTP layer.
@@ -598,8 +577,8 @@ func TestAnExpiredTokenIsRejectedByTheAPI(t *testing.T) {
 
 	var problem map[string]any
 
-	apitest.DecodeJSON(t, resp, &problem)
-	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	resp.JSON(t, &problem)
+	require.Equal(t, http.StatusUnauthorized, resp.Status)
 }
 
 // TestMethodNotAllowed is Go 1.22 routing doing the work.
@@ -611,9 +590,7 @@ func TestMethodNotAllowed(t *testing.T) {
 
 	resp := h.Do(t, http.MethodDelete, "/healthz", "", nil)
 
-	defer func() { _ = resp.Body.Close() }()
-
-	require.Equal(t, http.StatusMethodNotAllowed, resp.StatusCode)
+	require.Equal(t, http.StatusMethodNotAllowed, resp.Status)
 	require.Contains(t, resp.Header.Get("Allow"), "GET")
 }
 
@@ -633,7 +610,7 @@ func TestALargeBodyIsRefused(t *testing.T) {
 
 	var problem map[string]any
 
-	apitest.DecodeJSON(t, resp, &problem)
-	require.Equal(t, http.StatusBadRequest, resp.StatusCode,
+	resp.JSON(t, &problem)
+	require.Equal(t, http.StatusBadRequest, resp.Status,
 		"without a limit, a slow infinite body holds a goroutine for as long as the client likes")
 }

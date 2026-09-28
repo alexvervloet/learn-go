@@ -2063,3 +2063,36 @@ their first instruction.
 
 The general form, which this repository keeps relearning: when a concurrency test asserts an exact count, check
 whether the guarantee is about a count or about a bound.
+
+## chi's RealIP is deprecated, and the reason is worth reading
+
+**Expected.** `middleware.RequestID`, `middleware.RealIP`, `middleware.Recoverer` is the standard chi opening,
+copied from chi's own README.
+
+**What happened.** staticcheck flagged RealIP as deprecated with three advisory numbers attached. It rewrites
+`r.RemoteAddr` from the leftmost `X-Forwarded-For` value, or from `True-Client-IP` or `X-Real-IP`, whether or
+not anything in front of the service sets them. A client can send all three, so on a service reachable without
+a trusted proxy, RealIP turns the client address into an attacker-controlled string and every rate limit,
+audit log and block list keyed on it is evaded by a header.
+
+**Next time.** The correct version takes the RIGHTMOST value a trusted proxy appended and has to know how many
+proxies there are, which means it cannot be a drop-in. The url-shortener does not use the client address for
+anything, so it simply does not have the middleware. A lint finding on a deprecated symbol is worth reading
+rather than silencing: this one is a vulnerability class, not a rename.
+
+## A test helper that returns `*http.Response` hands every caller an obligation
+
+**Expected.** A test harness with `Do(t, method, path, token, body) *http.Response` is the obvious shape, and a
+`DecodeJSON` helper that closes the body covers the common case.
+
+**What happened.** bodyclose flagged six call sites, and each fix was a `//nolint` saying "DecodeJSON closes
+it". Twenty-nine call sites is twenty-nine chances to forget, and the linter cannot see through the helper to
+know the body was closed.
+
+**Next time.** Return the bytes, not the stream. `Do` now reads the body, closes it, and returns a small struct
+with the status, the headers and a `[]byte`, so nothing escapes that can leak and the linter has nothing to
+complain about. The general shape: when a helper returns a resource, it returns an obligation, and moving the
+obligation inside the helper is usually both simpler and safer than documenting it.
+
+The same refactor removed a second problem. Two tests built a raw request to set an exact header, so they
+bypassed the harness entirely; `DoWith` takes a customiser function and they go through one path now.

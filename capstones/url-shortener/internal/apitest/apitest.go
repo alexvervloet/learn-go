@@ -40,12 +40,14 @@ import (
 	"github.com/alexvervloet/learn-go/capstones/url-shortener/internal/store"
 	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5/pgxpool"
+
 	// The blank import registers "pgx" as a database/sql driver.
 	//
 	// goose talks to database/sql, and pgxpool does not. Without this line goose fails with
 	// `sql: unknown driver "pgx" (forgotten import?)`, and the parenthesis in that message is the standard
 	// library telling you exactly this.
 	_ "github.com/jackc/pgx/v5/stdlib"
+
 	"github.com/pressly/goose/v3"
 	"github.com/redis/go-redis/v9"
 )
@@ -501,8 +503,46 @@ func (h *Harness) Client() *http.Client {
 	}
 }
 
-// Do sends a request to the harness.
-func (h *Harness) Do(t *testing.T, method, path, token string, body any) *http.Response {
+// Response is a finished exchange.
+//
+// # Why this and not *http.Response
+//
+// Because *http.Response hands a test an open body and the obligation to close it, and a test that forgets
+// leaks a connection. Twenty-nine call sites is twenty-nine chances to forget, and the linter found several.
+//
+// Reading the body and closing it inside Do moves the obligation to one place. The test gets bytes, which is
+// what it wanted, and there is nothing left to leak.
+type Response struct {
+	Status int
+	Header http.Header
+	Body   []byte
+}
+
+// JSON decodes the body into v.
+func (r *Response) JSON(t *testing.T, v any) {
+	t.Helper()
+
+	if err := json.Unmarshal(r.Body, v); err != nil {
+		t.Fatalf("decode %d response %q: %v", r.Status, r.Body, err)
+	}
+}
+
+// Do sends a request to the harness and reads the whole response.
+func (h *Harness) Do(t *testing.T, method, path, token string, body any) *Response {
+	t.Helper()
+
+	return h.DoWith(t, method, path, nil, body, func(req *http.Request) {
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+	})
+}
+
+// DoWith is Do with the request in hand, for a test that needs a particular header.
+//
+// The variadic customiser rather than a headers map, because two of these tests care about the EXACT spelling
+// and case of a header, and a map would go through textproto's canonicalisation on the way in.
+func (h *Harness) DoWith(t *testing.T, method, path string, _ map[string]string, body any, customise ...func(*http.Request)) *Response {
 	t.Helper()
 
 	var reader io.Reader
@@ -525,8 +565,8 @@ func (h *Harness) Do(t *testing.T, method, path, token string, body any) *http.R
 		req.Header.Set("Content-Type", "application/json")
 	}
 
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
+	for _, c := range customise {
+		c(req)
 	}
 
 	resp, err := h.Client().Do(req)
@@ -534,18 +574,14 @@ func (h *Harness) Do(t *testing.T, method, path, token string, body any) *http.R
 		t.Fatalf("%s %s: %v", method, path, err)
 	}
 
-	return resp
-}
-
-// DecodeJSON reads a response body into v and closes it.
-func DecodeJSON(t *testing.T, resp *http.Response, v any) {
-	t.Helper()
-
 	defer func() { _ = resp.Body.Close() }()
 
-	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
-		t.Fatalf("decode %s: %v", resp.Status, err)
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("%s %s: read body: %v", method, path, err)
 	}
+
+	return &Response{Status: resp.StatusCode, Header: resp.Header, Body: raw}
 }
 
 // Register creates a user and returns the token.
@@ -557,15 +593,15 @@ func (h *Harness) Register(t *testing.T, email, password string) string {
 		"password": password,
 	})
 
+	if resp.Status != http.StatusCreated {
+		t.Fatalf("register %s: %d %s", email, resp.Status, resp.Body)
+	}
+
 	var body struct {
 		Token string `json:"token"`
 	}
 
-	DecodeJSON(t, resp, &body)
-
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("register %s: %s", email, resp.Status)
-	}
+	resp.JSON(t, &body)
 
 	return body.Token
 }

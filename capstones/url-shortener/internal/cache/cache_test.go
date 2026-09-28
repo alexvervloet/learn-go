@@ -264,15 +264,14 @@ func TestTheCacheServesTheRedirect(t *testing.T) {
 
 	var created map[string]any
 
-	apitest.DecodeJSON(t, resp, &created)
-	require.Equal(t, http.StatusCreated, resp.StatusCode)
+	resp.JSON(t, &created)
+	require.Equal(t, http.StatusCreated, resp.Status)
 
 	slug, _ := created["slug"].(string)
 
 	for range 10 {
 		r := h.Do(t, http.MethodGet, "/"+slug, "", nil)
-		require.Equal(t, http.StatusFound, r.StatusCode)
-		_ = r.Body.Close()
+		require.Equal(t, http.StatusFound, r.Status)
 	}
 
 	stats := h.Cache.Stats()
@@ -293,8 +292,8 @@ func TestCreatingASlugClearsItsNegativeEntry(t *testing.T) {
 
 	var problem map[string]any
 
-	apitest.DecodeJSON(t, probe, &problem)
-	require.Equal(t, http.StatusNotFound, probe.StatusCode)
+	probe.JSON(t, &problem)
+	require.Equal(t, http.StatusNotFound, probe.Status)
 
 	// Now it is created with that exact slug.
 	resp := h.Do(t, http.MethodPost, "/api/v1/urls", token, map[string]any{
@@ -303,15 +302,13 @@ func TestCreatingASlugClearsItsNegativeEntry(t *testing.T) {
 
 	var created map[string]any
 
-	apitest.DecodeJSON(t, resp, &created)
-	require.Equal(t, http.StatusCreated, resp.StatusCode, "%v", created)
+	resp.JSON(t, &created)
+	require.Equal(t, http.StatusCreated, resp.Status, "%v", created)
 
 	// Without the cache delete in the create handler, this is a 404 for the rest of the negative TTL.
 	redirect := h.Do(t, http.MethodGet, "/my-link", "", nil)
 
-	defer func() { _ = redirect.Body.Close() }()
-
-	require.Equal(t, http.StatusFound, redirect.StatusCode)
+	require.Equal(t, http.StatusFound, redirect.Status)
 }
 
 // TestDeletingALinkClearsTheCache is the other direction.
@@ -324,24 +321,24 @@ func TestDeletingALinkClearsTheCache(t *testing.T) {
 
 	var created map[string]any
 
-	apitest.DecodeJSON(t, resp, &created)
+	resp.JSON(t, &created)
 
 	slug, _ := created["slug"].(string)
 
 	// Warm the cache.
 	warm := h.Do(t, http.MethodGet, "/"+slug, "", nil)
-	require.Equal(t, http.StatusFound, warm.StatusCode)
-	_ = warm.Body.Close()
+
+	require.Equal(t, http.StatusFound, warm.Status)
 
 	del := h.Do(t, http.MethodDelete, "/api/v1/urls/"+slug, token, nil)
-	require.Equal(t, http.StatusNoContent, del.StatusCode)
-	_ = del.Body.Close()
+
+	require.Equal(t, http.StatusNoContent, del.Status)
 
 	// Without the invalidation this serves a redirect to a deleted link for an hour.
 	gone := h.Do(t, http.MethodGet, "/"+slug, "", nil)
 
 	var problem map[string]any
 
-	apitest.DecodeJSON(t, gone, &problem)
-	require.Equal(t, http.StatusNotFound, gone.StatusCode)
+	gone.JSON(t, &problem)
+	require.Equal(t, http.StatusNotFound, gone.Status)
 }

@@ -125,10 +125,23 @@ func (s *Server) Routes() http.Handler {
 
 	// Middleware wraps outside in, so the recoverer is outermost and catches a panic from anything below it,
 	// including the logger.
+	//
+	// # What is NOT here: chi's RealIP
+	//
+	// The first version used it. staticcheck flagged it as deprecated, and the deprecation notice is worth
+	// reading: RealIP rewrites r.RemoteAddr from the leftmost X-Forwarded-For value, or from True-Client-IP
+	// or X-Real-IP, whether or not the infrastructure in front actually sets them.
+	//
+	// A client can send any of those headers. So on a service reachable without a trusted proxy, RealIP turns
+	// r.RemoteAddr into an attacker-controlled string, and anything keyed on it (a rate limit, an audit log,
+	// a block list) is trivially evaded. There are three advisories about it.
+	//
+	// The correct version takes the RIGHTMOST value a trusted proxy appended and needs to know how many
+	// proxies there are. This service does not use the client address for anything, so the right answer is to
+	// not have the middleware rather than to configure it.
 	var h http.Handler = mux
 	h = s.logRequests(h)
 	h = middleware.Recoverer(h)
-	h = middleware.RealIP(h)
 	h = middleware.RequestID(h)
 
 	return h

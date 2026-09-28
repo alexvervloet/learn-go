@@ -1,0 +1,22 @@
+# What the build context does NOT need.
+#
+# Everything here is copied into the daemon before the build starts, so a large ignored directory is time spent
+# on every build even though no layer uses it. .git alone is usually the biggest thing in a Go repository.
+
+.git
+.gitignore
+
+# Test caches and local state.
+*.test
+coverage.out
+
+# Anything that would end up in the image by accident.
+.env
+*.pem
+*.key
+
+# Documentation does not affect the binary, and including it invalidates the COPY layer on every typo fix.
+*.md
+docker-compose.yml
+Dockerfile
+.dockerignore

@@ -1,0 +1,56 @@
+# Everything the service needs to run locally.
+#
+#   docker compose up -d
+#   DATABASE_URL="postgres://postgres:postgres@localhost:5433/learn_go_db?sslmode=disable" \
+#     REDIS_ADDR=localhost:6382 go test ./...
+#
+# Or, with a local Postgres and Redis on their usual ports, just:
+#
+#   go test ./...
+#
+# Without these, every test that needs a service skips and says how to start it.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+
+    container_name: url-shortener-db
+
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: learn_go_db
+
+    ports:
+      # 5433, so this runs alongside a local Postgres and alongside the learning modules' own containers.
+      # Every module in this repository picks a port nobody else uses, for the same reason: a developer with
+      # a brew-installed Postgres on 5432 otherwise gets a confusing "role postgres does not exist" instead
+      # of a connection to this container.
+      - "5433:5432"
+
+    healthcheck:
+      # pg_isready against the actual database, not just the port. The port accepts connections a second or
+      # two before Postgres is ready to answer, and a test that connects in that window fails or, worse, skips.
+      test: ["CMD-SHELL", "pg_isready -U postgres -d learn_go_db"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+
+    container_name: url-shortener-redis
+
+    ports:
+      # 6382, for the same reason. backend-concepts uses 6380 and jobs-concepts uses 6381.
+      - "6382:6379"
+
+    # No persistence. This Redis holds a cache and a job queue, and a job queue that survives a restart with
+    # stale tasks is worse for a local setup than one that starts empty.
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30

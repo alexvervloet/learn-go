@@ -26,10 +26,13 @@ timers: retry backoffs, a three-second scheduled task, and a handler deliberatel
 ## asynq against Celery
 
 Celery is a framework: a decorator makes a function a task, a separate `celery worker` process runs it, and the
-result comes back through a "result backend". asynq is a library: a task is a name and a JSON payload, a worker
-is an `asynq.Server` started inside your own binary, and there is **no result backend at all**.
+result comes back through a "result backend". asynq is a library: a task is a name and a JSON payload, and a
+worker is an `asynq.Server` started inside your own binary.
 
-That last difference is the important one. Celery lets you write `result = add.delay(2, 2); result.get()`, which
+asynq can store a result: a handler writes it with `t.ResultWriter()`, it is kept for as long as the task's
+`asynq.Retention` option says, and `Inspector.GetTaskInfo` returns it in `TaskInfo.Result`. (An earlier version
+of this section said asynq has no result backend at all; it has had one since v0.22.) What it does not have is
+the blocking wait, and that is the important difference. Celery lets you write `result = add.delay(2, 2); result.get()`, which
 looks like a function call and is a distributed system pretending to be one: it blocks a web worker on a
 background worker, and if the background worker is down it blocks forever. asynq does not offer it. Having to
 write down where the result goes is the better default.
@@ -115,9 +118,11 @@ Without that, a failed job is a log line and the work is lost.
 | selects on `ctx.Done()` | returns at the deadline with `context.DeadlineExceeded` |
 | does not | asynq reports it timed out, and the goroutine keeps running |
 
-The second is the one to understand. asynq marks the task failed at its deadline and **retries it elsewhere**,
-while the original goroutine still holds a worker slot and still does the work. So the work happens twice and
-the concurrency limit is quietly one lower than configured.
+The second is the one to understand. asynq marks the task failed at its deadline and **retries it**, while the
+original goroutine carries on and still does the work. So the work happens twice. And asynq has already given
+the slot back: its bookkeeping goroutine releases the concurrency token at the deadline, while the handler's
+goroutine keeps running, so the process is quietly running MORE tasks than its concurrency limit, not fewer. An
+earlier version of this paragraph said the limit drops by one; asynq's `processor.exec` does the opposite.
 
 A long handler has to check its context between chunks. `ReportBuild` in this module does, and reports how far
 it got.

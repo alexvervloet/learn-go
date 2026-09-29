@@ -4,8 +4,8 @@
 //
 // The Python mirror of this module uses Celery, which is a framework: a decorator makes a function a task, a
 // separate process runs the worker, and the result comes back through a "result backend". asynq is a library:
-// a task is a name and a JSON payload, a worker is a `asynq.Server` you start in your own binary, and there is
-// no result backend at all.
+// a task is a name and a JSON payload, and a worker is a `asynq.Server` you start in your own binary. asynq can
+// store a result (Task.ResultWriter, kept for the task's Retention), but it has no blocking wait for one.
 //
 // That last difference is the important one. Celery lets you write `result = add.delay(2, 2); result.get()`,
 // which looks like a function call and is a distributed system pretending to be one: it blocks a web worker on
@@ -19,8 +19,9 @@
 //	               running yesterday's code, and that is a schema problem with no schema.
 //	RETRIES        a job that fails is retried, so every handler must be idempotent. The same rule
 //	               as at-least-once delivery in messaging, for the same reason.
-//	TIMEOUTS       a handler that hangs holds a worker slot forever. asynq gives each task a
-//	               deadline through the context, and a handler that ignores it is unkillable.
+//	TIMEOUTS       a handler that hangs keeps a goroutine busy forever. asynq gives each task a
+//	               deadline through the context, and a handler that ignores it is unkillable:
+//	               asynq frees the slot and retries, and the old goroutine runs on regardless.
 //	VISIBILITY     a queue with no dashboard is a queue nobody knows the depth of. asynq's Inspector
 //	               is the API behind its web UI and it is what a test uses to assert on state.
 //
@@ -28,7 +29,8 @@
 //
 // At-least-once, by the same mechanism as everything else that says so: a task is moved to an "active" set when
 // a worker picks it up and removed when the handler returns nil. A worker that dies mid-task leaves it in the
-// active set, and asynq's recovery moves it back to pending after a lease expires.
+// active set, and after its lease expires asynq's recoverer retries it (or archives it, out of retries). It
+// counts as a failed attempt, not a return to pending, so a crash costs a retry.
 //
 // So a handler that runs twice is normal traffic, not an incident.
 package tasks

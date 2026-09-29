@@ -368,8 +368,10 @@ type ServerConfig struct {
 	// strict priority, which is what stops the low queue starving forever.
 	Queues map[string]int
 
-	// ShutdownTimeout is how long a graceful stop waits for in-flight tasks. Past it they are left
-	// in the active set and recovered by the lease expiry, which means they RUN AGAIN.
+	// ShutdownTimeout is how long a graceful stop waits for in-flight tasks. Past it asynq requeues
+	// them straight away, back to pending, which means they RUN AGAIN, on the next worker to pick
+	// them up. (An earlier version said they wait for the lease to expire; the processor requeues
+	// on abort.)
 	ShutdownTimeout time.Duration
 
 	// HealthCheckInterval and its handler are how a worker reports that it cannot reach Redis. A
@@ -382,8 +384,10 @@ type ServerConfig struct {
 	// now ran at 5s". It is a poll, not a timer: nothing wakes up when a task becomes due, a
 	// forwarder checks on an interval.
 	//
-	// So "schedule" means "not before", never "at", and a queue whose tasks are latency-sensitive
-	// needs this lowered, at the cost of a Redis round trip per interval per worker.
+	// So "schedule" means "some time after it becomes due", never "at". And "due" is itself rounded:
+	// asynq stores the time in whole seconds, so a task can become due up to a second EARLY (see
+	// TestScheduledTasksRunLater). A queue whose tasks are latency-sensitive needs this lowered, at
+	// the cost of a Redis round trip per interval per worker.
 	DelayedTaskCheckInterval time.Duration
 
 	// RetryDelay overrides the backoff. Nil uses asynq's default, which is exponential with jitter

@@ -327,8 +327,8 @@ func TestTimeoutStopsAHandlerThatChecks(t *testing.T) {
 		}
 
 		t.Log("asynq reported the task as timed out at 1s and the goroutine ran for 3s. A " +
-			"handler that does not check its context is unkillable: the worker slot is " +
-			"occupied, the task is retried elsewhere, and the work happens twice.")
+			"handler that does not check its context is unkillable: asynq frees the slot and " +
+			"retries the task, the old goroutine runs on, and the work happens twice.")
 	})
 
 	_ = inspector

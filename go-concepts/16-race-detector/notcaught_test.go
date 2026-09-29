@@ -1,7 +1,8 @@
 package main
 
 import (
-	"strings"
+	"runtime"
+	"sync"
 	"testing"
 	"time"
 )
@@ -91,10 +92,30 @@ func TestNotCaughtDocsArePresent(t *testing.T) {
 	}
 }
 
-func TestCostsMentionTheGoroutineLimit(t *testing.T) {
-	limit := costs()["goroutines"]
+// TestNoGoroutineLimitUnderRace checks the claim in the costs table by doing it: 10,000 goroutines alive at
+// once. Under -race before Go 1.19 this died with "race: limit on 8128 simultaneously alive goroutines is
+// exceeded". The test it replaces asserted that the table said "8192", which enforced the old limit as a fact
+// long after the limit was gone.
+func TestNoGoroutineLimitUnderRace(t *testing.T) {
+	const n = 10_000
 
-	if !strings.Contains(limit, "8192") {
-		t.Errorf("the goroutine limit should be documented, got %q", limit)
+	release := make(chan struct{})
+
+	var started, done sync.WaitGroup
+
+	started.Add(n)
+
+	for range n {
+		done.Go(func() {
+			started.Done()
+			<-release
+		})
 	}
+
+	started.Wait()
+
+	t.Logf("%d goroutines alive at once, race detector %t", runtime.NumGoroutine(), raceDetectorEnabled)
+
+	close(release)
+	done.Wait()
 }

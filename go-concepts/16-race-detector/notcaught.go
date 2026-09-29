@@ -206,7 +206,7 @@ func costs() map[string]string {
 	return map[string]string{
 		"CPU":        "2-20x slower",
 		"memory":     "5-10x more",
-		"goroutines": "limited to 8192 simultaneously",
+		"goroutines": "no fixed limit since Go 1.19; before that about 8,000 could be alive at once",
 		"production": "usually no; one canary instance is a real technique for an unreproducible race",
 	}
 }

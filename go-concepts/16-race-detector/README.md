@@ -85,7 +85,7 @@ helper that takes a func and starts it. Look one frame past the helper. A bare
 |---|---|
 | CPU | 2-20x slower |
 | Memory | 5-10x more |
-| Goroutines | limited to 8192 simultaneously |
+| Goroutines | No fixed limit since Go 1.19. Before that, about 8,000 alive at once, which is why older advice warns about it. `TestNoGoroutineLimitUnderRace` keeps 10,000 alive under `-race` |
 
 So it is a testing tool, not a production one, though running one canary
 instance with `-race` is a real technique for a race that will not reproduce.

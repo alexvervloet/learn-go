@@ -82,14 +82,21 @@ func ParseTraceparent(header string) (SpanContext, error) {
 
 	parts := strings.Split(header, "-")
 
-	// At least four fields. MORE than four is allowed, because a future version may append, and a
-	// parser that requires exactly four rejects every version after 00.
+	// At least four fields. MORE than four is allowed for a version after 00, because a future version
+	// may append, and a parser that requires exactly four rejects every version after 00. Version 00
+	// itself is exactly four; the W3C spec says a 00 header with more is invalid, and the first
+	// version of this parser accepted it.
 	if len(parts) < 4 {
 		return SpanContext{}, fmt.Errorf("%w: %d fields, want at least 4",
 			ErrBadTraceparent, len(parts))
 	}
 
 	version, traceID, spanID, flags := parts[0], parts[1], parts[2], parts[3]
+
+	if version == "00" && len(parts) != 4 {
+		return SpanContext{}, fmt.Errorf("%w: version 00 has exactly 4 fields, got %d",
+			ErrBadTraceparent, len(parts))
+	}
 
 	if len(version) != 2 {
 		return SpanContext{}, fmt.Errorf("%w: version %q is not two hex digits",

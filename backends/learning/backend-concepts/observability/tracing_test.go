@@ -393,3 +393,15 @@ func TestAClientCannotTurnOnDebugLogging(t *testing.T) {
 		t.Error("a trusted caller's sampled flag was ignored")
 	}
 }
+
+// TestVersion00HasExactlyFourFields: extra fields are allowed only for versions after 00.
+func TestVersion00HasExactlyFourFields(t *testing.T) {
+	const ok = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+
+	if _, err := ParseTraceparent(ok + "-extra"); !errors.Is(err, ErrBadTraceparent) {
+		t.Errorf("a version 00 header with five fields: err = %v, want ErrBadTraceparent", err)
+	}
+	if _, err := ParseTraceparent("01" + ok[2:] + "-extra"); err != nil {
+		t.Errorf("a version 01 header with five fields was rejected: %v", err)
+	}
+}

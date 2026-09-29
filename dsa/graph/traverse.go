@@ -101,8 +101,13 @@ func (g *Graph[V]) BFSLevels(start V) iter.Seq2[int, []V] {
 // test expectation.
 //
 // The visited mark goes on at POP time here, not at push time, which is the
-// opposite of BFS. A node can be pushed several times before it is popped, and
-// checking on pop is what keeps the first path to reach it winning.
+// opposite of BFS. A node can be pushed several times before it is popped, and a
+// stack pops the most recent push first, so the LAST path to reach a node is the
+// one that visits it. That is exactly what recursive DFS does: it follows the
+// newest edge as deep as it goes before coming back. Marking at push time would
+// let the first path win and give an order no recursive DFS produces. (An
+// earlier version of this comment said checking on pop keeps the first path
+// winning, which is backwards.)
 func (g *Graph[V]) DFS(start V) iter.Seq[V] {
 	return func(yield func(V) bool) {
 		if !g.Has(start) {

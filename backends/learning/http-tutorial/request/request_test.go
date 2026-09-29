@@ -720,3 +720,19 @@ func TestParseFormCapsTheWholeBody(t *testing.T) {
 		t.Errorf("malformed form: err = %v, want ErrBadForm and not ErrBadJSON", err)
 	}
 }
+
+// TestSplitHostPortHandlesIPv6: the first version cut at the last colon, which for "[::1]" is inside the
+// brackets, and returned ":" as the host.
+func TestSplitHostPortHandlesIPv6(t *testing.T) {
+	for addr, want := range map[string]string{
+		"203.0.113.7:443":   "203.0.113.7",
+		"203.0.113.7":       "203.0.113.7",
+		"[2001:db8::1]:443": "2001:db8::1",
+		"[::1]":             "::1",
+		"::1":               "::1",
+	} {
+		if host, _, err := splitHostPort(addr); err != nil || host != want {
+			t.Errorf("splitHostPort(%q) = %q, %v; want %q", addr, host, err, want)
+		}
+	}
+}

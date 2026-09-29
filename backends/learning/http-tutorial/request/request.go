@@ -42,6 +42,7 @@ import (
 	"io"
 	"mime"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -587,15 +588,13 @@ func SafeFilename(name string) (string, bool) {
 
 // splitHostPort is net.SplitHostPort, wrapped so a missing port is not an error.
 func splitHostPort(addr string) (string, string, error) {
-	i := strings.LastIndex(addr, ":")
-	if i < 0 {
-		return addr, "", nil
+	// net.SplitHostPort handles brackets and IPv6 properly, and rejects an address without a
+	// port, which is the one case this needs to accept. The first version cut at the last colon
+	// by hand and returned ":" as the host of "[::1]".
+	if host, port, err := net.SplitHostPort(addr); err == nil {
+		return host, port, nil
 	}
 
-	// An IPv6 address without a port looks like "::1", so a bracket check is needed.
-	if strings.Contains(addr[:i], ":") && !strings.HasPrefix(addr, "[") {
-		return addr, "", nil
-	}
-
-	return strings.TrimSuffix(strings.TrimPrefix(addr[:i], "["), "]"), addr[i+1:], nil
+	// No port: "1.2.3.4", "::1" or "[::1]".
+	return strings.TrimSuffix(strings.TrimPrefix(addr, "["), "]"), "", nil
 }

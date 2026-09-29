@@ -12,7 +12,7 @@ package main
 import (
 	_ "embed"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -230,7 +230,7 @@ func demoGoMod() {
 	for k := range byKind {
 		kinds = append(kinds, k)
 	}
-	sort.Strings(kinds)
+	slices.Sort(kinds)
 
 	fmt.Printf("  a realistic go.mod, parsed (%d directives):\n", len(directives))
 	for _, kind := range kinds {

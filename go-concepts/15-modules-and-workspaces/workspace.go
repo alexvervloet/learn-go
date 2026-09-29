@@ -6,7 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -134,7 +134,7 @@ func listWorkspaceModules() (modules []string, err error) {
 		}
 	}
 
-	sort.Strings(modules)
+	slices.Sort(modules)
 	return modules, nil
 }
 
@@ -269,7 +269,7 @@ func demoWorkspace() {
 	for k := range guidance {
 		keys = append(keys, k)
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	for _, k := range keys {
 		fmt.Printf("    %-36s %s\n", k, guidance[k])
 	}

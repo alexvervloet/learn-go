@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"runtime"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -51,7 +51,7 @@ func walkEmbedded() (files []string, totalBytes int64, err error) {
 		return nil, 0, fmt.Errorf("walk: %w", err)
 	}
 
-	sort.Strings(files)
+	slices.Sort(files)
 	return files, totalBytes, nil
 }
 

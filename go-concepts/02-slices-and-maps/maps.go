@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -115,7 +115,7 @@ func deterministicOrder(m map[string]int) []string {
 	for k := range m {
 		keys = append(keys, k)
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	return keys
 }
 
@@ -143,7 +143,7 @@ func (s Set) Sorted() []string {
 	for k := range s {
 		out = append(out, k)
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 

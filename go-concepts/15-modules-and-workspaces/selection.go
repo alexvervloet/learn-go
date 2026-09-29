@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -226,7 +226,7 @@ func demoSelection() {
 	for m := range mvs {
 		modules = append(modules, m)
 	}
-	sort.Strings(modules)
+	slices.Sort(modules)
 
 	fmt.Printf("\n    %-10s %-24s %s\n", "MODULE", "GO (minimal selection)", "NEWEST-WINS")
 	for _, m := range modules {
@@ -244,7 +244,7 @@ func demoSelection() {
 		}
 		parsed = append(parsed, v)
 	}
-	sort.Slice(parsed, func(i, j int) bool { return parsed[i].Compare(parsed[j]) < 0 })
+	slices.SortFunc(parsed, Version.Compare)
 
 	rendered := make([]string, 0, len(parsed))
 	for _, v := range parsed {

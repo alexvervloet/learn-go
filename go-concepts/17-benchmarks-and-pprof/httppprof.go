@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/http/pprof"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -245,7 +245,7 @@ func demoHTTPPprof() {
 	for k := range endpointReference() {
 		keys = append(keys, k)
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	for _, k := range keys {
 		fmt.Printf("    %-32s %s\n", k, endpointReference()[k])
 	}

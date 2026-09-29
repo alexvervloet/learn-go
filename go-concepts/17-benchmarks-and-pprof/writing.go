@@ -15,7 +15,7 @@ package main
 
 import (
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -119,8 +119,7 @@ func searchLinear(values []int, target int) int {
 // searchBinary is O(log n) and requires sorted input, which is the trade every
 // "use a better algorithm" decision actually is.
 func searchBinary(sorted []int, target int) int {
-	i := sort.SearchInts(sorted, target)
-	if i < len(sorted) && sorted[i] == target {
+	if i, found := slices.BinarySearch(sorted, target); found {
 		return i
 	}
 	return -1

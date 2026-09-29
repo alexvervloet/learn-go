@@ -1,12 +1,13 @@
 package main
 
 import (
+	"cmp"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -116,7 +117,7 @@ func decisionsFor(decisions []EscapeDecision, file string) []EscapeDecision {
 		}
 	}
 
-	sort.Slice(out, func(i, j int) bool { return out[i].Line < out[j].Line })
+	slices.SortFunc(out, func(a, b EscapeDecision) int { return cmp.Compare(a.Line, b.Line) })
 	return out
 }
 

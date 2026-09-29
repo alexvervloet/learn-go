@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"sort"
+	"slices"
 )
 
 // The commands worth knowing
@@ -213,7 +213,7 @@ func demoCommands() {
 	for g := range byModification {
 		groups = append(groups, g)
 	}
-	sort.Strings(groups)
+	slices.Sort(groups)
 
 	for _, g := range groups {
 		fmt.Printf("\n    %s:\n", g)
@@ -228,7 +228,7 @@ func demoCommands() {
 	for k := range env {
 		keys = append(keys, k)
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	for _, k := range keys {
 		fmt.Printf("    %-12s %s\n", k, env[k])
 	}

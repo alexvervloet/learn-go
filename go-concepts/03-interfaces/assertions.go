@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -58,7 +58,7 @@ func describeJSON(v any) string {
 		for k := range x {
 			keys = append(keys, k)
 		}
-		sort.Strings(keys)
+		slices.Sort(keys)
 
 		parts := make([]string, 0, len(keys))
 		for _, k := range keys {

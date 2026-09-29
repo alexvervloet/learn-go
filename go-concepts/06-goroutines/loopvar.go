@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"sort"
+	"slices"
 	"sync"
 )
 
@@ -48,7 +48,7 @@ func eachIterationHasItsOwnVariable(n int) []int {
 	}
 
 	wg.Wait()
-	sort.Ints(out) // goroutines finish in any order; sort for a stable assertion
+	slices.Sort(out) // goroutines finish in any order; sort for a stable assertion
 	return out
 }
 
@@ -79,7 +79,7 @@ func theOldWorkaroundIsNowRedundant(n int) []int {
 	}
 
 	wg.Wait()
-	sort.Ints(out)
+	slices.Sort(out)
 	return out
 }
 
@@ -114,7 +114,7 @@ func simulateOldBehaviour(n int) []int {
 
 	close(ready)
 	wg.Wait()
-	sort.Ints(out)
+	slices.Sort(out)
 	return out
 }
 
@@ -139,7 +139,7 @@ func rangeOverSliceToo(items []string) []string {
 	}
 
 	wg.Wait()
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 

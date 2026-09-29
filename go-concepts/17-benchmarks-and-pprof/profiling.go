@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/pprof"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -190,7 +190,7 @@ func burnCPU(iterations int) int {
 		for j := range 8 {
 			parts = append(parts, strings.Repeat("x", j+1))
 		}
-		sort.Strings(parts)
+		slices.Sort(parts)
 		total += len(strings.Join(parts, "-"))
 	}
 	return total

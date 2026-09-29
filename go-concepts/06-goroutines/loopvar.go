@@ -85,7 +85,12 @@ func theOldWorkaroundIsNowRedundant(n int) []int {
 
 // simulateOldBehaviour shows what the pre-1.22 bug produced, using a shared
 // variable explicitly. This is the shape the old loop desugared to, and the
-// reason the output was "3 3 3": one variable, read late by everyone.
+// reason the output was "3 3 3" for n = 3: one variable, read late by
+// everyone, after the final i++ had taken it to n.
+//
+// The loop variable itself is the shared variable, so it ends at n exactly as
+// the old loop's did. An earlier version assigned `shared = i` inside the body,
+// which stops one short and produced n-1, contradicting this comment.
 func simulateOldBehaviour(n int) []int {
 	var (
 		mu     sync.Mutex
@@ -95,8 +100,7 @@ func simulateOldBehaviour(n int) []int {
 		ready  = make(chan struct{})
 	)
 
-	for i := 0; i < n; i++ {
-		shared = i
+	for shared = 0; shared < n; shared++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

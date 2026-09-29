@@ -46,10 +46,11 @@ func TestSimulateOldBehaviour(t *testing.T) {
 	if len(got) != n {
 		t.Fatalf("got %d values, want %d", len(got), n)
 	}
-	// All n goroutines read the same final value, n-1.
+	// All n goroutines read the same final value, n: the value the loop variable holds after the last i++,
+	// which is why the classic pre-1.22 program printed "3 3 3" and not "2 2 2".
 	for i, v := range got {
-		if v != n-1 {
-			t.Errorf("value %d = %d, want %d — every goroutine should read the last write", i, v, n-1)
+		if v != n {
+			t.Errorf("value %d = %d, want %d: every goroutine should read the variable after the loop ended", i, v, n)
 		}
 	}
 }

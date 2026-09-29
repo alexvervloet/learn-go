@@ -13,14 +13,16 @@ CREATE EXTENSION IF NOT EXISTS vector;
 
 -- Embeddings for the books, one row per book.
 --
--- A separate table rather than a column on books, and the reason is storage. A vector(384) is 384 * 4 +
--- 8 = 1544 bytes, which is larger than the whole rest of a book row. Postgres moves anything over about
--- 2 KB to TOAST storage, and a column that pushes the row over that line makes every query on the table
--- pay for it. Keeping the vectors in their own table means "list the books" never touches them.
+-- A separate table rather than a column on books, and the reason is ROW WIDTH. A vector(384) is 384 * 4 +
+-- 8 = 1544 bytes, larger than the whole rest of a book row. It is under the ~2 KB TOAST threshold, so it
+-- is stored inline (pg_column_size says 1544, and the TOAST table stays empty), which means a books row
+-- carrying it would be several times wider: fewer rows per 8 KB page, and every scan of books reads that
+-- many more pages. In their own table, "list the books" never reads a vector. (An earlier version of this
+-- comment gave TOAST as the reason. At 384 dimensions TOAST never happens; at 1536, it would.)
 --
 -- 384 dimensions because that is what all-MiniLM-L6-v2 produces, which is the model most people reach
 -- for first. OpenAI's text-embedding-3-small is 1536, and the arithmetic scales: 10,000 rows at 1536
--- dimensions is 62 MB of vectors before any index.
+-- dimensions is about 62 MB (59 MiB) of vectors before any index.
 CREATE TABLE book_embeddings (
     book_id   bigint PRIMARY KEY REFERENCES books(id) ON DELETE CASCADE,
     embedding vector(384) NOT NULL,

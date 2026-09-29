@@ -253,8 +253,11 @@ above.
 a vector column before the data exists.
 
 Storage arithmetic, which is just multiplication and still surprises people: 10,000 `vector(384)` rows are
-31.7 MB, which is **11.1x** the size of the books they describe. At 1,536 dimensions the same 10,000 rows
-would be 59 MB of vectors alone.
+16.6 MB, which is **5.9x** the size of the books they describe. At 1,536 dimensions the same 10,000 rows
+would be about 62 MB (59 MiB) of vectors alone.
+
+Measure after `VACUUM FULL`, or the number includes dead rows. This paragraph first said 31.7 MB and 11.1x,
+measured on a table that repeated test runs had rewritten: half of it was dead tuples.
 
 ### The connection pool
 

@@ -2,7 +2,9 @@ package nplusone
 
 import (
 	"context"
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/alexvervloet/learn-go/backends/learning/database-concepts/dbtest"
 	"github.com/alexvervloet/learn-go/backends/learning/database-concepts/indexes"
@@ -47,8 +49,17 @@ func TestGenericPlanRegression(t *testing.T) {
 
 	// PREPARE by hand rather than relying on pgx's cache, because the point is to control which
 	// plan is used and read both.
+	//
+	// A prepared statement belongs to the SESSION, not the transaction: rolling the transaction back
+	// does not remove it, and the pooled connection carries it into whatever runs next. The first
+	// version used a fixed name, so `go test -count=2` failed the second time with 42P05 ("prepared
+	// statement already exists"). So the name is unique per run, and cleanup deallocates it. The
+	// cleanup is registered after dbtest.Tx's, so it runs first, while the transaction is still open.
+	name := "authors_with_books_" + strconv.FormatInt(time.Now().UnixNano(), 36)
+	t.Cleanup(func() { _, _ = tx.Exec(ctx, "DEALLOCATE "+name) })
+
 	if _, err := tx.Exec(ctx, `
-		PREPARE authors_with_books (int) AS
+		PREPARE `+name+` (int) AS
 		SELECT a.id, a.name, b.id, b.title, b.price_cents
 		  FROM (SELECT id, name FROM authors ORDER BY id LIMIT $1) a
 		  LEFT JOIN books b ON b.author_id = a.id
@@ -67,7 +78,7 @@ func TestGenericPlanRegression(t *testing.T) {
 
 		// Explain lives in the indexes package, which is where reading a plan is the
 		// subject. Reusing it here is the whole reason it takes a Querier.
-		a, err := indexes.Explain(ctx, tx, "EXECUTE authors_with_books(1)")
+		a, err := indexes.Explain(ctx, tx, "EXECUTE "+name+"(1)")
 		if err != nil {
 			t.Fatalf("explaining with %s: %v", mode, err)
 		}

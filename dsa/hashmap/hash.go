@@ -63,11 +63,16 @@ type Spread struct {
 	Worst      int // keys in the most crowded slot
 	Collisions int // keys that landed on an already-used slot
 
-	// ChiSquare is the raw crowding score: the sum over slots of
-	// count*(count+1)/2, which is the number of probes a linear-probing table
-	// would pay to insert every key. Compare it against Expected, not against
-	// any absolute number.
-	ChiSquare float64
+	// Score is the raw crowding score: the sum over slots of count*(count+1)/2.
+	// That is how many comparisons it takes to find every key once if each slot
+	// kept its keys in a list (separate chaining). A linear-probing table pays
+	// more than this, because one slot's overflow runs into its neighbours.
+	// Compare it against Expected, not against any absolute number.
+	//
+	// It is the hash-quality measure from the compiler textbooks. An earlier
+	// version called it ChiSquare, which it is not, though it is used the same
+	// way: as a ratio against what a random hash would score.
+	Score float64
 }
 
 // Expected is the crowding score a uniformly random hash would produce for this
@@ -80,7 +85,7 @@ func (s Spread) Expected() float64 {
 	return n / (2 * m) * (n + 2*m - 1)
 }
 
-// Ratio reports ChiSquare against Expected. A hash indistinguishable from random
+// Ratio reports Score against Expected. A hash indistinguishable from random
 // scores about 1.0. Well under or over is suspicious; SumBytes scores in the
 // hundreds because its keys pile into a handful of slots.
 func (s Spread) Ratio() float64 {
@@ -88,7 +93,7 @@ func (s Spread) Ratio() float64 {
 	if expected == 0 {
 		return 0
 	}
-	return s.ChiSquare / expected
+	return s.Score / expected
 }
 
 // Measure buckets keys by hash and reports how evenly they fell.
@@ -126,7 +131,7 @@ func Measure(hash func(string) uint64, keys []string, slots int) Spread {
 		Keys:       len(keys),
 		Used:       used,
 		Worst:      worst,
-		ChiSquare:  sum,
+		Score:      sum,
 		Collisions: collisions,
 	}
 }

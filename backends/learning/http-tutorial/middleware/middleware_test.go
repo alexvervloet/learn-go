@@ -453,7 +453,7 @@ func TestWrapperKeepsFlush(t *testing.T) {
 func TestProductionStreams(t *testing.T) {
 	read := make(chan struct{})
 
-	srv := httptest.NewServer(Production(discardLogger())(http.HandlerFunc(
+	srv := httptest.NewServer(Production(discardLogger(), false)(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/x-ndjson")
 
@@ -513,7 +513,7 @@ func TestProductionStreams(t *testing.T) {
 // TestProductionCanHijack is the WebSocket half. An upgrade takes over the connection with Hijack, and a
 // wrapper that hides http.Hijacker makes every upgrade fail with "not supported" through this chain.
 func TestProductionCanHijack(t *testing.T) {
-	srv := httptest.NewServer(Production(discardLogger())(http.HandlerFunc(
+	srv := httptest.NewServer(Production(discardLogger(), false)(http.HandlerFunc(
 		func(w http.ResponseWriter, _ *http.Request) {
 			conn, buf, err := http.NewResponseController(w).Hijack()
 			if err != nil {
@@ -850,4 +850,30 @@ func TestRealIPTakesTheRightmostEntry(t *testing.T) {
 			t.Errorf("RemoteAddr = %q, want the peer address", seen)
 		}
 	})
+}
+
+// TestProductionTrustsProxyHeadersOnlyWhenTold: a client talking to the server directly can send any
+// X-Forwarded-For it likes. The first version of Production passed RealIP(true) unconditionally, so every
+// deployment of it let clients choose the address it logged and rate-limited by.
+func TestProductionTrustsProxyHeadersOnlyWhenTold(t *testing.T) {
+	var seen string
+
+	handler := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) { seen = r.RemoteAddr })
+
+	req := func() *http.Request {
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
+		r.RemoteAddr = "203.0.113.7:51234"
+		r.Header.Set("X-Forwarded-For", "1.2.3.4, 198.51.100.9")
+		return r
+	}
+
+	Production(discardLogger(), false)(handler).ServeHTTP(httptest.NewRecorder(), req())
+	if seen != "203.0.113.7:51234" {
+		t.Errorf("untrusted: RemoteAddr = %q; the forged header was believed", seen)
+	}
+
+	Production(discardLogger(), true)(handler).ServeHTTP(httptest.NewRecorder(), req())
+	if seen != "198.51.100.9" {
+		t.Errorf("trusted: RemoteAddr = %q, want the rightmost entry, the one the proxy added", seen)
+	}
 }

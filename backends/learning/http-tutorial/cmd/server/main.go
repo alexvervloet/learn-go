@@ -56,7 +56,12 @@ func run() error {
 		panic("deliberate, to show the recovery middleware")
 	}))
 
-	handler := middleware.Production(log)(mux)
+	// Proxy headers are trusted only when a deployment says it sits behind a proxy
+	// that sets them. This server is usually run directly, where any client could
+	// write its own X-Forwarded-For.
+	trustProxy := os.Getenv("TRUST_PROXY_HEADERS") == "true"
+
+	handler := middleware.Production(log, trustProxy)(mux)
 
 	cfg := server.Default(addr)
 	srv := server.New(cfg, handler, log)

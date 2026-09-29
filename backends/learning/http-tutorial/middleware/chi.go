@@ -60,7 +60,10 @@ import (
 // The order is the argument:
 //
 //  1. RealIP        before anything that logs or rate-limits by address. THIS
-//     package's, not chi's, which is deprecated as IP-spoofable
+//     package's, not chi's, which is deprecated as IP-spoofable. Whether to
+//     trust the proxy headers is the caller's decision, and the only safe
+//     default is no: a server reachable directly lets any client write its
+//     own X-Forwarded-For. The first version passed true unconditionally
 //  2. RequestID     before logging, so the line has an ID
 //  3. Logger        outside Recovery, so a panicking request still gets a request line
 //  4. Recovery      outside the handler
@@ -68,9 +71,9 @@ import (
 //  6. SecureHeaders anywhere before the handler writes
 //  7. Compress      innermost of the response-touching ones, so it wraps the smallest set
 //  8. Timeout       innermost, so it bounds only the handler
-func Production(log *slog.Logger) Middleware {
+func Production(log *slog.Logger, trustProxyHeaders bool) Middleware {
 	return Chain(
-		RealIP(true),
+		RealIP(trustProxyHeaders),
 		RequestID,
 		Logger(log),
 		Recovery(log),

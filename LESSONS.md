@@ -89,6 +89,7 @@ the index below groups them by topic.
 - [One rate-limit bucket per path is two limits that together allow twice the traffic](#one-rate-limit-bucket-per-path-is-two-limits-that-together-allow-twice-the-traffic)
 - [A 300ms JWT TTL is zero about 70% of the time and one second the rest](#a-300ms-jwt-ttl-is-zero-about-70-of-the-time-and-one-second-the-rest)
 - [ParseMultipartForm swallows the error of the parser it calls first](#parsemultipartform-swallows-the-error-of-the-parser-it-calls-first)
+- [r.Pattern is readable after the handler, until a middleware sits in between](#rpattern-is-readable-after-the-handler-until-a-middleware-sits-in-between)
 
 **gRPC, GraphQL, jobs, email and Docker.**
 
@@ -2505,3 +2506,19 @@ all along, and no test had tried one.
 **Next time.** Don't use one parser's failure to decide to call another parser that shares its state. Decide from
 the input: here, `mime.ParseMediaType` on the Content-Type picks the one parser that runs. And a test of the
 error path needs input that really is malformed, because the happy path can't reveal an error that was swallowed.
+
+## r.Pattern is readable after the handler, until a middleware sits in between
+
+**Expected.** An audit said the metrics middleware's `CaptureRoute` workaround was unnecessary: its comment
+claimed `http.ServeMux` passes a cloned request so an outer middleware never sees `r.Pattern`, and a scratch
+program showed the mux sets `Pattern` on the request it receives. I deleted the holder and read `r.Pattern`
+after `next.ServeHTTP`.
+
+**What happened.** `TestFullStackMiddleware` failed with every metric labelled "unmatched". In that stack a
+request-ID middleware sits between metrics and the mux and calls `r.WithContext`, so the mux fills in a copy.
+The comment's reason was wrong and its conclusion was right. The scratch program had the metrics middleware
+wrapping the mux directly, and real stacks almost never look like that.
+
+**Next time.** When a check contradicts a design decision, test it in the shape the code is actually used in,
+not a minimal reproduction. Before deleting a workaround, run the tests that exercise the full stack. Here the
+fix was one comment, and the workaround stayed.

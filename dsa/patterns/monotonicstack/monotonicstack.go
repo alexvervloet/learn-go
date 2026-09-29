@@ -12,10 +12,15 @@
 // indices monotonic. When a new element arrives, it is the answer for everything on the
 // stack that it beats, so pop those and record it.
 //
+//	index    0  1  2  3  4
 //	values   2  1  2  4  3
-//	stack    [0]                      2 is unresolved
-//	         [0,1]                    1 is smaller, so 2 is still unresolved
-//	         4 arrives: it beats 2 at index 1 and 2 at index 0, so both pop
+//
+//	i=0  2 arrives   stack [0]      nothing to beat
+//	i=1  1 arrives   stack [0 1]    smaller than 2, so it waits too
+//	i=2  2 arrives   stack [0 2]    beats the 1 at index 1, which pops: its answer is index 2.
+//	                                Ties do not beat, so the 2 at index 0 stays
+//	i=3  4 arrives   stack [3]      beats the 2 at index 2 and the 2 at index 0: both pop
+//	i=4  3 arrives   stack [3 4]    smaller than 4; indices 3 and 4 end with no answer
 //
 // The invariant that makes it work: an index on the stack has not yet met anything that
 // beats it, and the values on the stack are ordered, so the first element that beats the top
@@ -38,8 +43,9 @@
 //	next GREATER   keep values DECREASING, pop when the new value is larger
 //	next SMALLER   keep values INCREASING, pop when the new value is smaller
 //
-// All four combinations are here, generated from one implementation, so the relationship is
-// visible rather than four near-identical functions to compare by eye.
+// All four directions are here, plus or-equal variants of two of them (a tie counts as a
+// beat), six functions generated from one implementation, so the relationship is visible
+// rather than six near-identical functions to compare by eye.
 package monotonicstack
 
 import "cmp"

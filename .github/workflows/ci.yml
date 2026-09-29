@@ -94,7 +94,18 @@ jobs:
         run: make isolated-check
 
   # ---------------------------------------------------------------------------
-  # Test — matrix across the two supported Go versions and both major OSes.
+  # Test — matrix across the three major OSes, on the one Go version the repo
+  # supports.
+  #
+  # One version, not two. Every go.mod says go 1.27, and since Go 1.21 that
+  # line is a minimum toolchain: an older go command downloads 1.27 and
+  # re-executes itself (GOTOOLCHAIN=auto, setup-go@v5's default). This matrix
+  # used to have a "Go 1.26" leg, and its log said "go: downloading go1.27.1"
+  # on every run. It tested 1.27 twice under two names. Testing an older Go for
+  # real would mean lowering every go line and setting GOTOOLCHAIN=local, and
+  # the lessons use 1.27 features, so the repo supports 1.27 and says so.
+  #
+  # The version stays a matrix axis so the job names keep their shape.
   #
   # fail-fast: false so a failure on one combination does not hide the others.
   # Windows is in the matrix because path handling and file permissions are
@@ -107,13 +118,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        go: ["1.26", "1.27"]
+        go: ["1.27"]
         os: [ubuntu-latest, macos-latest, windows-latest]
-        # Windows on the older Go adds runner minutes without adding coverage:
-        # anything it would catch, one of the other five combinations catches.
-        exclude:
-          - os: windows-latest
-            go: "1.26"
 
     steps:
       - uses: actions/checkout@v4

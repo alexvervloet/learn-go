@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -591,5 +592,29 @@ func assertGolden(t *testing.T, name string, got []byte) {
 
 	if string(got) != string(want) {
 		t.Errorf("%s differs:\n--- want\n%s\n--- got\n%s", path, want, got)
+	}
+}
+
+// TestRecordingTransportLeavesTheRequestAlone: a RoundTripper may consume and close the body and nothing else.
+// The first version replaced r.Body on the caller's request with a fresh reader.
+func TestRecordingTransportLeavesTheRequestAlone(t *testing.T) {
+	tr := &RecordingTransport{}
+
+	req := httptest.NewRequest(http.MethodPost, "http://api.example/things", strings.NewReader(`{"a":1}`))
+	original := req.Body
+
+	resp, err := tr.RoundTrip(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+
+	if req.Body != original {
+		t.Error("RoundTrip replaced the caller's request body")
+	}
+
+	got, _ := io.ReadAll(tr.Requests()[0].Body)
+	if string(got) != `{"a":1}` {
+		t.Errorf("recorded body %q", got)
 	}
 }

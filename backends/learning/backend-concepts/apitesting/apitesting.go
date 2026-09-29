@@ -287,9 +287,11 @@ type RecordingTransport struct {
 
 // RoundTrip implements http.RoundTripper.
 func (t *RecordingTransport) RoundTrip(r *http.Request) (*http.Response, error) {
-	// The body has to be read here and put back, because a RoundTripper receives a stream that the
-	// caller will not be able to read again. A recorder that stores the request without its body
-	// records the half nobody needed.
+	// The http.RoundTripper contract allows exactly two things to be done to the request: consume its
+	// body and close it. Nothing else, including putting a new body back. The first version did put one
+	// back, on the caller's request. So the body is read and closed here, and what gets recorded, and
+	// what Respond sees, is a CLONE with its own copy of the bytes. A recorder that stores the request
+	// without its body records the half nobody needed.
 	var body []byte
 
 	if r.Body != nil {
@@ -301,12 +303,16 @@ func (t *RecordingTransport) RoundTrip(r *http.Request) (*http.Response, error) 
 		}
 
 		_ = r.Body.Close()
+	}
 
-		r.Body = io.NopCloser(bytes.NewReader(body))
+	recorded := func() *http.Request {
+		c := r.Clone(r.Context())
+		c.Body = io.NopCloser(bytes.NewReader(body))
+		return c
 	}
 
 	t.mu.Lock()
-	t.requests = append(t.requests, r.Clone(r.Context()))
+	t.requests = append(t.requests, recorded())
 	t.bodies = append(t.bodies, body)
 	t.mu.Unlock()
 
@@ -319,7 +325,7 @@ func (t *RecordingTransport) RoundTrip(r *http.Request) (*http.Response, error) 
 		}, nil
 	}
 
-	return t.Respond(r)
+	return t.Respond(recorded())
 }
 
 // Requests returns what was sent.

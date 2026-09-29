@@ -14,6 +14,7 @@ package apitest
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -318,13 +319,55 @@ func RedisClient(t testing.TB) *redis.Client {
 			RedisAddr(), err, ComposeRedisAddr)
 	}
 
-	if err := client.FlushDB(ctx).Err(); err != nil {
-		t.Fatalf("flush redis: %v", err)
+	if err := flushOwned(ctx, client); err != nil {
+		_ = client.Close()
+
+		t.Fatalf("%v\n"+
+			"  point REDIS_ADDR at a Redis you don't mind emptying (docker compose up -d serves one on\n"+
+			"  %s), or empty that database yourself if its contents don't matter", err, ComposeRedisAddr)
 	}
 
 	t.Cleanup(func() { _ = client.Close() })
 
 	return client
+}
+
+// ErrForeignDatabase means the database holds keys this harness did not write, so it will not flush it.
+var ErrForeignDatabase = errors.New("refusing to FLUSHDB a database this test harness does not own")
+
+// MarkerKey is written after every flush. A database that holds keys but not this one was filled by
+// something else.
+const MarkerKey = "learn-go:test-harness"
+
+// flushOwned empties the database if it is empty already or carries MarkerKey, and refuses otherwise.
+//
+// The first version flushed unconditionally, reasoning that staying off database 0 kept it away from anything
+// a person was using. The default address is the developer's own Redis, and a local app can use any of its 16
+// databases. An empty database is safe to claim; one with the marker was last flushed here; anything else
+// might be someone's data.
+func flushOwned(ctx context.Context, c *redis.Client) error {
+	n, err := c.DBSize(ctx).Result()
+	if err != nil {
+		return fmt.Errorf("sizing the test database: %w", err)
+	}
+
+	if n > 0 {
+		owned, err := c.Exists(ctx, MarkerKey).Result()
+		if err != nil {
+			return fmt.Errorf("checking the test database: %w", err)
+		}
+
+		if owned == 0 {
+			return fmt.Errorf("%w: database %d at %s holds %d key(s) and no %q marker",
+				ErrForeignDatabase, c.Options().DB, c.Options().Addr, n, MarkerKey)
+		}
+	}
+
+	if err := c.FlushDB(ctx).Err(); err != nil {
+		return fmt.Errorf("flushing the test database: %w", err)
+	}
+
+	return c.Set(ctx, MarkerKey, "emptied by this repository's test harness; safe to delete", 0).Err()
 }
 
 // redisDB picks a database from the binary name, leaving 0 for a human.

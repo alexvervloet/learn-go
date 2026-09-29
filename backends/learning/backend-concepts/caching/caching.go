@@ -9,9 +9,13 @@
 // work nobody asked for and a second place for the derivation to be wrong. Deleting means the next reader
 // recomputes it from the source, which is the same code path that already exists.
 //
-// The order also matters and is not symmetric. Write-then-delete leaves a window where a reader can see stale
-// data; delete-then-write leaves a window where a reader can populate the cache with the OLD value and then
-// keep it for the full TTL. The second is much worse, so: write the source first, delete second, always.
+// The order also matters and is not symmetric. Delete-then-write leaves a wide window where a reader misses,
+// loads the OLD value from the source and caches it for the full TTL. Write-then-delete shrinks that window
+// but does not close it: a reader that loaded the old value just BEFORE the write can finish its SET just
+// AFTER the delete, and the stale value is then cached for a full TTL too. It needs a slow load racing a
+// write, so it is rare, and it is not "a brief window of stale reads". Write the source first and delete
+// second, always, and if a TTL's worth of staleness matters, bound it: a short TTL, a second delete a moment
+// later, or a version number in the value that a stale SET cannot pass.
 //
 // # The four failures, in the order they bite
 //
@@ -121,6 +125,9 @@ type Cache[T any] struct {
 	// endpoints genuinely need it: anything where a miss is cheap and a stale negative is harmful.
 	negativeTTL time.Duration
 
+	// loadTimeout bounds the shared load, which no single caller's context may cancel.
+	loadTimeout time.Duration
+
 	// group collapses concurrent loads of the same key. This is the whole stampede fix, and it is
 	// one field.
 	group singleflight.Group
@@ -147,6 +154,10 @@ type Options struct {
 
 	// Prefix namespaces the keys.
 	Prefix string
+
+	// LoadTimeout bounds one load of the source, 10 seconds by default. It exists because the load
+	// shared by collapsed callers does not run on any one caller's context; see loadAndStore.
+	LoadTimeout time.Duration
 }
 
 // New builds a Cache.
@@ -157,6 +168,9 @@ func New[T any](client *redis.Client, load Loader[T], opts Options) *Cache[T] {
 	if opts.Prefix == "" {
 		opts.Prefix = "cache"
 	}
+	if opts.LoadTimeout <= 0 {
+		opts.LoadTimeout = 10 * time.Second
+	}
 
 	return &Cache[T]{
 		client:      client,
@@ -165,6 +179,7 @@ func New[T any](client *redis.Client, load Loader[T], opts Options) *Cache[T] {
 		ttl:         opts.TTL,
 		jitter:      opts.Jitter,
 		negativeTTL: opts.NegativeTTL,
+		loadTimeout: opts.LoadTimeout,
 	}
 }
 
@@ -242,11 +257,23 @@ func (c *Cache[T]) Get(ctx context.Context, key string) (T, error) {
 //
 // The shared flag says whether this caller's result came from someone else's call, which is how Collapsed is
 // counted, and it is the only way to measure the fix from inside.
+//
+// # Whose context the load runs on
+//
+// The load serves every caller collapsed onto it, so it must not run on any ONE caller's context. The first
+// version passed the first caller's ctx straight through, and when that client disconnected the query was
+// cancelled and every other caller got context.Canceled with nothing wrong on their side.
+// TestOneCallerLeavingDoesNotFailTheOthers is that case. So the load runs on context.WithoutCancel(ctx), which
+// keeps the values (trace IDs) and drops the cancellation, bounded by LoadTimeout instead. Each caller still
+// waits on its OWN context through DoChan, so a caller that leaves returns at once and the rest keep waiting.
 func (c *Cache[T]) loadAndStore(ctx context.Context, redisKey, key string) (T, error) {
 	var zero T
 
-	result, err, shared := c.group.Do(redisKey, func() (any, error) {
+	ch := c.group.DoChan(redisKey, func() (any, error) {
 		c.stats.Loads.Add(1)
+
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), c.loadTimeout)
+		defer cancel()
 
 		v, err := c.load(ctx, key)
 		if err != nil {
@@ -268,6 +295,19 @@ func (c *Cache[T]) loadAndStore(ctx context.Context, redisKey, key string) (T, e
 
 		return v, nil
 	})
+
+	var (
+		result any
+		err    error
+		shared bool
+	)
+
+	select {
+	case r := <-ch:
+		result, err, shared = r.Val, r.Err, r.Shared
+	case <-ctx.Done():
+		return zero, ctx.Err()
+	}
 
 	if shared {
 		c.stats.Collapsed.Add(1)

@@ -707,3 +707,51 @@ func maxDuration(a, b time.Duration) time.Duration {
 	}
 	return b
 }
+
+// TestOneCallerLeavingDoesNotFailTheOthers: singleflight runs the load once, with the context of whichever caller
+// arrived first. The first version passed that context straight to the loader, so when that one client
+// disconnected, the load was cancelled and every caller collapsed onto it got context.Canceled, including callers
+// whose own requests were fine.
+func TestOneCallerLeavingDoesNotFailTheOthers(t *testing.T) {
+	started, release := make(chan struct{}), make(chan struct{})
+	var once sync.Once
+
+	load := func(ctx context.Context, key string) (User, error) {
+		once.Do(func() { close(started) })
+		select {
+		case <-release:
+			return User{ID: parseID(key), Name: "loaded"}, nil
+		case <-ctx.Done():
+			return User{}, ctx.Err()
+		}
+	}
+
+	client := redistest.Client(t)
+	redistest.Flush(t)
+	c := New(client, load, Options{TTL: time.Minute, Prefix: "leave"})
+
+	leaderCtx, leaderLeaves := context.WithCancel(context.Background())
+	leaderErr := make(chan error, 1)
+	go func() {
+		_, err := c.Get(leaderCtx, "7")
+		leaderErr <- err
+	}()
+	<-started
+
+	follower := make(chan error, 1)
+	go func() {
+		_, err := c.Get(context.Background(), "7")
+		follower <- err
+	}()
+	time.Sleep(50 * time.Millisecond) // let the follower join the load in flight
+
+	leaderLeaves()
+	if err := <-leaderErr; !errors.Is(err, context.Canceled) {
+		t.Errorf("the caller that left got %v, want context.Canceled", err)
+	}
+
+	close(release)
+	if err := <-follower; err != nil {
+		t.Errorf("a caller whose request was fine got %v because another caller left", err)
+	}
+}

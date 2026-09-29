@@ -152,8 +152,12 @@ func NewMetrics(namespace string, pathLabel func(*http.Request) string, buckets 
 //
 //	register the middleware per route, so it runs after matching. Correct, and it means every
 //	  route registration carries it and one forgotten route is one unmeasured endpoint.
-//	read the route after next.ServeHTTP returns. The mux passes a CLONED request to the handler,
-//	  so the outer middleware's r is not the one with the pattern set. Does not work.
+//	read r.Pattern after next.ServeHTTP returns. The mux sets Pattern on the request IT receives,
+//	  so this works when the metrics middleware wraps the mux directly. It stops working the
+//	  moment any middleware in between calls r.WithContext, which request IDs and tracing both
+//	  do: the mux then fills in a copy the outer middleware never sees. TestFullStackMiddleware
+//	  is that stack. (An earlier version of this comment blamed the mux for cloning the
+//	  request; it doesn't, the middleware between does.)
 //	a pointer in the context, filled by a middleware registered inside the mux. One shared slot,
 //	  written once, read by whoever put it there.
 //

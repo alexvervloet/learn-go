@@ -307,7 +307,8 @@ dependency, and it makes the mechanism visible rather than configured.
 - `observability.Redacted[T]`: implements LogValuer, Stringer, GoStringer and Marshaler, because implementing
   three of four leaks on one verb.
 - `observability.CaptureRoute`: publishes the matched route through a mutable holder in the context, which is the
-  only way to get `r.Pattern` out to a middleware that wraps the mux.
+  reliable way to get `r.Pattern` out to a middleware that wraps the mux once other middleware sits in between
+  (reading `r.Pattern` after the handler works only when nothing between them calls `r.WithContext`).
 - `websockets.Conn`: one writer goroutine, liveness from pings rather than read deadlines, a ping with a pong
   deadline, and a bounded send buffer with a chosen overflow policy.
 - `messaging.Consumer`: `FetchMessage` and `CommitMessages` kept separate so the delivery guarantee is a

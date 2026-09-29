@@ -11,9 +11,13 @@ import (
 
 // update is the flag that regenerates the golden files.
 //
-// Declared at package level with flag.Bool, which works because `go test` parses flags it does
-// not recognise into the test binary's flag set. The convention is exactly this name, so
-// `go test ./... -update` works across a repository.
+// Declared at package level with flag.Bool, which works because `go test` passes flags it does
+// not recognise to the test binary. The convention is exactly this name.
+//
+// Pass it to the package that declares it: `go test ./golden -update`. Across a repository,
+// `go test ./... -update` does NOT work: every test binary receives the flag, and each package
+// that doesn't declare it fails with "flag provided but not defined: -update". An earlier
+// version of this comment said the opposite.
 //
 // The risk is real: a flag that rewrites the test's own expectations makes accepting a regression
 // a single command. The discipline is that its output goes in a diff and gets read.

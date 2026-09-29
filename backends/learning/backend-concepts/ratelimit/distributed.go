@@ -196,6 +196,16 @@ func NewRedisLimiter(client *redis.Client, limit int, window time.Duration, pref
 	return &RedisLimiter{Client: client, Limit: limit, Window: window, Prefix: prefix}
 }
 
+// windowKeys names the two counters the script reads, the current window's and the previous one's.
+//
+// The client key is wrapped in braces, a Redis Cluster HASH TAG: Cluster hashes only the part between the braces
+// to pick a slot, so both keys land on the same node. A Lua script may only touch keys in one slot, and the
+// first version named them "prefix:key:index", which hash to different slots and fail on Cluster with CROSSSLOT.
+// A single Redis never checks, which is why nothing here noticed.
+func windowKeys(prefix, key string, index int64) (current, previous string) {
+	return fmt.Sprintf("%s:{%s}:%d", prefix, key, index), fmt.Sprintf("%s:{%s}:%d", prefix, key, index-1)
+}
+
 // Allow implements Limiter.
 func (r *RedisLimiter) Allow(ctx context.Context, key string) (Decision, error) {
 	if r.Limit <= 0 || r.Window <= 0 {
@@ -209,8 +219,7 @@ func (r *RedisLimiter) Allow(ctx context.Context, key string) (Decision, error) 
 	// Time-based key names rather than a stored timestamp: there is nothing to clean up.
 	index := start.UnixMilli() / r.Window.Milliseconds()
 
-	currentKey := fmt.Sprintf("%s:%s:%d", r.Prefix, key, index)
-	previousKey := fmt.Sprintf("%s:%s:%d", r.Prefix, key, index-1)
+	currentKey, previousKey := windowKeys(r.Prefix, key, index)
 
 	weight := 1 - float64(now.Sub(start))/float64(r.Window)
 

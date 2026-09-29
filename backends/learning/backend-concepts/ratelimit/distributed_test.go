@@ -2,6 +2,7 @@ package ratelimit
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -328,3 +329,22 @@ func (l testLogger) Printf(_ context.Context, format string, v ...any) {
 type silentLogger struct{}
 
 func (silentLogger) Printf(context.Context, string, ...any) {}
+
+// TestWindowKeysShareAClusterSlot: the script reads two keys, and Redis Cluster only runs a script whose keys are
+// in one slot. A hash tag (the part in braces) is what Cluster hashes, so both keys must carry the same one.
+func TestWindowKeysShareAClusterSlot(t *testing.T) {
+	tag := func(k string) string {
+		open, closing := strings.Index(k, "{"), strings.Index(k, "}")
+		if open < 0 || closing < open {
+			return ""
+		}
+		return k[open+1 : closing]
+	}
+
+	current, previous := windowKeys("rl", "203.0.113.7", 42)
+
+	if tag(current) == "" || tag(current) != tag(previous) {
+		t.Errorf("keys %q and %q do not share a hash tag, so Cluster can put them in different slots",
+			current, previous)
+	}
+}

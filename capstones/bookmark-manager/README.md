@@ -29,7 +29,7 @@ internal/
   api         routing, middleware, handlers
   apitest     the test harness
 
-migrations/   goose, one file
+migrations/   goose, applied in order and never edited once run
 ```
 
 ## Two tokens
@@ -209,8 +209,15 @@ open door. Reads are not limited at all, which is a decision the handler makes r
 
 - `categories` and `tags` are unique **per user**, not globally. Two people can both have a "Reading" category,
   and a global `UNIQUE (name)` would be first-come-first-served.
-- Deleting a category is `ON DELETE SET NULL`, so the bookmarks survive. `CASCADE` is the kind of mistake
-  discovered by a support ticket.
+- A bookmark's category must belong to the bookmark's owner, and the database enforces it with a composite
+  foreign key, `(user_id, category_id) -> categories(user_id, id)`. The first version only had
+  `REFERENCES categories(id)`, which proves the category exists and says nothing about whose it is: any user
+  could file bookmarks under anyone's category. Migration 002 fixes it forward, and
+  `TestCannotFileIntoAnotherUsersCategory` is the test that was missing. Scoping every read by `user_id` is not
+  enough; the write path needs the same check.
+- Deleting a category is `ON DELETE SET NULL (category_id)`, so the bookmarks survive. `CASCADE` is the kind of
+  mistake discovered by a support ticket. The column list matters on a composite key: without it Postgres would
+  null `user_id` too, and that column is `NOT NULL`.
 - `bookmark_tags` has a composite primary key and no surrogate id. A join table with its own `BIGSERIAL` and a
   separate unique index is a column and an index nothing reads.
 - Ownership failures are **404, not 403**. A 403 confirms the row exists, one request at a time.

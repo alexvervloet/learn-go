@@ -102,7 +102,7 @@ func filter(ctx context.Context, in <-chan int, keep func(int) bool) <-chan int 
 func fanOut(ctx context.Context, in <-chan int, n int, work func(int) int) []<-chan int {
 	outs := make([]<-chan int, 0, n)
 
-	for i := 0; i < n; i++ {
+	for range n {
 		out := make(chan int)
 		outs = append(outs, out)
 
@@ -206,7 +206,7 @@ func tee(ctx context.Context, in <-chan int) (<-chan int, <-chan int) {
 			// Shadow them per value; nil-ing a local disables that send.
 			a, b := out1, out2
 
-			for i := 0; i < 2; i++ {
+			for range 2 {
 				select {
 				case <-ctx.Done():
 					return
@@ -355,7 +355,7 @@ func demoPipelines() {
 	defer bridgeCancel()
 
 	streams := make(chan (<-chan int), 3)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		streams <- generate(bridgeCtx, i*10, i*10+1)
 	}
 	close(streams)

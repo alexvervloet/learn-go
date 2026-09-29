@@ -89,7 +89,7 @@ func TestFanOutFanIn(t *testing.T) {
 func TestFanInClosesOnce(t *testing.T) {
 	ctx := context.Background()
 
-	for run := 0; run < 50; run++ {
+	for run := range 50 {
 		withTimeout(t, 2*time.Second, func() {
 			a := generate(ctx, 1)
 			b := generate(ctx, 2)
@@ -222,7 +222,7 @@ func TestBridge(t *testing.T) {
 		defer cancel()
 
 		streams := make(chan (<-chan int), 3)
-		for i := 0; i < 3; i++ {
+		for i := range 3 {
 			streams <- generate(ctx, i*10, i*10+1)
 		}
 		close(streams)

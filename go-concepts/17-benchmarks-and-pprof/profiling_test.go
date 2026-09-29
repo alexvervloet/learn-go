@@ -104,7 +104,7 @@ func TestWriteProfileReportsAnUnwritablePath(t *testing.T) {
 func TestBurnCPUIsDeterministic(t *testing.T) {
 	first := burnCPU(100)
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if got := burnCPU(100); got != first {
 			t.Fatalf("run %d gave %d, first gave %d", i, got, first)
 		}

@@ -17,7 +17,7 @@ func TestLoopVariableIsPerIteration(t *testing.T) {
 
 	// Run it repeatedly: a scheduling-dependent bug that shows up one time in
 	// twenty is still a bug, and a single run could miss it.
-	for run := 0; run < 20; run++ {
+	for run := range 20 {
 		if got := eachIterationHasItsOwnVariable(n); !slices.Equal(got, want) {
 			t.Fatalf("run %d: got %v, want %v", run, got, want)
 		}

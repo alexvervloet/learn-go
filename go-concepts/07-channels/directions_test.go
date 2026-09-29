@@ -31,7 +31,7 @@ func TestProduceClosesItsChannel(t *testing.T) {
 		produce(ch, 3)
 
 		// Draining everything, the fourth receive must report closed.
-		for i := 0; i < 3; i++ {
+		for range 3 {
 			<-ch
 		}
 		if _, ok := <-ch; ok {

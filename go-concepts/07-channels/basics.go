@@ -85,7 +85,7 @@ func unbufferedIsAHandshake() []string {
 func bufferedDoesNotBlockUntilFull(capacity, sends int) (lengths []int, blocked bool) {
 	ch := make(chan int, capacity)
 
-	for i := 0; i < sends; i++ {
+	for i := range sends {
 		// Try the send without committing to it. The default arm fires when
 		// the buffer is full, which is how this detects the block rather than
 		// hanging on it. select is lesson 08; this is a preview.

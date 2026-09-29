@@ -27,7 +27,7 @@ func correctWaitGroup(n int) int {
 		counter atomic.Int64
 	)
 
-	for i := 0; i < n; i++ {
+	for range n {
 		wg.Add(1) // before the go statement
 		go func() {
 			defer wg.Done() // deferred, so a panic still decrements
@@ -71,7 +71,7 @@ func addInsideTheGoroutineRaces(n int) int {
 	// directly; opaque enough that vet's syntactic check does not see it.
 	add := wg.Add
 
-	for i := 0; i < n; i++ {
+	for range n {
 		go func() {
 			add(1) // WRONG: may not have run before Wait is called
 			defer wg.Done()
@@ -138,7 +138,7 @@ func waitGroupGo(n int) int {
 		counter atomic.Int64
 	)
 
-	for i := 0; i < n; i++ {
+	for range n {
 		wg.Go(func() { // Add, go, and Done, in one call
 			counter.Add(1)
 		})
@@ -157,8 +157,8 @@ func reusingAWaitGroup(rounds, perRound int) int {
 		counter atomic.Int64
 	)
 
-	for r := 0; r < rounds; r++ {
-		for i := 0; i < perRound; i++ {
+	for range rounds {
+		for range perRound {
 			wg.Go(func() { counter.Add(1) })
 		}
 		wg.Wait() // fully drained before the next round adds to it

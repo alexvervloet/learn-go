@@ -28,7 +28,7 @@ import (
 // interrupted and would starve its P.
 func cpuBound(iterations int) uint64 {
 	var sum uint64
-	for i := 0; i < iterations; i++ {
+	for i := range iterations {
 		// Enough arithmetic that the compiler cannot delete the loop.
 		sum = sum*31 + uint64(i%7)
 	}
@@ -38,7 +38,7 @@ func cpuBound(iterations int) uint64 {
 // sequential runs the work one piece at a time. This is the baseline.
 func sequential(chunks, iterations int) time.Duration {
 	start := time.Now()
-	for i := 0; i < chunks; i++ {
+	for range chunks {
 		_ = cpuBound(iterations)
 	}
 	return time.Since(start)
@@ -51,7 +51,7 @@ func parallel(chunks, iterations int) time.Duration {
 	var wg sync.WaitGroup
 
 	start := time.Now()
-	for i := 0; i < chunks; i++ {
+	for range chunks {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -107,7 +107,7 @@ func blockedGoroutinesDoNotStopOthers(sleepers int, d time.Duration) int64 {
 	)
 
 	// Goroutines that block.
-	for i := 0; i < sleepers; i++ {
+	for range sleepers {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

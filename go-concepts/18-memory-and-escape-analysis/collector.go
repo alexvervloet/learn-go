@@ -69,7 +69,7 @@ func (s MemorySnapshot) String() string {
 func allocateAndDiscard(rounds, size int) (collections uint32) {
 	before := Snapshot()
 
-	for i := 0; i < rounds; i++ {
+	for i := range rounds {
 		buf := make([]byte, size)
 		buf[0] = byte(i)
 		sinkSlice = buf
@@ -137,7 +137,7 @@ func forcingACycle() (beforeKB, afterKB uint64) {
 	// data unreachable if the variable is still live in the frame.
 	before := func() MemorySnapshot {
 		garbage := make([][]byte, 0, 1000)
-		for i := 0; i < 1000; i++ {
+		for range 1000 {
 			garbage = append(garbage, make([]byte, 1024))
 		}
 

@@ -43,7 +43,7 @@ func (u *upperReader) Read(p []byte) (int, error) {
 
 	// Transform what we got, BEFORE returning, and regardless of err. The n
 	// bytes are valid even when err is io.EOF.
-	for i := 0; i < n; i++ {
+	for i := range n {
 		if p[i] >= 'a' && p[i] <= 'z' {
 			p[i] -= 32
 		}

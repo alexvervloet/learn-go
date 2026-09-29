@@ -284,7 +284,7 @@ func demoContainers() {
 
 	cache := NewCache[string, int]()
 	computed := 0
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		cache.GetOrCompute("key", func() int { computed++; return 99 })
 	}
 	v, _ := cache.Get("key")

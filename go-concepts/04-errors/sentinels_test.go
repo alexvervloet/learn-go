@@ -60,7 +60,7 @@ func TestHTTPStatusFor(t *testing.T) {
 	t.Run("status survives extra wrapping", func(t *testing.T) {
 		// Three more layers of context must not change the classification.
 		err := fetchRecord(0)
-		for i := 0; i < 3; i++ {
+		for range 3 {
 			err = errors.Join(err)
 		}
 		if got := httpStatusFor(err); got != 404 {

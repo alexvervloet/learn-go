@@ -107,7 +107,7 @@ func goroutineStackCost(n int) (perGoroutineBytes uint64) {
 	start := make(chan struct{})
 	done := make(chan struct{})
 
-	for i := 0; i < n; i++ {
+	for range n {
 		go func() {
 			<-start // park, so they all exist at once
 			done <- struct{}{}
@@ -119,7 +119,7 @@ func goroutineStackCost(n int) (perGoroutineBytes uint64) {
 	runtime.ReadMemStats(&after)
 
 	close(start)
-	for i := 0; i < n; i++ {
+	for range n {
 		<-done
 	}
 

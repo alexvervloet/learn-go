@@ -11,7 +11,7 @@ func TestCorrectWaitGroup(t *testing.T) {
 
 	// Repeat, because a synchronisation bug that fires one run in twenty is
 	// still a bug and one run could miss it.
-	for run := 0; run < 10; run++ {
+	for run := range 10 {
 		if got := correctWaitGroup(n); got != n {
 			t.Fatalf("run %d: counted %d, want %d", run, got, n)
 		}
@@ -53,7 +53,7 @@ func TestAddInsideTheGoroutineIsUnreliable(t *testing.T) {
 		return addInsideTheGoroutineRaces(n)
 	}
 
-	for run := 0; run < 20; run++ {
+	for run := range 20 {
 		switch got := runOnce(); {
 		case got == -1:
 			t.Logf("run %d: the race panicked, which is the same bug", run)
@@ -87,7 +87,7 @@ func TestNegativeCounterPanics(t *testing.T) {
 func TestWaitGroupGo(t *testing.T) {
 	const n = 1000
 
-	for run := 0; run < 10; run++ {
+	for run := range 10 {
 		if got := waitGroupGo(n); got != n {
 			t.Fatalf("run %d: counted %d, want %d", run, got, n)
 		}

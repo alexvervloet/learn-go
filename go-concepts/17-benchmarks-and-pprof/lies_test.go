@@ -54,7 +54,7 @@ func TestExpensiveComputationIsDeterministic(t *testing.T) {
 	// A benchmark of a function that is not deterministic measures the input,
 	// not the code.
 	first := expensiveComputation(1000)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if got := expensiveComputation(1000); got != first {
 			t.Fatalf("run %d gave %d, first gave %d", i, got, first)
 		}

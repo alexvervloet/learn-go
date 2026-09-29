@@ -87,7 +87,7 @@ func pipeCloseWithErrorReachesTheReader(failAfter int) (read string, err error) 
 	pr, pw := io.Pipe()
 
 	go func() {
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			if i == failAfter {
 				_ = pw.CloseWithError(fmt.Errorf("record %d: %w", i, ErrProducerFailed))
 				return
@@ -141,7 +141,7 @@ func readerClosingStopsTheWriter() (writesBeforeClose int, writeErr error) {
 	go func() {
 		defer close(writeDone)
 
-		for i := 0; i < 1000; i++ {
+		for i := range 1000 {
 			if _, err := fmt.Fprintf(pw, "line-%d\n", i); err != nil {
 				writeErr = err
 				return

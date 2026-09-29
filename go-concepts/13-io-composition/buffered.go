@@ -89,7 +89,7 @@ func (w *syscallCountingWriter) Write(p []byte) (int, error) {
 
 // writeManySmallWrites is the unbuffered version.
 func writeManySmallWrites(w *syscallCountingWriter, n int) (syscalls int64, err error) {
-	for i := 0; i < n; i++ {
+	for range n {
 		if _, err = io.WriteString(w, "x"); err != nil {
 			return w.writes.Load(), fmt.Errorf("write: %w", err)
 		}
@@ -106,7 +106,7 @@ func writeManySmallWrites(w *syscallCountingWriter, n int) (syscalls int64, err 
 func writeBuffered(w *syscallCountingWriter, n int) (syscalls int64, err error) {
 	bw := bufio.NewWriter(w)
 
-	for i := 0; i < n; i++ {
+	for range n {
 		if _, err = bw.WriteString("x"); err != nil {
 			return w.writes.Load(), fmt.Errorf("write: %w", err)
 		}

@@ -24,7 +24,7 @@ import (
 
 func collectGrowing(n int) []string {
 	var out []string
-	for i := 0; i < n; i++ {
+	for i := range n {
 		out = append(out, strconv.Itoa(i))
 	}
 	return out
@@ -32,7 +32,7 @@ func collectGrowing(n int) []string {
 
 func collectPresized(n int) []string {
 	out := make([]string, 0, n) // one allocation
-	for i := 0; i < n; i++ {
+	for i := range n {
 		out = append(out, strconv.Itoa(i))
 	}
 	return out
@@ -46,7 +46,7 @@ func collectPresized(n int) []string {
 
 func indexGrowing(n int) map[int]string {
 	m := make(map[int]string)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		m[i] = strconv.Itoa(i)
 	}
 	return m
@@ -54,7 +54,7 @@ func indexGrowing(n int) map[int]string {
 
 func indexPresized(n int) map[int]string {
 	m := make(map[int]string, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		m[i] = strconv.Itoa(i)
 	}
 	return m

@@ -30,7 +30,7 @@ import (
 // exists to prevent starvation: without it, a busy channel written first in the
 // source would permanently starve a quieter one below it.
 func randomChoiceAmongReady(rounds int) (firstChosen, secondChosen int) {
-	for i := 0; i < rounds; i++ {
+	for range rounds {
 		a := make(chan int, 1)
 		b := make(chan int, 1)
 		a <- 1
@@ -91,7 +91,7 @@ func trySend(ch chan<- int, v int) (sent bool) {
 func dropOnFullChannel(capacity, attempts int) (accepted, dropped int) {
 	ch := make(chan int, capacity) // nobody receives
 
-	for i := 0; i < attempts; i++ {
+	for i := range attempts {
 		if trySend(ch, i) {
 			accepted++
 		} else {
@@ -133,7 +133,7 @@ func selectOnSendsToo(values int) (sent int, cancelled bool) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		for i := 0; i < values; i++ {
+		for i := range values {
 			select {
 			case out <- i:
 				sent++

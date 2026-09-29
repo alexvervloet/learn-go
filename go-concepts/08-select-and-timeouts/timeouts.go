@@ -88,7 +88,7 @@ func timerAllocationsPerIteration(n int) (withAfter, withTimer uint64) {
 	}
 
 	withAfter = measure(func() {
-		for i := 0; i < n; i++ {
+		for i := range n {
 			ch <- i
 			select {
 			case <-ch:
@@ -101,7 +101,7 @@ func timerAllocationsPerIteration(n int) (withAfter, withTimer uint64) {
 		timer := time.NewTimer(time.Hour)
 		defer timer.Stop()
 
-		for i := 0; i < n; i++ {
+		for i := range n {
 			timer.Reset(time.Hour)
 			ch <- i
 			select {
@@ -139,7 +139,7 @@ func deadlineVsTimeout(deadline time.Time, steps int, each time.Duration) (compl
 	ctx, cancel := context.WithDeadline(context.Background(), deadline)
 	defer cancel()
 
-	for i := 0; i < steps; i++ {
+	for i := range steps {
 		select {
 		case <-time.After(each):
 			completed++

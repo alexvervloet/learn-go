@@ -156,7 +156,7 @@ func demoOrdering() {
 		defer func() { _ = os.RemoveAll(dir) }() // best-effort cleanup of a temp dir
 
 		var paths []string
-		for i := 0; i < 3; i++ {
+		for i := range 3 {
 			p := filepath.Join(dir, fmt.Sprintf("f%d.txt", i))
 			if werr := os.WriteFile(p, []byte("x"), 0o600); werr == nil {
 				paths = append(paths, p)

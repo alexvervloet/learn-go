@@ -34,14 +34,14 @@ func pingPong(rounds int) []string {
 	wg.Add(1)
 	go func() { // the pong player
 		defer wg.Done()
-		for i := 0; i < rounds; i++ {
+		for range rounds {
 			v := <-ping
 			record(fmt.Sprintf("pong received %d", v))
 			pong <- v + 1
 		}
 	}()
 
-	for i := 0; i < rounds; i++ {
+	for i := range rounds {
 		ping <- i * 10
 		v := <-pong
 		record(fmt.Sprintf("ping received %d", v))
@@ -80,7 +80,7 @@ func boundedConcurrency(tasks, limit int, work time.Duration) (peak int) {
 		running int
 	)
 
-	for i := 0; i < tasks; i++ {
+	for range tasks {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -122,7 +122,7 @@ func doneChannel(workers int) (stopped int) {
 		mu   sync.Mutex
 	)
 
-	for i := 0; i < workers; i++ {
+	for range workers {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -230,7 +230,7 @@ func demoPatterns() {
 	go counterServer(requests, done)
 
 	var counts []int
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		counts = append(counts, askCounter(requests, "hits"))
 	}
 	counts = append(counts, askCounter(requests, "other"))
@@ -241,7 +241,7 @@ func demoPatterns() {
 	b := make(chan int)
 	go func() {
 		defer close(a)
-		for i := 0; i < 3; i++ {
+		for i := range 3 {
 			a <- i
 		}
 	}()

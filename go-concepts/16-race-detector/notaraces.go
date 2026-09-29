@@ -25,7 +25,7 @@ func distinctIndexesAreSafe(n int) []int {
 	results := make([]int, n)
 
 	var wg sync.WaitGroup
-	for i := 0; i < n; i++ {
+	for i := range n {
 		wg.Go(func() { results[i] = i })
 	}
 	wg.Wait()
@@ -45,7 +45,7 @@ func readOnlySharingIsSafe(data []int, workers int) int {
 		wg    sync.WaitGroup
 	)
 
-	for w := 0; w < workers; w++ {
+	for range workers {
 		wg.Go(func() {
 			sum := 0
 			for _, v := range data { // read only, by every goroutine
@@ -95,7 +95,7 @@ func ownershipTransferIsSafe(count int) []int {
 	ch := make(chan *batch, count)
 
 	var wg sync.WaitGroup
-	for i := 0; i < count; i++ {
+	for i := range count {
 		wg.Go(func() {
 			b := &batch{ID: i, Items: []string{"a", "b"}}
 			ch <- b
@@ -129,7 +129,7 @@ func copyingBeforeTheGoStatementIsSafe(cfg racyConfig, n int) []int {
 	timeouts := make([]int, n)
 
 	var wg sync.WaitGroup
-	for i := 0; i < n; i++ {
+	for i := range n {
 		// cfg is copied into the closure's argument HERE, before the goroutine
 		// exists, so the parent mutating cfg afterwards cannot affect it.
 		wg.Add(1)
@@ -172,7 +172,7 @@ func onceIsSafe(readers int) (values []string, distinct int) {
 	values = make([]string, readers)
 
 	var wg sync.WaitGroup
-	for i := 0; i < readers; i++ {
+	for i := range readers {
 		wg.Go(func() { values[i] = r.Get() })
 	}
 	wg.Wait()

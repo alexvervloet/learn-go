@@ -45,7 +45,7 @@ func TestMainDoesNotWait(t *testing.T) {
 func TestWaitForThem(t *testing.T) {
 	const n = 100
 
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		if got := waitForThem(n); got != n {
 			t.Fatalf("run %d: finished = %d, want %d", i, got, n)
 		}
@@ -93,7 +93,7 @@ func BenchmarkGoroutineCreation(b *testing.B) {
 func BenchmarkGoroutineCreationBatch(b *testing.B) {
 	for b.Loop() {
 		var wg sync.WaitGroup
-		for i := 0; i < 1000; i++ {
+		for range 1000 {
 			wg.Add(1)
 			go wg.Done()
 		}

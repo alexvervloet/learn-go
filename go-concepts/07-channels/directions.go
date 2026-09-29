@@ -29,7 +29,7 @@ import (
 func produce(out chan<- int, n int) {
 	defer close(out)
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		out <- i * i
 	}
 }

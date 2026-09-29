@@ -256,7 +256,7 @@ func TestCacheGetOrComputeRunsOnce(t *testing.T) {
 		wg       sync.WaitGroup
 	)
 
-	for i := 0; i < 200; i++ {
+	for range 200 {
 		wg.Go(func() {
 			v, _ := c.GetOrCompute("key", func() int {
 				mu.Lock()

@@ -33,7 +33,7 @@ func goroutinesStartUnordered(n int) []int {
 		out []int
 	)
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -74,7 +74,7 @@ func goroutinesStartUnordered(n int) []int {
 func mainDoesNotWait(n int) int32 {
 	var finished atomic.Int32
 
-	for i := 0; i < n; i++ {
+	for range n {
 		go func() {
 			finished.Add(1)
 		}()
@@ -100,7 +100,7 @@ func waitForThem(n int) int32 {
 		finished atomic.Int32
 	)
 
-	for i := 0; i < n; i++ {
+	for range n {
 		wg.Add(1) // before the go statement
 		go func() {
 			defer wg.Done() // deferred, so every exit path counts
@@ -119,7 +119,7 @@ func goroutineCost(n int) (elapsed time.Duration, perGoroutine time.Duration) {
 	var wg sync.WaitGroup
 
 	start := time.Now()
-	for i := 0; i < n; i++ {
+	for range n {
 		wg.Add(1)
 		go func() { wg.Done() }()
 	}
@@ -140,7 +140,7 @@ func manyGoroutines(n int) (peak int) {
 		start = make(chan struct{})
 	)
 
-	for i := 0; i < n; i++ {
+	for range n {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

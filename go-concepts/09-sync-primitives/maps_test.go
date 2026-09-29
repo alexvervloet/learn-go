@@ -54,7 +54,7 @@ func TestLoadOrStoreIsAtomic(t *testing.T) {
 		results = make([]int, 500)
 	)
 
-	for i := 0; i < 500; i++ {
+	for i := range 500 {
 		wg.Go(func() {
 			actual, loaded := m.LoadOrStore("key", i)
 			results[i] = actual
@@ -134,7 +134,7 @@ func TestTypedSyncMap(t *testing.T) {
 // implement a find without visiting everything.
 func TestRangeCanStopEarly(t *testing.T) {
 	m := &typedSyncMap[int, int]{}
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		m.Store(i, i)
 	}
 
@@ -189,7 +189,7 @@ func TestWhenToUseSyncMapIsDocumented(t *testing.T) {
 
 func BenchmarkMapReadHeavySyncMap(b *testing.B) {
 	m := &typedSyncMap[int, int]{}
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		m.Store(i, i*i)
 	}
 
@@ -204,7 +204,7 @@ func BenchmarkMapReadHeavySyncMap(b *testing.B) {
 
 func BenchmarkMapReadHeavyRWMutex(b *testing.B) {
 	m := newRWMutexMap[int, int]()
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		m.Store(i, i*i)
 	}
 
@@ -260,7 +260,7 @@ func BenchmarkMapMixedRWMutex(b *testing.B) {
 
 func BenchmarkMapSequentialSyncMap(b *testing.B) {
 	m := &typedSyncMap[int, int]{}
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		m.Store(i, i*i)
 	}
 
@@ -273,7 +273,7 @@ func BenchmarkMapSequentialSyncMap(b *testing.B) {
 
 func BenchmarkMapSequentialRWMutex(b *testing.B) {
 	m := newRWMutexMap[int, int]()
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		m.Store(i, i*i)
 	}
 

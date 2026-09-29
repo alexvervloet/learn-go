@@ -92,7 +92,7 @@ func TestCounterServer(t *testing.T) {
 		go counterServer(requests, done)
 
 		var hits []int
-		for i := 0; i < 5; i++ {
+		for range 5 {
 			hits = append(hits, askCounter(requests, "hits"))
 		}
 		if want := []int{1, 2, 3, 4, 5}; !slices.Equal(hits, want) {
@@ -131,7 +131,7 @@ func TestFanInSimple(t *testing.T) {
 
 		go func() {
 			defer close(a)
-			for i := 0; i < 3; i++ {
+			for i := range 3 {
 				a <- i
 			}
 		}()
@@ -159,7 +159,7 @@ func TestFanInSimple(t *testing.T) {
 // the output twice and panics. This runs it repeatedly to catch a race in the
 // closer.
 func TestFanInClosesExactlyOnce(t *testing.T) {
-	for run := 0; run < 50; run++ {
+	for run := range 50 {
 		withTimeout(t, 2*time.Second, func() {
 			a := make(chan int)
 			b := make(chan int)

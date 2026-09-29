@@ -187,7 +187,7 @@ func TestLoadFromMapErrorsAreDeterministic(t *testing.T) {
 	}
 
 	var first string
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		var s Settings
 		err := LoadFromMap(&s, values)
 		if err == nil {

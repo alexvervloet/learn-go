@@ -70,7 +70,7 @@ func countConcurrently(n int, inc func(), value func() int) int {
 	var wg sync.WaitGroup
 
 	wg.Add(n)
-	for i := 0; i < n; i++ {
+	for range n {
 		go func() {
 			defer wg.Done()
 			inc()
@@ -229,7 +229,7 @@ func demoMutexes() {
 	broken := newBrokenMap()
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
-	for i := 0; i < goroutines; i++ {
+	for range goroutines {
 		go func() { defer wg.Done(); broken.IncBroken("k") }()
 	}
 	wg.Wait()
@@ -237,7 +237,7 @@ func demoMutexes() {
 
 	fixed := newBrokenMap()
 	wg.Add(goroutines)
-	for i := 0; i < goroutines; i++ {
+	for range goroutines {
 		go func() { defer wg.Done(); fixed.IncFixed("k") }()
 	}
 	wg.Wait()
@@ -253,7 +253,7 @@ func demoMutexes() {
 	var computeMu sync.Mutex
 
 	wg.Add(50)
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		go func() {
 			defer wg.Done()
 			cache.GetOrCompute("expensive", func() string {

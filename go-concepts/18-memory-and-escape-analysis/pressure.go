@@ -92,7 +92,7 @@ func measureGCImpact(build func() any, rounds int) (markTime time.Duration) {
 	held := build() // stays reachable for the duration
 
 	best := time.Hour
-	for i := 0; i < rounds; i++ {
+	for range rounds {
 		start := time.Now()
 		runtime.GC()
 		if d := time.Since(start); d < best {

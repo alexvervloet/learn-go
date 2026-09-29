@@ -55,7 +55,7 @@ func onceBlocksUntilTheFirstCallFinishes(goroutines int, initialise func()) (run
 		wg       sync.WaitGroup
 	)
 
-	for i := 0; i < goroutines; i++ {
+	for range goroutines {
 		wg.Go(func() {
 			once.Do(func() {
 				runCount.Add(1)
@@ -120,7 +120,7 @@ func onceValueCachesAResult() (values []int, computations *atomic.Int64) {
 		return 99
 	})
 
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		values = append(values, get())
 	}
 
@@ -142,7 +142,7 @@ func onceValuesForFallibleInit(fail bool) (results []string, errs []error, runs 
 		return "connected", nil
 	})
 
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		v, err := connect()
 		results = append(results, v)
 		errs = append(errs, err)
@@ -188,7 +188,7 @@ func demoOnce() {
 	init := &onceInitialiser{}
 	var wg sync.WaitGroup
 	ids := make([]int, 100)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		wg.Go(func() { ids[i] = init.Get().ID })
 	}
 	wg.Wait()
@@ -222,7 +222,7 @@ func demoOnce() {
 
 	var retry retryableOnce
 	attempt := 0
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		v, err := retry.Do(func() (string, error) {
 			attempt++
 			if attempt < 3 {

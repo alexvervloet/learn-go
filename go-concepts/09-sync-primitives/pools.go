@@ -107,7 +107,7 @@ func forgettingResetLeaksData() (first, second string, reused bool) {
 // consequence rather than the scheduling. It returns the leaked content once
 // the pool actually hands the buffer back.
 func leakIsObservable(attempts int) (leaked string, observed bool) {
-	for i := 0; i < attempts; i++ {
+	for range attempts {
 		_, second, reused := forgettingResetLeaksData()
 		if reused {
 			return second, true

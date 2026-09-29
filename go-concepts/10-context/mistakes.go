@@ -54,7 +54,7 @@ func leakingContexts(n int) (parent context.Context, cancelParent context.Cancel
 	parent, cancelParent = context.WithCancel(context.Background())
 
 	cancels := make([]context.CancelFunc, 0, n)
-	for i := 0; i < n; i++ {
+	for range n {
 		_, cancel := context.WithTimeout(parent, time.Hour)
 		cancels = append(cancels, cancel) // collected, and never called
 	}
@@ -68,7 +68,7 @@ func notLeakingContexts(n int) {
 	parent, cancelParent := context.WithCancel(context.Background())
 	defer cancelParent()
 
-	for i := 0; i < n; i++ {
+	for range n {
 		_, cancel := context.WithTimeout(parent, time.Hour)
 		cancel() // explicitly, inside the loop: a defer here piles up until the function returns
 	}

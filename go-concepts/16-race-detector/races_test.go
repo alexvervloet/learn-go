@@ -23,7 +23,7 @@ func TestRacyCounterLosesUpdates(t *testing.T) {
 	const n = 5000
 
 	// Repeat: a single run on a quiet machine can get lucky.
-	for run := 0; run < 5; run++ {
+	for run := range 5 {
 		if got := countWithRacyCounter(n); got < n {
 			t.Logf("run %d: %d of %d increments survived", run, got, n)
 			return
@@ -43,7 +43,7 @@ func TestRacyAppendLosesElements(t *testing.T) {
 
 	const n = 5000
 
-	for run := 0; run < 5; run++ {
+	for run := range 5 {
 		if got := len(racyAppend(n)); got < n {
 			t.Logf("run %d: %d of %d elements survived", run, got, n)
 			return
@@ -64,7 +64,7 @@ func TestRacyClosureCaptureLosesUpdates(t *testing.T) {
 	const n = 5000
 	want := n * (n - 1) / 2
 
-	for run := 0; run < 5; run++ {
+	for run := range 5 {
 		if got := racyClosureCapture(n); got != want {
 			t.Logf("run %d: total %d, want %d", run, got, want)
 			return

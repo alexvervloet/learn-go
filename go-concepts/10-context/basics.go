@@ -150,7 +150,7 @@ func aPastDeadlineIsAlreadyExpired() (doneImmediately bool, err error) {
 // Note the order of the returns. On cancellation it returns what it managed to
 // do PLUS the error, because partial progress is usually worth reporting.
 func respectCancellation(ctx context.Context, steps int, each time.Duration) (completed int, err error) {
-	for i := 0; i < steps; i++ {
+	for range steps {
 		select {
 		case <-ctx.Done():
 			return completed, fmt.Errorf("after %d of %d steps: %w", completed, steps, ctx.Err())

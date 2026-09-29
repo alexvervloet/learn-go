@@ -28,7 +28,7 @@ import (
 // growUnbounded appends without pre-sizing.
 func growUnbounded(n int) []int {
 	var out []int
-	for i := 0; i < n; i++ {
+	for i := range n {
 		out = append(out, i)
 	}
 	return out
@@ -37,7 +37,7 @@ func growUnbounded(n int) []int {
 // growPresized does the same work with the size known.
 func growPresized(n int) []int {
 	out := make([]int, 0, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		out = append(out, i)
 	}
 	return out
@@ -49,7 +49,7 @@ func growPresized(n int) []int {
 // exactly why the bug survives a casual check.
 func growUnboundedWithExtraWork(n int) (values []int, caps []int) {
 	var out []int
-	for i := 0; i < n; i++ {
+	for i := range n {
 		out = append(out, i)
 		caps = append(caps, cap(out)) // extra work the other side does not do
 	}
@@ -84,7 +84,7 @@ var (
 // expensiveComputation is pure and its result is easy to eliminate.
 func expensiveComputation(n int) int {
 	total := 0
-	for i := 0; i < n; i++ {
+	for i := range n {
 		total += i * i % 7
 	}
 	return total

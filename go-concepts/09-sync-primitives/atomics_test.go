@@ -13,7 +13,7 @@ func TestAtomicCounter(t *testing.T) {
 	c := &atomicCounter{}
 
 	var wg sync.WaitGroup
-	for i := 0; i < n; i++ {
+	for range n {
 		wg.Go(c.Inc)
 	}
 	wg.Wait()
@@ -30,7 +30,7 @@ func TestChannelCounter(t *testing.T) {
 	defer c.Close()
 
 	var wg sync.WaitGroup
-	for i := 0; i < n; i++ {
+	for range n {
 		wg.Go(c.Inc)
 	}
 	wg.Wait()
@@ -49,7 +49,7 @@ func TestAllThreeCountersAgree(t *testing.T) {
 	defer cc.Close()
 
 	var wg sync.WaitGroup
-	for i := 0; i < n; i++ {
+	for range n {
 		wg.Go(ac.Inc)
 		wg.Go(mc.Inc)
 		wg.Go(cc.Inc)

@@ -42,7 +42,7 @@ func cancellingAParentCancelsEveryDescendant(depth int) (allCancelled bool, dept
 
 	contexts := []context.Context{root}
 	current := root
-	for i := 0; i < depth; i++ {
+	for range depth {
 		child, childCancel := context.WithCancel(current)
 		defer childCancel() //nolint:gocritic // a short-lived demo; each child needs its own cancel
 		contexts = append(contexts, child)
@@ -162,7 +162,7 @@ func concurrentChildrenShareOneDeadline(workers int, timeout, work time.Duration
 		wg sync.WaitGroup
 	)
 
-	for i := 0; i < workers; i++ {
+	for range workers {
 		wg.Go(func() {
 			select {
 			case <-time.After(work):

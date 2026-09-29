@@ -102,7 +102,7 @@ func valuesAreImmutableAndLayered() (parentHas, childHas bool, parentValue, chil
 func lookupIsLinear(depth int) (found bool, missing bool) {
 	ctx := context.Background()
 
-	for i := 0; i < depth; i++ {
+	for i := range depth {
 		// Each of these is a distinct layer that a lookup must walk past.
 		ctx = context.WithValue(ctx, fmt.Sprintf("filler-%d", i), i) //nolint:staticcheck // SA1029: demonstrating the wrong key type
 	}

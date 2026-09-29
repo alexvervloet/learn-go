@@ -45,7 +45,7 @@ func TestLogicalRaceIsInvisibleToRace(t *testing.T) {
 
 	const n = 5000
 
-	for run := 0; run < 5; run++ {
+	for run := range 5 {
 		broken, fixed := logicalRaceLosesUpdates(n)
 
 		if fixed != n {
@@ -67,7 +67,7 @@ func TestCheckThenActHasNoDataRace(t *testing.T) {
 	c := &checkThenActCounter{}
 
 	// If IncBroken had a data race, -race would fail this. It does not.
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		go c.IncBroken()
 	}
 	time.Sleep(50 * time.Millisecond)

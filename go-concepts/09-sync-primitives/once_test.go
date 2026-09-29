@@ -11,7 +11,7 @@ func TestOnceRunsExactlyOnce(t *testing.T) {
 
 	var wg sync.WaitGroup
 	results := make([]*expensiveResource, 500)
-	for i := 0; i < 500; i++ {
+	for i := range 500 {
 		wg.Go(func() { results[i] = init.Get() })
 	}
 	wg.Wait()
@@ -117,7 +117,7 @@ func TestRetryableOnce(t *testing.T) {
 		return "connected", nil
 	}
 
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		if _, err := r.Do(init); err == nil {
 			t.Fatalf("call %d should have failed", i+1)
 		}
@@ -133,7 +133,7 @@ func TestRetryableOnce(t *testing.T) {
 
 	// Once it has succeeded, it stops calling init.
 	before := r.attempts.Load()
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		if _, err := r.Do(init); err != nil {
 			t.Errorf("cached call returned %v", err)
 		}
@@ -149,7 +149,7 @@ func TestRetryableOnceUnderConcurrency(t *testing.T) {
 	var r retryableOnce
 
 	var wg sync.WaitGroup
-	for i := 0; i < 200; i++ {
+	for range 200 {
 		wg.Go(func() {
 			v, err := r.Do(func() (string, error) { return "value", nil })
 			if err != nil || v != "value" {

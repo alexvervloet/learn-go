@@ -27,7 +27,7 @@ import (
 // Count produces the integers [0, n). The simplest possible Seq.
 func Count(n int) iter.Seq[int] {
 	return func(yield func(int) bool) {
-		for i := 0; i < n; i++ {
+		for i := range n {
 			if !yield(i) {
 				return // the consumer stopped; so do we
 			}
@@ -53,7 +53,7 @@ func Count(n int) iter.Seq[int] {
 // reading files after its consumer has stopped.
 func CountBroken(n int, work func(int)) iter.Seq[int] {
 	return func(yield func(int) bool) {
-		for i := 0; i < n; i++ {
+		for i := range n {
 			work(i)
 			yield(i) //nolint:errcheck,gocritic // ignoring the result is the bug being demonstrated
 		}

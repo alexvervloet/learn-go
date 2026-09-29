@@ -37,7 +37,7 @@ func TestRacyCounterLosesUpdates(t *testing.T) {
 
 	// Repeat: a single run can get lucky on a quiet machine.
 	lostAtLeastOnce := false
-	for run := 0; run < 5; run++ {
+	for run := range 5 {
 		c := &racyCounter{}
 		got := countConcurrently(goroutines, c.Inc, func() int { return c.value })
 		if got < goroutines {
@@ -78,7 +78,7 @@ func TestCheckThenActLosesUpdates(t *testing.T) {
 		b := newBrokenMap()
 
 		var wg sync.WaitGroup
-		for i := 0; i < goroutines; i++ {
+		for range goroutines {
 			wg.Go(func() { b.IncBroken("k") })
 		}
 		wg.Wait()
@@ -95,7 +95,7 @@ func TestCheckThenActLosesUpdates(t *testing.T) {
 		b := newBrokenMap()
 
 		var wg sync.WaitGroup
-		for i := 0; i < goroutines; i++ {
+		for range goroutines {
 			wg.Go(func() { b.IncFixed("k") })
 		}
 		wg.Wait()
@@ -146,7 +146,7 @@ func TestGetOrComputeRunsOnce(t *testing.T) {
 		wg           sync.WaitGroup
 	)
 
-	for i := 0; i < 200; i++ {
+	for range 200 {
 		wg.Go(func() {
 			v, _ := c.GetOrCompute("key", func() string {
 				mu.Lock()
@@ -250,7 +250,7 @@ func BenchmarkCacheReadHeavyMutex(b *testing.B) {
 // computation over the value, a JSON decode, a template render.
 func slowRead(v string) int {
 	sum := 0
-	for i := 0; i < 200; i++ {
+	for i := range 200 {
 		for _, c := range v {
 			sum += int(c) * i
 		}

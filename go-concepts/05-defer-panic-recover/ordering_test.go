@@ -78,7 +78,7 @@ func writeTempFiles(t *testing.T, n int) []string {
 	dir := t.TempDir()
 	paths := make([]string, 0, n)
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		p := filepath.Join(dir, "f"+string(rune('0'+i))+".txt")
 		if err := os.WriteFile(p, []byte("x"), 0o600); err != nil {
 			t.Fatalf("write %s: %v", p, err)

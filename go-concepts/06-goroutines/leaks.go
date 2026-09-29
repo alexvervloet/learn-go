@@ -75,7 +75,7 @@ func LiveExampleGoroutines() int64 { return liveExampleGoroutines.Load() }
 // returned is not deducted from the count instantly. Tests that assert on
 // goroutine counts have to allow for this, which is one reason goleak exists.
 func countGoroutines() int {
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		runtime.Gosched()
 		time.Sleep(time.Millisecond)
 	}
@@ -216,7 +216,7 @@ func leakyWorker(work time.Duration) {
 // cancelled at all, which is a design constraint worth knowing before choosing
 // a library.
 func fixedWorker(ctx context.Context, steps int, each time.Duration) (completed int, err error) {
-	for i := 0; i < steps; i++ {
+	for range steps {
 		select {
 		case <-ctx.Done():
 			return completed, ctx.Err()

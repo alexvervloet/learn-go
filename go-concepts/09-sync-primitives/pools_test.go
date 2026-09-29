@@ -32,7 +32,7 @@ func TestPooledBufferIsResetBetweenUses(t *testing.T) {
 	first := renderWithPool([]string{"user-1"})
 
 	// Many subsequent calls, any of which might receive the same buffer.
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		got := renderWithPool([]string{"user-2"})
 
 		if strings.Contains(got, "user-1") {
@@ -53,7 +53,7 @@ func TestPoolIsSafeUnderConcurrency(t *testing.T) {
 	results := make([]string, goroutines)
 
 	var wg sync.WaitGroup
-	for i := 0; i < goroutines; i++ {
+	for i := range goroutines {
 		wg.Go(func() {
 			results[i] = renderWithPool([]string{strings.Repeat("x", i%10+1)})
 		})
@@ -185,7 +185,7 @@ func BenchmarkLargeBufferWithPool(b *testing.B) {
 		for pb.Next() {
 			buf := pool.Get().(*bytes.Buffer)
 			buf.Grow(64 * 1024)
-			for i := 0; i < 1000; i++ {
+			for range 1000 {
 				buf.WriteString("some payload data")
 			}
 			buf.Reset()
@@ -199,7 +199,7 @@ func BenchmarkLargeBufferWithoutPool(b *testing.B) {
 		for pb.Next() {
 			var buf bytes.Buffer
 			buf.Grow(64 * 1024)
-			for i := 0; i < 1000; i++ {
+			for range 1000 {
 				buf.WriteString("some payload data")
 			}
 		}

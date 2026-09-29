@@ -18,7 +18,7 @@ func TestBuildersProduceWhatTheyClaim(t *testing.T) {
 
 	// They must hold the same IDs, or the comparison is measuring different
 	// amounts of data rather than different pointer densities.
-	for i := 0; i < n; i++ {
+	for i := range n {
 		if values[i].ID != int64(i) || pointers[i].ID != int64(i) || heavy[i].ID != int64(i) {
 			t.Fatalf("index %d: ids differ", i)
 		}

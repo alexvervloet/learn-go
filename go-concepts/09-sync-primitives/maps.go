@@ -161,7 +161,7 @@ func writeOnceReadManyComparison(keys, readers, readsEach int) (syncElapsed, rwE
 	syncM := &typedSyncMap[int, int]{}
 	rwM := newRWMutexMap[int, int]()
 
-	for i := 0; i < keys; i++ {
+	for i := range keys {
 		syncM.Store(i, i*i)
 		rwM.Store(i, i*i)
 	}
@@ -170,9 +170,9 @@ func writeOnceReadManyComparison(keys, readers, readsEach int) (syncElapsed, rwE
 		var wg sync.WaitGroup
 		start := time.Now()
 
-		for r := 0; r < readers; r++ {
+		for range readers {
 			wg.Go(func() {
-				for i := 0; i < readsEach; i++ {
+				for i := range readsEach {
 					_, _ = load(i % keys)
 				}
 			})

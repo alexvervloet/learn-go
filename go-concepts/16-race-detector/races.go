@@ -42,7 +42,7 @@ func countWithRacyCounter(n int) int {
 	c := &racyCounter{}
 
 	var wg sync.WaitGroup
-	for i := 0; i < n; i++ {
+	for range n {
 		wg.Go(c.Inc)
 	}
 	wg.Wait()
@@ -85,7 +85,7 @@ func racyAppend(n int) []int {
 	var shared []int
 
 	var wg sync.WaitGroup
-	for i := 0; i < n; i++ {
+	for i := range n {
 		wg.Go(func() {
 			shared = append(shared, i) // races on the slice header
 		})
@@ -126,7 +126,7 @@ func racyStructAccess(iterations int) *racyConfig {
 	var wg sync.WaitGroup
 
 	wg.Go(func() {
-		for i := 0; i < iterations; i++ {
+		for i := range iterations {
 			cfg.Timeout = i
 			cfg.Retries = i * 2
 			cfg.Name = "writer"
@@ -134,7 +134,7 @@ func racyStructAccess(iterations int) *racyConfig {
 	})
 
 	wg.Go(func() {
-		for i := 0; i < iterations; i++ {
+		for range iterations {
 			_ = cfg.Timeout
 			_ = cfg.Retries
 			_ = cfg.Name
@@ -158,7 +158,7 @@ func racyClosureCapture(n int) (finalTotal int) {
 	total := 0 // captured by every closure AND read here
 
 	var wg sync.WaitGroup
-	for i := 0; i < n; i++ {
+	for i := range n {
 		wg.Go(func() {
 			total += i // racy: read-modify-write on a shared variable
 		})

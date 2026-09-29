@@ -26,7 +26,7 @@ func TestSortingStructs(t *testing.T) {
 	users := []User{{"Cy", 7}, {"Bo", 9}, {"Ana", 7}}
 
 	want := []User{{"Bo", 9}, {"Ana", 7}, {"Cy", 7}}
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		got := sortingStructs(users)
 		if !slices.Equal(got, want) {
 			t.Fatalf("pass %d: got %v, want %v", i, got, want)

@@ -102,7 +102,7 @@ func spinDetector(values int, gap time.Duration) (brokenIterations, fixedIterati
 		slow := make(chan int)
 		go func() {
 			defer close(slow)
-			for i := 0; i < values; i++ {
+			for i := range values {
 				time.Sleep(gap)
 				slow <- i
 			}
@@ -187,7 +187,7 @@ func cpuBurnComparison(values int, gap time.Duration) (brokenElapsed, fixedElaps
 		slow := make(chan int)
 		go func() {
 			defer close(slow)
-			for i := 0; i < values; i++ {
+			for i := range values {
 				time.Sleep(gap)
 				slow <- i
 			}
@@ -236,7 +236,7 @@ func demoNilCases() {
 
 	a := make(chan int, 3)
 	b := make(chan int, 3)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		a <- i
 		b <- i + 10
 	}

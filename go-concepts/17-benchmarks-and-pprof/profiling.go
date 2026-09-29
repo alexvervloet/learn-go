@@ -185,9 +185,9 @@ func interpretingACPUProfile() []string {
 // the resulting profile has something recognisable in it.
 func burnCPU(iterations int) int {
 	total := 0
-	for i := 0; i < iterations; i++ {
+	for range iterations {
 		parts := make([]string, 0, 8)
-		for j := 0; j < 8; j++ {
+		for j := range 8 {
 			parts = append(parts, strings.Repeat("x", j+1))
 		}
 		sort.Strings(parts)

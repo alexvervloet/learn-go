@@ -42,7 +42,7 @@ func TestGOOSIsStable(t *testing.T) {
 		t.Errorf("GOOS = %q, which is not in the known set", runtime.GOOS)
 	}
 
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		if runtime.GOOS != CurrentBuild().GOOS {
 			t.Fatal("GOOS changed between calls, which is impossible")
 		}

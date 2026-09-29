@@ -37,7 +37,7 @@ func leakedGoroutine() (leaked int) {
 // settledGoroutineCount gives the runtime a moment before counting, because a
 // goroutine that has returned is not deducted instantly.
 func settledGoroutineCount() int {
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		runtime.Gosched()
 		time.Sleep(time.Millisecond)
 	}
@@ -165,13 +165,13 @@ func (c *checkThenActCounter) Value() int {
 func logicalRaceLosesUpdates(n int) (broken, fixed int) {
 	b := &checkThenActCounter{}
 	var wg sync.WaitGroup
-	for i := 0; i < n; i++ {
+	for range n {
 		wg.Go(b.IncBroken)
 	}
 	wg.Wait()
 
 	f := &checkThenActCounter{}
-	for i := 0; i < n; i++ {
+	for range n {
 		wg.Go(f.IncFixed)
 	}
 	wg.Wait()

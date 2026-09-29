@@ -33,7 +33,7 @@ func receiveFromClosedReturnsZero() (values []int, oks []bool) {
 
 	// The two buffered values come out first, with ok=true. Closing does not
 	// discard what was already sent.
-	for i := 0; i < 4; i++ {
+	for range 4 {
 		v, ok := <-ch
 		values = append(values, v)
 		oks = append(oks, ok)
@@ -68,7 +68,7 @@ func rangeStopsOnClose(n int) (received []int) {
 
 	go func() {
 		defer close(ch) // the sender closes, in a defer so a panic still does
-		for i := 0; i < n; i++ {
+		for i := range n {
 			ch <- i
 		}
 	}()
@@ -122,11 +122,11 @@ func multipleSendersNeedACloser(senders, perSender int) (received int) {
 	ch := make(chan int)
 
 	var wg sync.WaitGroup
-	for s := 0; s < senders; s++ {
+	for s := range senders {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for i := 0; i < perSender; i++ {
+			for i := range perSender {
 				ch <- s*perSender + i
 			}
 		}()
@@ -161,7 +161,7 @@ func closeAsBroadcast(waiters int) (released int) {
 
 	start := make(chan struct{}) // no values will ever be sent on this
 
-	for i := 0; i < waiters; i++ {
+	for range waiters {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

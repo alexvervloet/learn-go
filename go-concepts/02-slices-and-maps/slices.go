@@ -73,7 +73,7 @@ func appendCannotMutateWithFullSliceExpression() (parent, child []int) {
 // grows) rather than specific numbers.
 func growthReallocates(n int) (caps []int) {
 	var xs []int
-	for i := 0; i < n; i++ {
+	for i := range n {
 		xs = append(xs, i)
 		caps = append(caps, cap(xs))
 	}
@@ -85,7 +85,7 @@ func growthReallocates(n int) (caps []int) {
 // slices_test.go measures the allocation strategy and nothing else.
 func appendGrowing(n int) []int {
 	var xs []int // nil, cap 0
-	for i := 0; i < n; i++ {
+	for i := range n {
 		xs = append(xs, i)
 	}
 	return xs
@@ -96,7 +96,7 @@ func appendGrowing(n int) []int {
 // slices_test.go.
 func preallocated(n int) []int {
 	xs := make([]int, 0, n) // len 0, cap n
-	for i := 0; i < n; i++ {
+	for i := range n {
 		xs = append(xs, i)
 	}
 	return xs

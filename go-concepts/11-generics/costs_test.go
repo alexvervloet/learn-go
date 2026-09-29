@@ -143,10 +143,10 @@ func BenchmarkJoinInterface(b *testing.B) {
 func BenchmarkSetGeneric(b *testing.B) {
 	for b.Loop() {
 		s := make(Set[int], 1000)
-		for i := 0; i < 1000; i++ {
+		for i := range 1000 {
 			s.Add(i)
 		}
-		for i := 0; i < 1000; i++ {
+		for i := range 1000 {
 			_ = s.Has(i)
 		}
 	}
@@ -155,10 +155,10 @@ func BenchmarkSetGeneric(b *testing.B) {
 func BenchmarkSetHandWritten(b *testing.B) {
 	for b.Loop() {
 		s := make(map[int]struct{}, 1000)
-		for i := 0; i < 1000; i++ {
+		for i := range 1000 {
 			s[i] = struct{}{}
 		}
-		for i := 0; i < 1000; i++ {
+		for i := range 1000 {
 			_, _ = s[i]
 		}
 	}
@@ -187,10 +187,10 @@ func BenchmarkStackOfPointers(b *testing.B) {
 func BenchmarkStackOfInts(b *testing.B) {
 	for b.Loop() {
 		s := NewStack[int](100)
-		for i := 0; i < 100; i++ {
+		for i := range 100 {
 			s.Push(i)
 		}
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			_, _ = s.Pop()
 		}
 	}

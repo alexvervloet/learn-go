@@ -98,7 +98,7 @@ func TestDescribeValueGuardsAgainstDepth(t *testing.T) {
 
 	deep := &nested{}
 	current := deep
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		current.Next = &nested{}
 		current = current.Next
 	}

@@ -13,7 +13,7 @@ func TestGroupAllSucceed(t *testing.T) {
 	g, ctx := WithContext(context.Background())
 
 	var count atomic.Int64
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		g.Go(func() error {
 			count.Add(1)
 			return nil
@@ -65,7 +65,7 @@ func TestGroupCancelsOnFirstError(t *testing.T) {
 		return boom
 	})
 
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		g.Go(func() error {
 			select {
 			case <-ctx.Done():
@@ -124,7 +124,7 @@ func TestGroupSetLimit(t *testing.T) {
 		peak    atomic.Int64
 	)
 
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		g.Go(func() error {
 			n := running.Add(1)
 			for {

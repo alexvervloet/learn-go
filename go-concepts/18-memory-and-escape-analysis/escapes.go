@@ -180,7 +180,7 @@ func closureCalledImmediately(n int) int {
 	total := 0
 
 	add := func(v int) { total += v } // total stays on the stack
-	for i := 0; i < n; i++ {
+	for i := range n {
 		add(i)
 	}
 

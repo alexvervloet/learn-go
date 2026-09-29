@@ -83,7 +83,7 @@ func TestMapIterationOrderIsRandomised(t *testing.T) {
 	m := map[string]int{"a": 1, "b": 2, "c": 3, "d": 4, "e": 5}
 
 	seen := make(map[string]struct{})
-	for i := 0; i < 200; i++ {
+	for i := range 200 {
 		keys := iterationOrderIsRandomised(m)
 		if len(keys) != len(m) {
 			t.Fatalf("pass %d produced %d keys, want %d", i, len(keys), len(m))
@@ -112,7 +112,7 @@ func TestDeterministicOrder(t *testing.T) {
 	m := map[string]int{"e": 5, "a": 1, "c": 3, "b": 2, "d": 4}
 	want := []string{"a", "b", "c", "d", "e"}
 
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		if got := deterministicOrder(m); !slices.Equal(got, want) {
 			t.Fatalf("pass %d: got %v, want %v", i, got, want)
 		}

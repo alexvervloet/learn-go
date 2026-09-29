@@ -61,7 +61,7 @@ func countWithMutex(n int) int {
 	c := &mutexCounter{}
 
 	var wg sync.WaitGroup
-	for i := 0; i < n; i++ {
+	for range n {
 		wg.Go(c.Inc)
 	}
 	wg.Wait()
@@ -73,7 +73,7 @@ func countWithAtomic(n int) int {
 	c := &atomicCounter{}
 
 	var wg sync.WaitGroup
-	for i := 0; i < n; i++ {
+	for range n {
 		wg.Go(c.Inc)
 	}
 	wg.Wait()
@@ -118,7 +118,7 @@ func fillMapConcurrently(n int) int {
 	m := newSafeMap()
 
 	var wg sync.WaitGroup
-	for i := 0; i < n; i++ {
+	for i := range n {
 		wg.Go(func() { m.Set(i, i*i) })
 	}
 	wg.Wait()
@@ -140,7 +140,7 @@ func fillSliceByIndex(n int) []int {
 	results := make([]int, n) // pre-sized: every goroutine owns one element
 
 	var wg sync.WaitGroup
-	for i := 0; i < n; i++ {
+	for i := range n {
 		wg.Go(func() {
 			results[i] = i * i // no lock: distinct index, distinct memory
 		})
@@ -160,7 +160,7 @@ func appendUnderLock(n int) []int {
 		wg     sync.WaitGroup
 	)
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		wg.Go(func() {
 			mu.Lock()
 			defer mu.Unlock()
@@ -179,7 +179,7 @@ func collectOverAChannel(n int) []int {
 	ch := make(chan int, n)
 
 	var wg sync.WaitGroup
-	for i := 0; i < n; i++ {
+	for i := range n {
 		wg.Go(func() { ch <- i })
 	}
 
@@ -257,14 +257,14 @@ func updateConfigConcurrently(iterations int) (guarded safeConfig, swapped immut
 	)
 
 	wg.Go(func() {
-		for i := 0; i < iterations; i++ {
+		for i := range iterations {
 			guardedCfg.Update(i, i*2, "writer")
 			holder.Store(immutableConfig{Timeout: i, Retries: i * 2, Name: "writer"})
 		}
 	})
 
 	wg.Go(func() {
-		for i := 0; i < iterations; i++ {
+		for range iterations {
 			_, _, _ = guardedCfg.Snapshot()
 			_ = holder.Load()
 		}
@@ -286,7 +286,7 @@ func sumWithoutSharing(n, workers int) int {
 	partials := make([]int, workers) // one element per worker: no sharing
 
 	var wg sync.WaitGroup
-	for w := 0; w < workers; w++ {
+	for w := range workers {
 		wg.Go(func() {
 			local := 0 // entirely this goroutine's
 			for i := w; i < n; i += workers {

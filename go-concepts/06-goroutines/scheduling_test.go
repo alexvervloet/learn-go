@@ -78,7 +78,7 @@ func TestParallelIsFasterThanSequential(t *testing.T) {
 
 	bestOf := func(fn func() time.Duration) time.Duration {
 		best := time.Duration(math.MaxInt64)
-		for i := 0; i < runs; i++ {
+		for range runs {
 			if d := fn(); d < best {
 				best = d
 			}

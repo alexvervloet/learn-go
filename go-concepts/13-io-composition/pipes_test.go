@@ -170,7 +170,7 @@ func TestPipeDoesNotLeakOnEarlyExit(t *testing.T) {
 
 	before := countGoroutines()
 
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		pr := streamJSONWithPipe(sampleRecords())
 
 		// Read one byte and hang up.
@@ -194,7 +194,7 @@ func TestPipeDoesNotLeakOnEarlyExit(t *testing.T) {
 
 // countGoroutines settles the scheduler and reports the count.
 func countGoroutines() int {
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		runtimeGosched()
 		time.Sleep(time.Millisecond)
 	}

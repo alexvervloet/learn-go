@@ -111,7 +111,7 @@ func TestReceiveWithTimerInLoop(t *testing.T) {
 			ch := make(chan int)
 			go func() {
 				defer close(ch)
-				for i := 0; i < 5; i++ {
+				for i := range 5 {
 					time.Sleep(10 * time.Millisecond)
 					ch <- i
 				}

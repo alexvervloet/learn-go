@@ -185,7 +185,7 @@ func consistentSnapshots(readers, writes int) (torn int) {
 		mu   sync.Mutex
 	)
 
-	for i := 0; i < readers; i++ {
+	for range readers {
 		wg.Go(func() {
 			for !stop.Load() {
 				c := holder.Load()
@@ -221,7 +221,7 @@ func demoAtomics() {
 	timeIt := func(inc func(), value func() int) (int, time.Duration) {
 		var wg sync.WaitGroup
 		start := time.Now()
-		for i := 0; i < goroutines; i++ {
+		for range goroutines {
 			wg.Go(inc)
 		}
 		wg.Wait()

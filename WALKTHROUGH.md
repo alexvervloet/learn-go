@@ -189,7 +189,7 @@ pipeline pattern.
 ## Running everything
 
 ```sh
-make check            # what CI runs, in CI's order
+make check            # CI's lint job plus the tests; CI also runs race, -tags debug and services
 ```
 
 That is `fmt-check`, `vet`, `lint`, `tidy-check`, `isolated-check`, then `test`. `isolated-check` is the one

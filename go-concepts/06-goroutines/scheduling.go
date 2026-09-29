@@ -87,14 +87,19 @@ func schedulerFacts() (numCPU, gomaxprocs, numGoroutine int, version string) {
 		runtime.Version()
 }
 
-// blockingSyscallDoesNotStopOthers demonstrates the handoff. When a goroutine
-// blocks in a syscall its M blocks too, but the P detaches and picks up another
-// M, so the other goroutines in that queue keep running.
+// blockedGoroutinesDoNotStopOthers shows that a goroutine waiting on
+// something does not hold up the rest. The counter keeps climbing while the
+// sleepers wait.
 //
-// Here time.Sleep stands in for a blocking read. The counter keeps climbing
-// while the sleepers are parked, which would be impossible if a blocked
-// goroutine held its P.
-func blockingSyscallDoesNotStopOthers(sleepers int, d time.Duration) int64 {
+// time.Sleep is the cheap kind of waiting: the goroutine parks on a timer and
+// its thread moves on to other work at once, with no syscall at all. The same
+// is true of channel operations, mutexes and network I/O, which Go routes
+// through its poller. The expensive kind is a syscall that really blocks the
+// thread (a read from a regular file, a cgo call). There the runtime hands the
+// P to another thread so the queue keeps running. An earlier version of this
+// comment called time.Sleep a stand-in for a blocking read; it demonstrates
+// the first mechanism, not the handoff.
+func blockedGoroutinesDoNotStopOthers(sleepers int, d time.Duration) int64 {
 	var (
 		wg      sync.WaitGroup
 		counter atomic.Int64
@@ -170,7 +175,7 @@ func demoScheduling() {
 	fmt.Printf("    concurrent, GOMAXPROCS=%-2d:   %v   (%.1fx faster than sequential)\n",
 		numCPU, all.Round(time.Millisecond), float64(seq)/float64(all))
 
-	progressed := blockingSyscallDoesNotStopOthers(8, 50*time.Millisecond)
+	progressed := blockedGoroutinesDoNotStopOthers(8, 50*time.Millisecond)
 	fmt.Printf("\n  while 8 goroutines were blocked, a 9th completed %d iterations\n", progressed)
 
 	fmt.Println("\n  preemption:")

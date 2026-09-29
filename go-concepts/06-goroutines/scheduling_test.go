@@ -164,12 +164,12 @@ func TestConcurrencyIsNotParallelism(t *testing.T) {
 	}
 }
 
-func TestBlockingSyscallDoesNotStopOthers(t *testing.T) {
+func TestBlockedGoroutinesDoNotStopOthers(t *testing.T) {
 	if testing.Short() {
 		t.Skip("timing test")
 	}
 
-	progressed := blockingSyscallDoesNotStopOthers(8, 30*time.Millisecond)
+	progressed := blockedGoroutinesDoNotStopOthers(8, 30*time.Millisecond)
 
 	if progressed == 0 {
 		t.Error("the working goroutine made no progress while others were blocked")

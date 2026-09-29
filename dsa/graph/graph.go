@@ -78,15 +78,25 @@ func (g *Graph[V]) Len() int { return len(g.nodes) }
 
 // EdgeCount reports the number of edges. An undirected edge is counted once,
 // although it is stored twice.
+//
+// Except a self-loop, which has only one direction to store: a-a is a single
+// entry in a's list. So undirected entries are halved and self-loops are added
+// back whole. The first version halved everything, and a graph holding only
+// a-a reported zero edges.
 func (g *Graph[V]) EdgeCount() int {
-	total := 0
-	for _, edges := range g.adj {
+	total, loops := 0, 0
+	for from, edges := range g.adj {
 		total += len(edges)
+		for _, e := range edges {
+			if e.To == from {
+				loops++
+			}
+		}
 	}
 	if g.directed {
 		return total
 	}
-	return total / 2
+	return (total-loops)/2 + loops
 }
 
 // AddNode adds a node with no edges and reports whether it was new.

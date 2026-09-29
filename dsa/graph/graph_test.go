@@ -407,3 +407,32 @@ func TestString(t *testing.T) {
 		t.Errorf("String() =\n%q\nwant\n%q", got, want)
 	}
 }
+
+// TestSelfLoopsAreCounted: an undirected edge is stored in both directions and counted by halving, but a
+// self-loop has only one direction to store. The first version halved it too, so AddEdge("a", "a") produced a
+// graph with zero edges, and adding a-b afterwards reported one.
+func TestSelfLoopsAreCounted(t *testing.T) {
+	g := New[string]()
+
+	g.AddEdge("a", "a")
+	if got := g.EdgeCount(); got != 1 {
+		t.Errorf("undirected self-loop: EdgeCount = %d, want 1", got)
+	}
+
+	g.AddEdge("a", "b")
+	if got := g.EdgeCount(); got != 2 {
+		t.Errorf("self-loop plus a-b: EdgeCount = %d, want 2", got)
+	}
+
+	g.AddEdge("a", "a") // again: replaces, does not add
+	if got := g.EdgeCount(); got != 2 {
+		t.Errorf("re-adding the self-loop: EdgeCount = %d, want 2", got)
+	}
+
+	d := NewDirected[string]()
+	d.AddEdge("a", "a")
+	d.AddEdge("a", "b")
+	if got := d.EdgeCount(); got != 2 {
+		t.Errorf("directed: EdgeCount = %d, want 2", got)
+	}
+}

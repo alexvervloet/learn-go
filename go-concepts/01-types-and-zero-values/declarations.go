@@ -1,6 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"strconv"
+)
 
 // Declaration forms
 // =================
@@ -15,28 +18,38 @@ import "fmt"
 // new scope makes it declare a new variable that shadows the outer one, which
 // is where the bugs live.
 
-// shadowingTrap shows the classic Go shadowing bug. The inner := inside the if
-// block creates a NEW err that goes out of scope at the closing brace, so the
-// outer err stays nil and the caller sees success.
+// shadowingTrap shows the classic Go shadowing bug. The function has an err,
+// and the := inside the if block needs a new variable for n, so it declares a
+// NEW err as well, in the block's scope. The parse error lands in the inner
+// err, which vanishes at the closing brace, and the caller sees success.
 //
-// go vet does not catch this. `go build -gcflags=-m` does not either. The
-// shadow linter in golangci-lint does, which is why .golangci.yml enables it.
-func shadowingTrap() (outerErr error) {
-	if true {
-		// This := declares a new err, scoped to the if block.
-		err := fmt.Errorf("something failed")
+// An earlier version named the outer variable outerErr and the inner one err,
+// so nothing was shadowed and the example only showed an unused variable.
+//
+// The compiler accepts this and so does go vet's default set. vet has a shadow
+// analyzer, but it is off by default because it also flags the idiomatic
+//
+//	if err := f(); err != nil { ... }
+//
+// which shadows an outer err on purpose. Turned on across this repository it
+// reported 50 findings, nearly all of that shape, so it stays off here too.
+// Reading := as "declare" every time is the defence.
+func shadowingTrap(input string) (n int, err error) {
+	if input != "" {
+		n, err := strconv.Atoi(input) // new n AND new err, both scoped to this block
+		_ = n
 		_ = err
 	}
-	// outerErr was never touched. The failure vanished.
-	return outerErr
+	// The outer n and err were never touched. The failure vanished.
+	return n, err
 }
 
-// shadowingFixed assigns to the existing variable with = instead of :=.
-func shadowingFixed() (outerErr error) {
-	if true {
-		outerErr = fmt.Errorf("something failed")
+// shadowingFixed assigns to the existing variables with = instead of :=.
+func shadowingFixed(input string) (n int, err error) {
+	if input != "" {
+		n, err = strconv.Atoi(input)
 	}
-	return outerErr
+	return n, err
 }
 
 // multipleAssignment returns several values, which Go uses instead of tuples.
@@ -70,8 +83,10 @@ var _ fmt.Stringer = (*Counter)(nil)
 // demoDeclarations prints the shadowing difference, which is the part of this
 // file worth seeing rather than reading.
 func demoDeclarations() {
-	fmt.Printf("  shadowingTrap()  -> %v   (the error was lost)\n", shadowingTrap())
-	fmt.Printf("  shadowingFixed() -> %v\n", shadowingFixed())
+	_, lost := shadowingTrap("not a number")
+	_, kept := shadowingFixed("not a number")
+	fmt.Printf("  shadowingTrap(\"not a number\")  -> err=%v   (the error was lost)\n", lost)
+	fmt.Printf("  shadowingFixed(\"not a number\") -> err=%v\n", kept)
 
 	n, s, err := multipleAssignment()
 	fmt.Printf("  multipleAssignment() -> %d, %q, %v\n", n, s, err)

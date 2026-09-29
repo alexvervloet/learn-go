@@ -7,11 +7,17 @@ import "testing"
 // ever made this an error, this test would fail and the README would need
 // rewriting.
 func TestShadowingTrap(t *testing.T) {
-	if err := shadowingTrap(); err != nil {
-		t.Errorf("shadowingTrap() = %v, want nil — the shadowed error should be lost", err)
+	if _, err := shadowingTrap("not a number"); err != nil {
+		t.Errorf("shadowingTrap() = %v, want nil: the shadowed error should be lost", err)
 	}
-	if err := shadowingFixed(); err == nil {
-		t.Error("shadowingFixed() = nil, want an error")
+	if _, err := shadowingFixed("not a number"); err == nil {
+		t.Error("shadowingFixed() = nil, want the parse error")
+	}
+	if n, _ := shadowingTrap("42"); n != 0 {
+		t.Errorf("shadowingTrap(\"42\") = %d, want 0: the parsed number is shadowed too", n)
+	}
+	if n, _ := shadowingFixed("42"); n != 42 {
+		t.Errorf("shadowingFixed(\"42\") = %d, want 42", n)
 	}
 }
 

@@ -72,6 +72,9 @@ go mod init github.com/alexvervloet/learn-go/backends/learning/whatever
 cd ../../.. && go work use ./backends/learning/whatever
 ```
 
+Then add the directory to the `gomod` list in [.github/dependabot.yml](.github/dependabot.yml), which does not
+read `go.work`.
+
 ## Structure
 
 | Folder | What's in it |

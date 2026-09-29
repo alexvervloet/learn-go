@@ -10,7 +10,7 @@
 // What Go has instead, and Python does not:
 //
 //	-race          a runtime data-race detector, in the toolchain
-//	synctest       a fake clock and deterministic scheduling, in the standard library since 1.24
+//	synctest       a fake clock and deterministic scheduling, in the standard library since 1.25 (an experiment in 1.24)
 //	goroutine dumps on deadlock, so a hung test says what it was waiting for
 //
 // # The two failure modes a concurrency test has to catch
@@ -40,7 +40,7 @@ type Counter interface {
 // UnsafeCounter has a data race on purpose.
 //
 // It is here so the race detector has a target, and it is unexported from the module's point of
-// view: nothing outside the tests uses it. See concurrency_race_test.go, which is behind a build
+// view: nothing outside the tests uses it. See race_demo_test.go, which is behind a build
 // tag because a deliberate race should not fail the suite.
 type UnsafeCounter struct {
 	n int

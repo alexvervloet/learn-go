@@ -96,7 +96,7 @@ reports a panic instead of the assertion that should have stopped it.
 
 ### Fake time, and the thing Go has that Python does not
 
-`testing/synctest` (standard library since Go 1.24) runs a function in a bubble where the `time`
+`testing/synctest` (standard library since Go 1.25, behind `GOEXPERIMENT=synctest` in 1.24) runs a function in a bubble where the `time`
 package uses a **fake clock** that advances only when every goroutine in the bubble is durably
 blocked. A test of exponential backoff with 1s, 2s and 4s waits runs instantly and assertions are
 *exact*:

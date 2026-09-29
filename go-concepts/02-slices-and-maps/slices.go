@@ -158,8 +158,8 @@ func deleteClearsTail(xs []string, i int) (result []string, tailCleared bool) {
 	return xs[:last], tailCleared
 }
 
-// deleteWithStdlib is the same operation in one call. slices.Delete zeroes the
-// vacated tail for element types that contain pointers.
+// deleteWithStdlib is the same operation in one call. Since Go 1.22,
+// slices.Delete zeroes the vacated tail, whatever the element type.
 func deleteWithStdlib(xs []string, i int) []string {
 	return slices.Delete(xs, i, i+1)
 }

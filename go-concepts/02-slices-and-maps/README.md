@@ -91,7 +91,8 @@ clear it.
 
 For `[]int` that is harmless. For `[]*User` it pins a `User` in memory for as
 long as the slice lives. Zero the tail when the element type contains pointers.
-Go 1.21's `slices.Delete` does this for you, which is the better answer.
+`slices.Delete` does this for you since Go 1.22, for every element type, which
+is the better answer.
 
 ## Maps
 
@@ -103,9 +104,10 @@ never promised. If you need determinism, collect the keys, sort them, and
 iterate the sorted slice.
 
 Worth being precise about what the randomisation is, because it is easy to
-overstate. The runtime picks a random starting bucket and a random offset within
-it, then walks from there. It is not a shuffle. A small map lives in a single
-bucket, so its observed orders are rotations of one walk: `go test -v -run
+overstate. Since Go 1.24 a map is a Swiss table: slots in groups of eight, found
+by open addressing. Iteration starts at a random position and walks from there.
+It is not a shuffle. A small map fits in a single group, so its observed orders
+are rotations of one walk: `go test -v -run
 TestMapIterationOrderIsRandomised` over a 5-key map reports about 5 distinct
 orders across 200 passes, not the 120 a real permutation would reach. The
 guarantee you get is "the order varies and is not yours to rely on", and that is

@@ -69,15 +69,16 @@ func TestMapElementsAreNotAddressable(t *testing.T) {
 
 // TestMapIterationOrderIsRandomised proves the order varies between passes.
 //
-// Worth knowing what it does NOT prove: the runtime randomises the starting
-// bucket and the offset within it, not the whole sequence. For a small map that
-// lives in one bucket the observed orders are rotations of each other, so 200
+// Worth knowing what it does NOT prove: the runtime randomises where iteration
+// starts, not the whole sequence. For a small map that fits in one group of
+// eight slots the observed orders are rotations of each other, so 200
 // passes over 5 keys typically yields around 5 distinct orders, not the 120
 // permutations a true shuffle would reach. The test logs the real count.
 //
 // The assertion is therefore ">= 2 distinct orders", which is the actual
 // guarantee: you cannot depend on map order. Asserting a higher number would
-// encode an implementation detail and flake on a bucket-layout change.
+// encode an implementation detail and flake on a table-layout change. (It
+// already survived one: Go 1.24 replaced buckets with Swiss tables.)
 func TestMapIterationOrderIsRandomised(t *testing.T) {
 	m := map[string]int{"a": 1, "b": 2, "c": 3, "d": 4, "e": 5}
 
@@ -93,7 +94,7 @@ func TestMapIterationOrderIsRandomised(t *testing.T) {
 	if len(seen) < 2 {
 		t.Errorf("200 range passes produced %d distinct order(s); Go must randomise map iteration", len(seen))
 	}
-	t.Logf("200 passes produced %d distinct orders (rotations of one bucket walk)", len(seen))
+	t.Logf("200 passes produced %d distinct orders (rotations of one walk over the table)", len(seen))
 }
 
 func joinKeys(keys []string) string {

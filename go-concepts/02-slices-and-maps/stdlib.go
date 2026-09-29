@@ -36,15 +36,18 @@ func sortingAndSearching() (sorted []int, idx int, found bool, maxV int, minV in
 
 // sortingStructs uses SortFunc with cmp.Compare, which is the generic
 // three-way comparison Go 1.21 added. Returning cmp.Compare directly is
-// clearer and less error-prone than writing `a.Score < b.Score`, which silently
-// produces an unstable sort when scores tie.
+// clearer and safer than hand-written arithmetic like `a.Score - b.Score`,
+// which overflows for large values and gets the order backwards.
 func sortingStructs(users []User) []User {
 	out := slices.Clone(users)
 
 	slices.SortFunc(out, func(a, b User) int {
-		// Descending by score, then ascending by name to break ties. Without
-		// the tie-break, equal scores come out in whatever order the sort
-		// happened to leave them, which differs between runs.
+		// Descending by score, then ascending by name to break ties. SortFunc
+		// is not stable, so without the tie-break equal scores come out in an
+		// order the algorithm chose rather than the input order. That order is
+		// the same every run for the same input, which is exactly why a
+		// missing tie-break survives testing. SortStableFunc keeps input order
+		// instead.
 		if c := cmp.Compare(b.Score, a.Score); c != 0 {
 			return c
 		}

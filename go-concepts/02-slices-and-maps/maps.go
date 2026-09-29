@@ -94,7 +94,7 @@ func mapElementsAreNotAddressable() (readModifyWrite, pointerValues map[string]i
 
 // iterationOrderIsRandomised collects one full pass over the same map. Calling
 // it repeatedly produces different orders: the runtime picks a random starting
-// bucket and offset for every range statement.
+// position in the table for every range statement.
 //
 // This is a feature. Go randomises so that code cannot come to depend on an
 // order the spec never promised, which is what happened in other languages

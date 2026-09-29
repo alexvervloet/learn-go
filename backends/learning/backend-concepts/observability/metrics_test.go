@@ -335,3 +335,19 @@ func TestMetricsRecorderKeepsCapabilitiesAndStatus(t *testing.T) {
 		t.Errorf("status %d after a 103, want 202", resp.StatusCode)
 	}
 }
+
+// TestLabelValuesUsePrometheusEscaping: only backslash, quote and newline are escaped in the text format.
+func TestLabelValuesUsePrometheusEscaping(t *testing.T) {
+	for value, want := range map[string]string{
+		`a"b`:      `k="a\"b"`,
+		`a\b`:      `k="a\\b"`,
+		"a\nb":     `k="a\nb"`,
+		"a\tb":     "k=\"a\tb\"", // a tab is written as it is, not as \t
+		"café":     `k="café"`,
+		"bell\x07": "k=\"bell\x07\"",
+	} {
+		if got := labelPair("k", value); got != want {
+			t.Errorf("labelPair(%q) = %s, want %s", value, got, want)
+		}
+	}
+}

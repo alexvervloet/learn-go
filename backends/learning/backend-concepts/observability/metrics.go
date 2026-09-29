@@ -433,6 +433,15 @@ func writeMetric(b *strings.Builder, name string, m *dto.Metric) {
 	}
 }
 
+// labelEscaper applies the Prometheus text format's escaping for label values: backslash, double quote and
+// newline, and nothing else. The first version used Go's %q, which also escapes tabs, control characters and
+// invalid UTF-8 in Go's own syntax (\t, \x07, \ufffd), none of which the Prometheus parser understands.
+var labelEscaper = strings.NewReplacer(`\`, `\\`, `"`, `\"`, "\n", `\n`)
+
+func labelPair(name, value string) string {
+	return name + `="` + labelEscaper.Replace(value) + `"`
+}
+
 func formatLabels(pairs []*dto.LabelPair) string {
 	if len(pairs) == 0 {
 		return ""
@@ -440,14 +449,14 @@ func formatLabels(pairs []*dto.LabelPair) string {
 
 	parts := make([]string, 0, len(pairs))
 	for _, p := range pairs {
-		parts = append(parts, fmt.Sprintf("%s=%q", p.GetName(), p.GetValue()))
+		parts = append(parts, labelPair(p.GetName(), p.GetValue()))
 	}
 
 	return "{" + strings.Join(parts, ",") + "}"
 }
 
 func withLabel(labels, name, value string) string {
-	pair := fmt.Sprintf("%s=%q", name, value)
+	pair := labelPair(name, value)
 
 	if labels == "" {
 		return "{" + pair + "}"

@@ -18,6 +18,7 @@ the index below groups them by topic.
 - [The famous slice-queue leak is not a leak](#the-famous-slice-queue-leak-is-not-a-leak)
 - [`time.Duration` runs out at 292 years](#timeduration-runs-out-at-292-years)
 - [`./...` matches nothing from a Go workspace root](#2026-09-25---matches-nothing-from-a-go-workspace-root)
+- ["Goroutines start at 8KB" was wrong, and so was "2KB", on Windows](#goroutines-start-at-8kb-was-wrong-and-so-was-2kb-on-windows)
 
 **Concurrency and the race detector.**
 
@@ -2467,3 +2468,19 @@ silently brought back the n-1 bug I had fixed in the same file an hour earlier.
 that assigns to an existing variable (`=`) rather than declaring one (`:=`), because that variable outlives the
 loop and its final value can change. Here the test would have caught it, but only because that test had just
 been corrected.
+
+## "Goroutines start at 8KB" was wrong, and so was "2KB", on Windows
+
+**Expected.** An audit said the lessons' "8KB initial stack" was wrong: `runtime/stack.go` has `stackMin = 2048`,
+and lesson 18's own test measured about 2KB per goroutine. I changed every mention to 2KB and tightened the test
+to require under 8KB.
+
+**What happened.** macOS and Linux passed and the Windows CI runner failed with exactly 8192 bytes per
+goroutine. The runtime adds `stackSystem`, space the OS reserves in every stack, to `stackMin` and rounds up to a
+power of two. Windows reserves 4096, so it gets 2048 + 4096 rounded to 8192. iOS on arm64 and Plan 9 get 4096,
+and everything else gets 2048. The original "8KB" was the Windows number presented as universal. My correction
+was the macOS number presented as universal.
+
+**Next time.** Before correcting a runtime number, read the constant and then every expression that uses it.
+`stackMin` isn't the allocation size; `fixedStack` is. The test and the lessons now use the platform's size, and
+the test states which one it expected.

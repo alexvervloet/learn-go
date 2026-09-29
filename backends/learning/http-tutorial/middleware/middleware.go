@@ -250,8 +250,11 @@ func Logger(log *slog.Logger) Middleware {
 // does not die. What it does not do is send a response, so the client sees a dropped
 // connection rather than a 500, and nothing useful is logged.
 //
-// This must be the OUTERMOST middleware, or a panic escapes whatever is outside it. Put
-// logging inside it and a panicking request produces no log line at all.
+// Where it goes is a trade-off, set out in the package doc. Outermost, it also catches a panic
+// in any other middleware; but then Logger is inside it, and a panicking request loses its
+// log line. Production puts Logger outside Recovery so the 500 is logged, and accepts that a
+// panic inside Logger itself is not caught. (An earlier version of this comment said Recovery
+// must be outermost, contradicting the package doc and Production.)
 func Recovery(log *slog.Logger) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -298,8 +301,11 @@ func Recovery(log *slog.Logger) Middleware {
 //
 // It does NOT stop the handler. Go has no way to kill a goroutine, so all this can do is
 // cancel the context and let the handler notice. A handler that ignores r.Context() runs to
-// completion regardless, and the only thing the timeout achieves is that the response is
-// discarded.
+// completion regardless, and whatever it writes after the deadline is still sent: this
+// middleware never touches the response. (An earlier version of this comment said the
+// response is discarded, which describes the standard library's http.TimeoutHandler. That
+// one buffers the handler's output and replies 503 at the deadline instead, at the cost of
+// holding every response in memory and breaking streaming.)
 //
 // That is the whole difference from a language with thread interruption, and it is why every
 // blocking call in a Go handler should take a context.

@@ -5,8 +5,8 @@
 //	curl -s localhost:8080/items/ | jq
 //	curl -s -XPOST localhost:8080/items/ -d '{"name":"chisel"}' | jq
 //	curl -s localhost:8080/stream          # one JSON object per second
-//	curl -i localhost:8080/items/nope      # a problem+json 404
-//	curl -i -H 'Accept: text/plain' localhost:8080/items/1
+//	curl -i localhost:8080/items/nope      # a plain-text 400: the id is not a number
+//	curl -i -H 'Accept: text/plain' localhost:8080/negotiated/1   # content negotiation
 //
 // Then ctrl-C and watch the graceful shutdown.
 package main

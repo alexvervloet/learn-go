@@ -15,7 +15,7 @@
 //	r.PathValue, r.URL.Query(), r.FormValue   strings
 //
 // So a Go handler that wants FastAPI's behaviour writes it. That is thirty lines for a typical
-// endpoint, and the thirty lines are the subject of this package and of validation/.
+// endpoint, and the thirty lines are the subject of this package.
 //
 // What Go gains: the decoding is explicit, so there is no question about what happened to a
 // field that was absent versus zero versus malformed, and the answers are in the code rather

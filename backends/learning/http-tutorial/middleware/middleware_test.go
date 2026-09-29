@@ -1,7 +1,9 @@
 package middleware
 
 import (
+	"bufio"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
@@ -422,23 +424,119 @@ func TestWrapperKeepsFlush(t *testing.T) {
 		}
 	})
 
-	t.Run("a type assertion to http.Flusher fails through the wrapper", func(t *testing.T) {
-		var assertedOK bool
+	t.Run("a type assertion to http.Flusher also works through the wrapper", func(t *testing.T) {
+		var flusher, hijacker bool
 
 		h := Logger(discardLogger())(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			// The pre-1.20 idiom, and this is why it broke inside middleware.
-			_, assertedOK = w.(http.Flusher)
+			// The pre-1.20 idiom. Your own code should use ResponseController, but the
+			// middleware you import may not, and it sees this recorder.
+			_, flusher = w.(http.Flusher)
+			_, hijacker = w.(http.Hijacker)
 		}))
 
 		h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/", nil))
 
-		if assertedOK {
-			t.Error("the recorder implements Flusher directly; the test no longer shows the problem")
+		if !flusher || !hijacker {
+			t.Errorf("Flusher=%v Hijacker=%v: Unwrap alone is not enough for code that type-asserts",
+				flusher, hijacker)
 		}
-
-		t.Log("w.(http.Flusher) fails inside the middleware even though the real writer " +
-			"supports it. That is the bug http.ResponseController exists to fix.")
 	})
+}
+
+// TestProductionStreams sends one line, waits for the client to READ it, and only then sends the second.
+//
+// If anything in the chain swallows Flush, the first line sits in a buffer until the handler returns, the
+// client never sees it, and the handler waits forever. So a broken chain fails this test with a timeout rather
+// than passing slowly. The first version of the recorder had Unwrap and no Flush method, which is enough for
+// a handler using http.ResponseController and NOT enough for chi's Compress, which type-asserts http.Flusher
+// on the writer it wraps. /stream in cmd/server delivered everything at the end.
+func TestProductionStreams(t *testing.T) {
+	read := make(chan struct{})
+
+	srv := httptest.NewServer(Production(discardLogger())(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/x-ndjson")
+
+			_, _ = w.Write([]byte("{\"n\":1}\n"))
+			if err := http.NewResponseController(w).Flush(); err != nil {
+				t.Errorf("Flush through Production failed: %v", err)
+				return
+			}
+
+			select {
+			case <-read:
+			case <-r.Context().Done():
+				return
+			}
+
+			_, _ = w.Write([]byte("{\"n\":2}\n"))
+		})))
+	t.Cleanup(srv.Close)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL, nil)
+
+	// Asking for gzip is what makes chi's Compress wrap the writer, and a streaming client
+	// behind a browser always asks. DisableCompression stops the client decoding it for us,
+	// so read through a gzip reader when the server did compress.
+	req.Header.Set("Accept-Encoding", "gzip")
+
+	resp, err := (&http.Transport{DisableCompression: true}).RoundTrip(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	var body io.Reader = resp.Body
+	if resp.Header.Get("Content-Encoding") == "gzip" {
+		zr, err := gzip.NewReader(resp.Body)
+		if err != nil {
+			t.Fatalf("the first line never arrived: %v", err)
+		}
+		body = zr
+	}
+
+	line, err := bufio.NewReader(body).ReadString('\n')
+	if err != nil {
+		t.Fatalf("the first line never arrived before the handler finished: %v", err)
+	}
+
+	close(read)
+
+	if line != "{\"n\":1}\n" {
+		t.Errorf("first line = %q", line)
+	}
+}
+
+// TestProductionCanHijack is the WebSocket half. An upgrade takes over the connection with Hijack, and a
+// wrapper that hides http.Hijacker makes every upgrade fail with "not supported" through this chain.
+func TestProductionCanHijack(t *testing.T) {
+	srv := httptest.NewServer(Production(discardLogger())(http.HandlerFunc(
+		func(w http.ResponseWriter, _ *http.Request) {
+			conn, buf, err := http.NewResponseController(w).Hijack()
+			if err != nil {
+				t.Errorf("Hijack through Production failed: %v", err)
+				return
+			}
+			defer func() { _ = conn.Close() }()
+
+			_, _ = buf.WriteString("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok")
+			_ = buf.Flush()
+		})))
+	t.Cleanup(srv.Close)
+
+	resp, err := http.Get(srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	body, _ := io.ReadAll(resp.Body)
+	if string(body) != "ok" {
+		t.Errorf("body = %q, want the bytes written on the hijacked connection", body)
+	}
 }
 
 // TestRecorderUnwrapReachesTheRealWriter, stated directly.

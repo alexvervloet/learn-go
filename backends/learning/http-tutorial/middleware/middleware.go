@@ -50,10 +50,12 @@
 package middleware
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"runtime/debug"
 	"strconv"
@@ -131,10 +133,25 @@ func RequestIDFrom(ctx context.Context) string {
 
 // recorder wraps http.ResponseWriter to remember the status and byte count.
 //
-// The Unwrap method is what makes http.ResponseController work through this wrapper, and
-// without it a streaming handler inside this middleware cannot flush. Go 1.20 introduced that
-// convention; before it, a wrapper had to reimplement Flusher, Hijacker and ReaderFrom by
-// hand, and most did not.
+// # Why it has Unwrap AND Flush AND Hijack
+//
+// Embedding http.ResponseWriter promotes Header, Write and WriteHeader, and nothing else. The
+// optional interfaces the real writer has (http.Flusher, http.Hijacker) are hidden, so a
+// streaming handler inside this middleware cannot flush and a WebSocket upgrade cannot hijack.
+//
+// Go 1.20's answer is Unwrap: http.ResponseController walks Unwrap until it finds a writer that
+// can do the job. That covers code YOU write, as long as you use ResponseController.
+//
+// It does not cover code other people wrote. chi's Compress, and plenty of other middleware,
+// still does `w.(http.Flusher)` on the writer it wraps, which is this recorder when Compress is
+// inside Logger. The first version of this type had only Unwrap, the comment said that restored
+// "every optional capability at once", and Production's /stream delivered everything at the end
+// while WebSocket upgrades failed. TestProductionStreams and TestProductionCanHijack are the
+// regression tests.
+//
+// So a wrapper that sits in someone else's chain needs both: Unwrap for ResponseController, and
+// the methods themselves for type assertions. Each method delegates through ResponseController,
+// so it keeps working when the writer underneath is itself a wrapper.
 type recorder struct {
 	http.ResponseWriter
 
@@ -143,9 +160,19 @@ type recorder struct {
 	wroteHeader bool
 }
 
-// Unwrap lets http.ResponseController reach the real writer. One method, and it restores
-// flushing, hijacking and every other optional capability at once.
+// Unwrap lets http.ResponseController reach the real writer.
 func (r *recorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
+
+// Flush makes the recorder an http.Flusher, for middleware that type-asserts rather than using
+// ResponseController. The error is dropped because http.Flusher has no way to return it.
+func (r *recorder) Flush() {
+	_ = http.NewResponseController(r.ResponseWriter).Flush()
+}
+
+// Hijack makes the recorder an http.Hijacker, which is what a WebSocket upgrade needs.
+func (r *recorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	return http.NewResponseController(r.ResponseWriter).Hijack()
+}
 
 // WriteHeader records the status and passes it through. A second call is swallowed, because
 // net/http ignores it too and the recorded status has to match what the client got.

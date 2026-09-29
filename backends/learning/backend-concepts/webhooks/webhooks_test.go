@@ -7,6 +7,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -154,14 +158,13 @@ func TestSecretRotation(t *testing.T) {
 	}
 }
 
-// TestConstantTimeComparison is the one property a test cannot prove, so this tests the next best thing: that
-// the code calls hmac.Equal rather than ==.
+// TestNearMissSignaturesAreRejected: a signature matching the expected one for all but its last character is
+// rejected exactly like one matching nothing.
 //
-// A timing test here would be a bad test. Measuring a nanosecond difference from Go, on a machine with a
-// scheduler and a turbo clock, produces a number that varies more between runs than between the two
-// implementations. So the assertion is behavioural: a signature that shares a long prefix with the expected one
-// is rejected exactly like one that shares nothing, and the comparison looks at the whole string.
-func TestConstantTimeComparison(t *testing.T) {
+// This does NOT show the comparison is constant-time: == would pass it too. An earlier version was named
+// TestConstantTimeComparison and said it checked that the code calls hmac.Equal, which it did not.
+// TestVerifyComparesInConstantTime below checks that, and why a timing measurement is not the way.
+func TestNearMissSignaturesAreRejected(t *testing.T) {
 	v := newTestVerifier()
 
 	body := []byte(`{"id":"evt_timing"}`)
@@ -620,5 +623,61 @@ func TestSignMatchesHandRolledHMAC(t *testing.T) {
 
 	if got := Sign(secret, fixedTime, body); got != want {
 		t.Errorf("Sign gave\n  %s\nwant\n  %s", got, want)
+	}
+}
+
+// TestVerifyComparesInConstantTime checks the source rather than the clock.
+//
+// A timing test would be a bad test: a nanosecond difference measured from Go, on a machine with a scheduler and a
+// turbo clock, varies more between runs than between == and hmac.Equal. What can be checked is that Verify
+// compares signatures with a constant-time function and never with == or !=. go/ast makes that a real check
+// rather than a comment.
+func TestVerifyComparesInConstantTime(t *testing.T) {
+	fset := token.NewFileSet()
+
+	file, err := parser.ParseFile(fset, "webhooks.go", nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var verify *ast.FuncDecl
+	for _, d := range file.Decls {
+		if fn, ok := d.(*ast.FuncDecl); ok && fn.Name.Name == "Verify" && fn.Recv != nil {
+			verify = fn
+		}
+	}
+	if verify == nil {
+		t.Fatal("no Verify method in webhooks.go")
+	}
+
+	constantTime := false
+
+	ast.Inspect(verify.Body, func(n ast.Node) bool {
+		switch n := n.(type) {
+		case *ast.CallExpr:
+			if sel, ok := n.Fun.(*ast.SelectorExpr); ok {
+				name := fmt.Sprint(sel.X) + "." + sel.Sel.Name
+				if name == "hmac.Equal" || name == "subtle.ConstantTimeCompare" {
+					constantTime = true
+				}
+			}
+		case *ast.BinaryExpr:
+			// Comparing against a literal (signature == "") tests for absence and leaks nothing. What
+			// must not happen is comparing the signature with another computed value.
+			_, xLit := n.X.(*ast.BasicLit)
+			_, yLit := n.Y.(*ast.BasicLit)
+			if (n.Op == token.EQL || n.Op == token.NEQ) && !xLit && !yLit {
+				for _, side := range []ast.Expr{n.X, n.Y} {
+					if id, ok := side.(*ast.Ident); ok && (id.Name == "signature" || id.Name == "expected") {
+						t.Errorf("%s: Verify compares %s with %s", fset.Position(n.Pos()), id.Name, n.Op)
+					}
+				}
+			}
+		}
+		return true
+	})
+
+	if !constantTime {
+		t.Error("Verify never calls hmac.Equal or subtle.ConstantTimeCompare")
 	}
 }

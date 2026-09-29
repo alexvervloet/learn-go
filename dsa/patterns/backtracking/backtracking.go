@@ -93,14 +93,20 @@ func Subsets[T any](s []T) [][]T {
 // Duplicates in the input are what make this different from Subsets. For [1,2,2] there
 // are 8 subsets but only 6 distinct ones.
 //
-// The rule: sort first, then at each level skip an element equal to the previous one
-// UNLESS the previous one was taken. That is the standard formulation and the reason it
-// works is worth stating: among k copies of a value, the only thing that distinguishes
-// the subsets is HOW MANY were taken, so forcing them to be taken as a prefix of the run
-// collapses every equivalent choice into one.
-func SubsetsDistinct[T interface{ comparable }](s []T, less func(a, b T) int) [][]T {
+// The rule: sort first, then at each level of the recursion try each distinct value
+// once. The loop at one level picks the next element of the subset, and it skips
+// sorted[i] when it equals sorted[i-1] and is not the level's first choice (i > at).
+// The reason it works is worth stating: among k copies of a value, the only thing that
+// distinguishes the subsets is HOW MANY were taken, and trying a value only once per
+// level means the copies are always taken as a prefix of their run, which collapses
+// every equivalent choice into one.
+//
+// (Another common formulation walks include/exclude decisions and skips a copy unless
+// the previous copy was taken. It produces the same set; an earlier version of this
+// comment described that one while the code did this.)
+func SubsetsDistinct[T comparable](s []T, compare func(a, b T) int) [][]T {
 	sorted := slices.Clone(s)
-	slices.SortFunc(sorted, less)
+	slices.SortFunc(sorted, compare)
 
 	var out [][]T
 	var path []T
@@ -249,9 +255,9 @@ func Permutations[T any](s []T) [][]T {
 // The condition is `!used[i-1]`, and getting it backwards is a classic. `used[i-1]` would
 // mean "skip unless the previous copy is in use", which permits the copies to be chosen in
 // any order and reproduces the duplicates.
-func PermutationsDistinct[T comparable](s []T, less func(a, b T) int) [][]T {
+func PermutationsDistinct[T comparable](s []T, compare func(a, b T) int) [][]T {
 	sorted := slices.Clone(s)
-	slices.SortFunc(sorted, less)
+	slices.SortFunc(sorted, compare)
 
 	used := make([]bool, len(sorted))
 	var out [][]T

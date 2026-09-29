@@ -154,7 +154,7 @@ func (s *Sets[T]) FindSteps() int { return s.findSteps }
 // runs and no test can be written. That is the same decision as in dsa/hashmap and
 // dsa/graph, and it costs O(n log n) on a structure whose operations are otherwise nearly
 // constant, which is why it is a separate function rather than something Count does.
-func (s *Sets[T]) Groups(less func(a, b T) int) [][]T {
+func (s *Sets[T]) Groups(compare func(a, b T) int) [][]T {
 	byRoot := make(map[T][]T, s.count)
 
 	for x := range s.parent {
@@ -164,11 +164,11 @@ func (s *Sets[T]) Groups(less func(a, b T) int) [][]T {
 
 	out := make([][]T, 0, len(byRoot))
 	for _, members := range byRoot {
-		slices.SortFunc(members, less)
+		slices.SortFunc(members, compare)
 		out = append(out, members)
 	}
 
-	slices.SortFunc(out, func(a, b []T) int { return less(a[0], b[0]) })
+	slices.SortFunc(out, func(a, b []T) int { return compare(a[0], b[0]) })
 
 	return out
 }

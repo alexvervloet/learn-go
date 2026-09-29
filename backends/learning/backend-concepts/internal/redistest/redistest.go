@@ -10,6 +10,7 @@ package redistest
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"os"
@@ -96,18 +97,63 @@ func databaseFor(binary string) int {
 	return int(h.Sum32()%15) + 1
 }
 
-// Flush empties this test binary's database.
+// Flush empties this test binary's database, if the database is this harness's to empty.
 //
-// FLUSHDB rather than deleting keys by pattern, because it is one round trip and it cannot miss a key. Safe
-// only because databaseFor keeps every binary off database 0.
+// FLUSHDB rather than deleting keys by pattern, because it is one round trip and it cannot miss a key.
+//
+// # Why it checks first
+//
+// The first version flushed unconditionally and justified it by staying off database 0. That protects a
+// developer poking at Redis by hand and nobody else: a local app can use any of the 16 databases, and the
+// default address is the developer's own Redis on 6379. `go test ./...` emptied whichever database the hash
+// picked, without asking. See flushOwned.
 func Flush(t testing.TB) {
 	t.Helper()
 
 	c := Client(t)
 
-	if err := c.FlushDB(context.Background()).Err(); err != nil {
-		t.Fatalf("flushing the test database: %v", err)
+	if err := flushOwned(context.Background(), c); err != nil {
+		t.Fatalf("%v\n"+
+			"  point REDIS_ADDR at a Redis you don't mind emptying (docker compose up -d serves one on\n"+
+			"  localhost:6380), or empty that database yourself if its contents don't matter", err)
 	}
+}
+
+// ErrForeignDatabase means the database holds keys this harness did not write, so it will not flush it.
+var ErrForeignDatabase = errors.New("refusing to FLUSHDB a database this test harness does not own")
+
+// MarkerKey is written after every flush. A database that holds keys but not this one was filled by
+// something else.
+const MarkerKey = "learn-go:test-harness"
+
+// flushOwned empties the database if it is empty already or carries MarkerKey, and refuses otherwise.
+//
+// An empty database is safe to claim: nothing is lost. A database with the marker was last flushed by this
+// harness, so whatever is in it was written by tests. Anything else might be someone's data, and a test
+// suite has no business deleting it.
+func flushOwned(ctx context.Context, c *redis.Client) error {
+	n, err := c.DBSize(ctx).Result()
+	if err != nil {
+		return fmt.Errorf("sizing the test database: %w", err)
+	}
+
+	if n > 0 {
+		owned, err := c.Exists(ctx, MarkerKey).Result()
+		if err != nil {
+			return fmt.Errorf("checking the test database: %w", err)
+		}
+
+		if owned == 0 {
+			return fmt.Errorf("%w: database %d at %s holds %d key(s) and no %q marker",
+				ErrForeignDatabase, c.Options().DB, c.Options().Addr, n, MarkerKey)
+		}
+	}
+
+	if err := c.FlushDB(ctx).Err(); err != nil {
+		return fmt.Errorf("flushing the test database: %w", err)
+	}
+
+	return c.Set(ctx, MarkerKey, "emptied by this repository's test harness; safe to delete", 0).Err()
 }
 
 // Database reports which database this binary is using, for a log line.

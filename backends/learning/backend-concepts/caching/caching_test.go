@@ -498,8 +498,10 @@ func TestInvalidateIsOneRoundTrip(t *testing.T) {
 
 	t.Logf("%d keys before, %d after one Invalidate call", before, after)
 
-	if after != 0 {
-		t.Errorf("%d keys survived", after)
+	// The difference, not after == 0: the database also holds the harness's marker key, and a test
+	// that assumes it owns every key breaks the moment anything else shares the database.
+	if removed := before - after; removed != int64(len(keys)) {
+		t.Errorf("one Invalidate call removed %d of %d keys", removed, len(keys))
 	}
 
 	// And the next read reloads from the source.

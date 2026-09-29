@@ -136,11 +136,11 @@ func TestResult(t *testing.T) {
 	}
 }
 
-func TestMapResult(t *testing.T) {
+func TestResultMap(t *testing.T) {
 	boom := errors.New("boom")
 
 	t.Run("transforms a success", func(t *testing.T) {
-		got := MapResult(Ok(21), func(v int) int { return v * 2 })
+		got := Ok(21).Map(func(v int) int { return v * 2 })
 		if v, _ := got.Unwrap(); v != 42 {
 			t.Errorf("got %d, want 42", v)
 		}
@@ -148,7 +148,7 @@ func TestMapResult(t *testing.T) {
 
 	t.Run("passes a failure through without calling f", func(t *testing.T) {
 		called := false
-		got := MapResult(Err[int](boom), func(v int) int { called = true; return v })
+		got := Err[int](boom).Map(func(v int) int { called = true; return v })
 
 		if called {
 			t.Error("f should not be called on a failed Result")

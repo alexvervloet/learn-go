@@ -134,9 +134,10 @@ func (r Result[T]) ValueOr(fallback T) T {
 	return r.value
 }
 
-// MapResult transforms a success and passes a failure through. It is a
-// function rather than a method for the usual reason: U is new.
-func MapResult[T, U any](r Result[T], f func(T) U) Result[U] {
+// Map transforms a success and passes a failure through. U is the method's
+// own type parameter (Go 1.27); before that this was a function,
+// MapResult(r, f).
+func (r Result[T]) Map[U any](f func(T) U) Result[U] {
 	if r.err != nil {
 		return Err[U](r.err)
 	}
@@ -271,8 +272,8 @@ func demoContainers() {
 	bad := Err[int](errors.New("not found"))
 	fmt.Printf("\n  Result[int]: Ok -> %v, Err -> %v\n", ok.ValueOr(-1), bad.ValueOr(-1))
 
-	doubled := MapResult(ok, func(v int) string { return fmt.Sprintf("value-%d", v) })
-	fmt.Printf("  MapResult(Ok(42), format) -> %v\n", doubled.ValueOr("none"))
+	doubled := ok.Map(func(v int) string { return fmt.Sprintf("value-%d", v) })
+	fmt.Printf("  Ok(42).Map(format) -> %v\n", doubled.ValueOr("none"))
 
 	values, err := CollectResults([]Result[int]{Ok(1), bad, Ok(3)})
 	fmt.Printf("  CollectResults: values=%v err=%v\n", values, err)

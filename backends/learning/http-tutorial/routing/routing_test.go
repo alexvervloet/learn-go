@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -437,5 +439,31 @@ func TestStore(t *testing.T) {
 	}
 	if got, ok := s.Get(4); !ok || got.Name != "chisel" {
 		t.Errorf("Get(4) = %+v, %v", got, ok)
+	}
+}
+
+// TestStoreIsSafeBehindAServer runs reads and writes through the router at once, the way cmd/server does:
+// net/http serves every request on its own goroutine. The store was documented as not safe for concurrent use
+// while cmd/server served it concurrently, which `go test -race` reports as a data race on the map.
+func TestStoreIsSafeBehindAServer(t *testing.T) {
+	store := NewStore()
+	mux := NewMux(store)
+
+	var wg sync.WaitGroup
+
+	for i := range 50 {
+		wg.Go(func() {
+			body := strings.NewReader(`{"name":"item-` + strconv.Itoa(i) + `"}`)
+			mux.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/items/", body))
+		})
+		wg.Go(func() {
+			mux.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/items/", nil))
+		})
+	}
+
+	wg.Wait()
+
+	if got := store.Len(); got != 53 {
+		t.Errorf("store holds %d items after 50 concurrent adds to 3, want 53", got)
 	}
 }

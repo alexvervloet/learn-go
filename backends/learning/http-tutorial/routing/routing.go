@@ -41,6 +41,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"sync"
 )
 
 // Item is the thing this router serves, kept trivial so the routing is the subject.
@@ -50,9 +51,15 @@ type Item struct {
 	Owner string `json:"owner,omitempty"`
 }
 
-// Store is an in-memory item store. Not safe for concurrent use; backend-concepts covers
-// what to do about that.
+// Store is an in-memory item store, safe for concurrent use.
+//
+// It has to be. net/http serves every request on its own goroutine, so a store behind
+// a server is read and written concurrently by default. The first version said "not
+// safe for concurrent use" while cmd/server served it anyway, and
+// TestStoreIsSafeBehindAServer found the race. A RWMutex, because reads outnumber
+// writes; go-concepts/09 covers the choice.
 type Store struct {
+	mu    sync.RWMutex
 	items map[int]Item
 	next  int
 }
@@ -70,6 +77,9 @@ func NewStore() *Store {
 
 // Add stores a new item and returns it.
 func (s *Store) Add(name string) Item {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	item := Item{ID: s.next, Name: name}
 	s.items[item.ID] = item
 	s.next++
@@ -78,12 +88,18 @@ func (s *Store) Add(name string) Item {
 
 // Get returns an item by ID.
 func (s *Store) Get(id int) (Item, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	item, ok := s.items[id]
 	return item, ok
 }
 
 // All returns every item, in ID order.
 func (s *Store) All() []Item {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	out := make([]Item, 0, len(s.items))
 	for id := 1; id < s.next; id++ {
 		if item, ok := s.items[id]; ok {
@@ -94,7 +110,12 @@ func (s *Store) All() []Item {
 }
 
 // Len returns the number of items.
-func (s *Store) Len() int { return len(s.items) }
+func (s *Store) Len() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return len(s.items)
+}
 
 // NewMux builds a router demonstrating every pattern form ServeMux supports.
 //

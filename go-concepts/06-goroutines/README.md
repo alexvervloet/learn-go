@@ -15,7 +15,7 @@ doSomethingElse()  // runs while doWork is still going
 
 The thing to understand first is what a goroutine costs, because the answer
 changes what designs are reasonable. A goroutine starts with a **2KB** stack
-that grows by copying as needed. An OS thread starts with 1MB or more, fixed.
+(8KB on Windows) that grows by copying as needed. An OS thread starts with 1MB or more, fixed.
 Creating a goroutine is a few hundred nanoseconds and a small allocation;
 creating a thread is a syscall. A Go program running 100,000 goroutines is
 ordinary. A program running 100,000 threads is not a program, it is an outage.

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"runtime"
 	"testing"
 )
 
@@ -60,21 +61,25 @@ func TestGoroutineStackCost(t *testing.T) {
 
 	t.Logf("~%d bytes of stack per parked goroutine", perGoroutine)
 
-	// A goroutine starts on a 2KB stack, the runtime's stackMin, and this
-	// measures about that. The lesson used to say 8KB, and this comment
-	// explained the gap as uncommitted address space. It wasn't: an 8KB stack
-	// occupies an 8KB span in StackInuse. The number was wrong, not the
-	// measurement.
+	// The starting stack is platform-dependent, and this test found that out the
+	// hard way. The runtime adds stackSystem (OS-reserved space) to its 2KB
+	// minimum and rounds up to a power of two: 2KB on Linux and macOS, 4KB on
+	// iOS and Plan 9, and 8KB on Windows, which reserves 4KB. The lesson said 8KB
+	// everywhere; the first correction said 2KB everywhere and failed on the
+	// Windows runner with exactly 8192.
 	//
-	// The upper bound is 8KB rather than a tight 2KB because since Go 1.19 the
-	// runtime starts goroutines at the program's average stack use when that is
-	// larger, and other tests in this binary recurse deeply. Under 8KB is still
-	// enough to rule out the old claim.
+	// Up to twice the platform's start, because since Go 1.19 the runtime starts
+	// goroutines at the program's average stack use when that is larger, and
+	// other tests in this binary recurse deeply.
+	start := startingStack()
+
+	t.Logf("expected start on %s/%s: %d bytes", runtime.GOOS, runtime.GOARCH, start)
+
 	if perGoroutine == 0 {
 		t.Error("measured 0 bytes per goroutine, which cannot be right")
 	}
-	if perGoroutine >= 8*1024 {
-		t.Errorf("measured %d bytes per goroutine; a 2KB start should be well under 8KB", perGoroutine)
+	if perGoroutine > uint64(2*start) {
+		t.Errorf("measured %d bytes per goroutine; this platform starts at %d", perGoroutine, start)
 	}
 }
 

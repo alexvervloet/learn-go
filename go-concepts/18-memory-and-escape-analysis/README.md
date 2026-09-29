@@ -100,7 +100,8 @@ a benchmark and almost never useful in real code.
 
 ## Stack growth
 
-Goroutine stacks start at **2KB**, the runtime's `stackMin`, and grow by copying: the runtime allocates a
+Goroutine stacks start at **2KB**, the runtime's `stackMin`, except where the OS
+reserves space in every stack: 8KB on Windows, 4KB on iOS and Plan 9. They grow by copying: the runtime allocates a
 bigger stack, copies the frames, and rewrites the pointers into them. The
 maximum is 1GB on 64-bit by default.
 

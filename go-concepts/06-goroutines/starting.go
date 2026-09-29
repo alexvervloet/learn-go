@@ -2,7 +2,7 @@
 //
 //	go f()   runs f concurrently and returns immediately
 //
-// A goroutine starts on a 2KB stack that grows by copying. An OS thread starts
+// A goroutine starts on a 2KB stack (8KB on Windows) that grows by copying. An OS thread starts
 // at 1MB or more, fixed. Creating a goroutine costs a few hundred nanoseconds;
 // creating a thread costs a syscall. That ratio is why Go programs start one
 // goroutine per unit of work instead of pooling them.

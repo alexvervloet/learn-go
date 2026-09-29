@@ -14,7 +14,9 @@ import (
 // pressure. It is NOT a resource pool.
 //
 // The critical property: items may be REMOVED AT ANY TIME, without notice.
-// The garbage collector clears pools on every cycle. So a Pool can never hold
+// Each GC cycle moves the pool's items to a victim cache and drops whatever
+// was already there, so an unused item survives at most two cycles (the test
+// below needs two runtime.GC calls to empty it). So a Pool can never hold
 // anything whose loss matters: not database connections, not open files, not
 // anything needing Close.
 //

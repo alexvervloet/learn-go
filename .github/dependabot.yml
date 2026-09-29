@@ -1,0 +1,48 @@
+# Dependabot keeps the pins in this repository current.
+#
+# Every version here is pinned on purpose: actions by major tag or commit sha,
+# Go modules by go.sum. A pin that nothing bumps goes stale silently. This file
+# had not existed for months when an audit found every first-party action two
+# or three majors behind, and the one sha-pinned action a major behind too.
+#
+# Monthly and grouped, so it is a handful of PRs a month rather than one per
+# dependency. A learning repository doesn't need same-day bumps, and a PR that
+# moves ten modules at once is easier to review than ten PRs.
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # One entry covering every module in go.work. Dependabot does not read
+  # go.work, so a module added there has to be added here too.
+  - package-ecosystem: gomod
+    directories:
+      - /backends/learning/ai-concepts
+      - /backends/learning/aws-concepts
+      - /backends/learning/backend-concepts
+      - /backends/learning/database-concepts
+      - /backends/learning/docker-concepts
+      - /backends/learning/email-concepts
+      - /backends/learning/github-actions
+      - /backends/learning/graphql-concepts
+      - /backends/learning/grpc-concepts
+      - /backends/learning/http-tutorial
+      - /backends/learning/jobs-concepts
+      - /backends/learning/makefile-concepts
+      - /backends/learning/testing-concepts
+      - /capstones/bookmark-manager
+      - /capstones/url-shortener
+      - /dsa
+      - /go-concepts
+      - /utilities
+    schedule:
+      interval: monthly
+    groups:
+      go-modules:
+        patterns: ["*"]

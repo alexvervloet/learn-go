@@ -1,3 +1,12 @@
+# syntax=docker/dockerfile:1
+#
+# The syntax directive above has to be the FIRST line of the file. BuildKit stops looking for parser
+# directives at the first comment or instruction, so one written anywhere else is an ordinary comment and does
+# nothing. The first version of this file had it on line 11, after the paragraph below, where it was ignored, and
+# no test built this file to notice. It pins the Dockerfile frontend rather than the base image: without it,
+# cache mounts work on a recent Docker and fail on an older one with a parse error, which is a confusing way to
+# learn about frontends.
+#
 # The same multi-stage build with BuildKit cache mounts, which is the fastest version.
 #
 # A cache mount is a directory that persists between builds and is NOT part of the image. So the Go module cache
@@ -7,12 +16,6 @@
 # The cost: it needs BuildKit (the default since Docker 23) and the cache lives on the builder, so a CI runner
 # with a fresh builder gets nothing from it unless the cache is exported. That is what
 # `--cache-from type=gha` is for in GitHub Actions.
-
-# syntax=docker/dockerfile:1.7
-#
-# The syntax directive has to be the FIRST line of the file to take effect, and it pins the Dockerfile frontend
-# rather than the base image. Without it, cache mounts work on a recent Docker and fail on an older one with a
-# parse error, which is a confusing way to learn about frontends.
 
 FROM golang:1.27 AS build
 

@@ -90,6 +90,9 @@ func TestImageSizes(t *testing.T) {
 		"03-distroless",
 		"04-scratch",
 		"05-scratch-broken",
+		// Built too, or nothing notices when its syntax directive stops taking effect: it
+		// was ignored for months, on line 11 instead of line 1.
+		"06-cached",
 	}
 
 	sizes := map[string]int64{}

@@ -805,3 +805,21 @@ func TestWordBreakSegmentationIsValid(t *testing.T) {
 		}
 	}
 }
+
+// TestKnapsackTakesAZeroWeightItem: an item that weighs nothing and is worth something is always worth taking.
+// The first version skipped weight 0 along with negative weights, so a free item was never chosen.
+func TestKnapsackTakesAZeroWeightItem(t *testing.T) {
+	free := Item{Name: "free", Weight: 0, Value: 5}
+
+	for _, capacity := range []int{0, 3} {
+		value, chosen := Knapsack01([]Item{{Name: "heavy", Weight: 3, Value: 4}, free}, capacity)
+
+		want := 5
+		if capacity >= 3 {
+			want = 9
+		}
+		if value != want || !slices.Contains(chosen, free) {
+			t.Errorf("capacity %d: value %d, chosen %v; want %d including the free item", capacity, value, chosen, want)
+		}
+	}
+}

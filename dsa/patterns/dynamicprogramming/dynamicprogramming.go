@@ -375,8 +375,10 @@ func Knapsack01(items []Item, capacity int) (int, []Item) {
 			// Not taking it: whatever the previous items managed with this capacity.
 			table[i][w] = table[i-1][w]
 
-			// Taking it, if it fits.
-			if item.Weight <= w && item.Weight > 0 {
+			// Taking it, if it fits. A zero-weight item always fits, and a negative
+			// weight would index past the end of the row, so the guard is >= 0. The
+			// first version said > 0 and never took an item that weighed nothing.
+			if item.Weight >= 0 && item.Weight <= w {
 				if taken := table[i-1][w-item.Weight] + item.Value; taken > table[i][w] {
 					table[i][w] = taken
 				}

@@ -28,17 +28,29 @@ require (
 | Directive | What it does |
 |---|---|
 | `module` | This module's import path. Must match where it is fetched from. |
-| `go` | The **language version**, not the toolchain. `go 1.27` enables 1.27 semantics. |
-| `toolchain` | The minimum toolchain to build it. Added automatically when needed. |
+| `go` | The **language version**, and since Go 1.21 also the minimum toolchain: an older `go` command downloads a newer one or refuses. |
+| `toolchain` | A *preferred* toolchain, used when it is newer than the `go` line. It never lowers the minimum. |
 | `require` | A dependency and its minimum version. |
 | `// indirect` | Required by a dependency, not imported directly by you. |
 | `replace` | Substitute a module, usually a local path during development. |
 | `exclude` | Refuse a specific version, forcing selection elsewhere. |
 | `retract` | *You* declaring one of *your own* published versions unusable. |
 
-The `go` directive is a language version and gates real behaviour. Lesson 06's
-per-iteration loop variables only apply to a module declaring `go 1.22` or
-later, which is a rare case of a language change gated on a file's contents.
+The `go` directive gates real behaviour in two ways. The compiler refuses a
+language feature newer than it: lesson 06's per-iteration loop variables only
+apply to a module declaring `go 1.22` or later, and lesson 11's generic methods
+need `go 1.27`. And it picks runtime defaults through GODEBUG: a `go 1.24`
+module gets `containermaxprocs=0`, so its GOMAXPROCS ignores container CPU
+limits even when built with 1.27 (`go list -f '{{.DefaultGODEBUG}}' .` shows
+the settings).
+
+What it does not gate is the standard library. `sync.WaitGroup.Go` in a
+`go 1.24` module builds with a 1.25 toolchain, and only `go vet`'s `stdversion`
+check objects.
+
+This repository declares `go 1.27` everywhere, and CI used to run a "Go 1.26"
+job anyway. Because the `go` line is a minimum toolchain, that job downloaded
+1.27.1 and tested it a second time. Its log said so on every run.
 
 ## Semantic import versioning
 

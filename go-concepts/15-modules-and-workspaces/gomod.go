@@ -195,14 +195,24 @@ func ImportPathFor(basePath string, major int) string {
 func canCoexist(a, b string) bool { return a != b }
 
 // goDirectiveGatesLanguageFeatures documents the part people miss: the `go`
-// line is a LANGUAGE version, and it changes how existing code compiles.
+// line changes how existing code compiles and runs, through two mechanisms.
+//
+//	language   the compiler refuses the feature below that version
+//	           ("requires go1.22 or later")
+//	runtime    the version picks GODEBUG defaults, so the same binary behaves
+//	           differently depending on the main module's go line
+//
+// Library additions are NOT on this list, and an earlier version of it said
+// they were. `sync.WaitGroup.Go` in a `go 1.24` module builds fine with a 1.25
+// toolchain; only go vet's stdversion check complains ("requires go1.25 or
+// later (module is go1.24)").
 func goDirectiveGatesLanguageFeatures() map[string]string {
 	return map[string]string{
-		"go 1.21": "the built-in min, max and clear; log/slog in the stdlib",
-		"go 1.22": "PER-ITERATION loop variables (lesson 06) and range-over-int",
-		"go 1.23": "range-over-function iterators (lesson 11); timers become collectable",
-		"go 1.24": "generic type aliases; the omitzero JSON tag (lesson 12)",
-		"go 1.25": "sync.WaitGroup.Go (lesson 09); container-aware GOMAXPROCS",
+		"go 1.21": "language: the built-in min, max and clear",
+		"go 1.22": "language: PER-ITERATION loop variables (lesson 06) and range over an int",
+		"go 1.23": "language: range-over-function iterators (lesson 11) and generic type aliases; runtime: unbuffered timer channels (asynctimerchan)",
+		"go 1.25": "runtime: container-aware GOMAXPROCS (containermaxprocs, updatemaxprocs)",
+		"go 1.27": "language: methods with their own type parameters (lesson 11)",
 	}
 }
 
@@ -254,9 +264,9 @@ func demoGoMod() {
 	fmt.Printf("    v1 and v3 can coexist in one build: %t\n",
 		canCoexist(ImportPathFor(base, 1), ImportPathFor(base, 3)))
 
-	fmt.Println("\n  the go directive is a LANGUAGE version:")
+	fmt.Println("\n  what the go directive gates (library APIs are not gated; vet flags them):")
 	features := goDirectiveGatesLanguageFeatures()
-	for _, v := range []string{"go 1.21", "go 1.22", "go 1.23", "go 1.24", "go 1.25"} {
+	for _, v := range []string{"go 1.21", "go 1.22", "go 1.23", "go 1.25", "go 1.27"} {
 		fmt.Printf("    %-8s %s\n", v, features[v])
 	}
 }

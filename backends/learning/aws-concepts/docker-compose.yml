@@ -5,7 +5,11 @@
 
 services:
   localstack:
-    image: localstack/localstack:3
+    # 3.8.1, the last 3.x, and deliberately not newer. Current LocalStack images
+    # refuse to start without a LOCALSTACK_AUTH_TOKEN (a free account for
+    # non-commercial use), which would break CI and every reader's first run. Bump
+    # this only together with a token, and say so in the aws-concepts README.
+    image: localstack/localstack:3.8.1
     ports:
       # One port for every service. The SDK routes by the request body and headers, not the host, so s3, sqs,
       # sns and dynamodb all answer here.

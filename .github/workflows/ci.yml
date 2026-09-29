@@ -297,7 +297,7 @@ jobs:
       # Mailpit fits as a service container where Redpanda does not, because it is
       # configured entirely through environment variables and needs no command.
       mailpit:
-        image: axllent/mailpit:latest
+        image: axllent/mailpit:v1.31.3
 
         env:
           MP_DATABASE: ""
@@ -337,7 +337,7 @@ jobs:
       - name: Start Redpanda
         run: |
           docker run -d --name redpanda -p 19092:19092 \
-            docker.redpanda.com/redpandadata/redpanda:latest \
+            docker.redpanda.com/redpandadata/redpanda:v26.2.3 \
             redpanda start \
               --overprovisioned --smp 1 --memory 512M --reserve-memory 0M \
               --node-id 0 --check=false \
@@ -588,7 +588,12 @@ jobs:
       localstack:
         # LocalStack fits as a service container: it is configured entirely
         # through environment variables and needs no command override.
-        image: localstack/localstack:3
+        #
+        # 3.8.1, the last 3.x, and deliberately not newer. Current LocalStack images
+        # refuse to start without a LOCALSTACK_AUTH_TOKEN (a free account for
+        # non-commercial use), which would break CI and every reader's first run. Bump
+        # this only together with a token, and say so in the aws-concepts README.
+        image: localstack/localstack:3.8.1
 
         env:
           SERVICES: s3,sqs,sns,dynamodb,iam

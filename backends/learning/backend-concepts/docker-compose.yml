@@ -79,7 +79,7 @@ services:
     # segmentio/kafka-go cannot tell the difference, and it is one process with no ZooKeeper and no JVM.
     # A Kafka compose file for a test suite is two containers, a gigabyte of heap and forty seconds of
     # startup.
-    image: docker.redpanda.com/redpandadata/redpanda:latest
+    image: docker.redpanda.com/redpandadata/redpanda:v26.2.3
     container_name: learn-go-bc-redpanda
 
     command:

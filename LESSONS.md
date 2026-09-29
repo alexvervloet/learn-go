@@ -2484,3 +2484,8 @@ was the macOS number presented as universal.
 **Next time.** Before correcting a runtime number, read the constant and then every expression that uses it.
 `stackMin` isn't the allocation size; `fixedStack` is. The test and the lessons now use the platform's size, and
 the test states which one it expected.
+
+**And a third time, under the race detector.** The next CI run passed on Windows and failed in the race job on
+Linux: 4109 bytes against a bound of 4096. A race build doubles `StackGuardMultiplier`, so every goroutine reserves
+twice the guard area and outgrows its first 2KB stack immediately. Build mode belongs on the list of things that
+change a "fixed" runtime number, next to the OS.

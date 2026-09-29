@@ -130,10 +130,15 @@ is a `context.Context` ([10-context](../10-context/)) or a `done` channel
 ([08-select-and-timeouts](../08-select-and-timeouts/)). If you cannot say in one
 sentence how a goroutine terminates, it leaks.
 
-`runtime.NumGoroutine()` counts them, which makes leaks testable: record the
-count, do the work, wait, and check it came back down. `goroutines_test.go` does
-exactly that, and [uber-go/goleak](https://github.com/uber-go/goleak) does it
-properly for a whole test suite.
+Leaks are testable: record how many goroutines are running, do the work, wait,
+and check the number came back down. `leaks_test.go` does exactly that, with one
+refinement learned the hard way. `runtime.NumGoroutine()` counts the whole
+process, and CI once failed a working leak test with "4 before, 4 after": one
+goroutine had leaked and an unrelated one had exited. So the examples count
+their own goroutines, and the test polls with a deadline because an unblocked
+goroutine hasn't necessarily run its deferred decrement yet.
+[uber-go/goleak](https://github.com/uber-go/goleak) does this properly for a
+whole test suite, by comparing goroutine stacks rather than counts.
 
 ## The loop variable, and why old code looks wrong
 

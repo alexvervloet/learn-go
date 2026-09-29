@@ -90,13 +90,20 @@ func TestTodoIsThePlaceholder(t *testing.T) {
 
 // TestPollingVsSelecting: both notice, but one burns CPU doing it.
 func TestPollingVsSelecting(t *testing.T) {
+	// Spinning for 5ms runs the loop a very large number of times, all of it wasted. The bound is loose
+	// on purpose (a check is tens of nanoseconds), because the point is "far more than one", not a speed.
+	spin, cancelSpin := context.WithTimeout(context.Background(), 5*time.Millisecond)
+	defer cancelSpin()
+
+	checks := pollingWastesCPU(spin, 10*time.Second)
+	t.Logf("5ms of spinning: %d checks of ctx.Err()", checks)
+
+	if checks < 100 {
+		t.Errorf("polling made %d checks in 5ms; it should spin far more than that", checks)
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-
-	checks := pollingWastesCPU(ctx, 5*time.Millisecond)
-	if checks < 1 {
-		t.Errorf("polling made %d checks, want at least 1", checks)
-	}
 
 	if !selectingParksTheGoroutine(ctx, time.Second) {
 		t.Error("selecting on Done() should notice an already-cancelled context immediately")

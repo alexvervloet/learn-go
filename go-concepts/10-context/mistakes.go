@@ -194,14 +194,22 @@ func todoIsThePlaceholder() (works bool) {
 	return ctx != nil
 }
 
-// Mistake 4: checking Err() instead of selecting on Done()
-// --------------------------------------------------------
+// Mistake 4: spinning on Err() to wait
+// ------------------------------------
 //
-// Polling Err() in a loop burns CPU and only notices cancellation at the next
-// iteration. Selecting on Done() parks the goroutine until there is something
-// to do.
+// Checking ctx.Err() is not the mistake. In a loop that does real work on every
+// iteration (parsing rows, hashing chunks), checking Err() between iterations
+// is exactly right: cheap, and cancellation is noticed within one iteration.
+//
+// The mistake is a loop whose only job is to WAIT, spinning on Err() until
+// something happens. It keeps a CPU core at 100% doing nothing. Selecting on
+// Done() parks the goroutine instead, and it wakes the moment the context is
+// cancelled. An earlier version of this section framed Err() itself as the
+// mistake, and its demo cancelled the context first, so it only ever showed
+// "1 check".
 
-// pollingWastesCPU checks Err repeatedly.
+// pollingWastesCPU spins on Err until the context ends or work has elapsed,
+// and reports how many times it checked.
 func pollingWastesCPU(ctx context.Context, work time.Duration) (checks int) {
 	deadline := time.Now().Add(work)
 
@@ -317,12 +325,15 @@ func demoMistakes() {
 	fmt.Printf("\n  3. a nil context: panic: %s\n", nilContextPanics())
 	fmt.Printf("     context.TODO() works: %t\n", todoIsThePlaceholder())
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	checks := pollingWastesCPU(ctx, 5*time.Millisecond)
-	fmt.Printf("\n  4. polling Err() made %d checks before noticing\n", checks)
-	fmt.Printf("     selecting on Done() noticed immediately: %t\n",
-		selectingParksTheGoroutine(ctx, time.Second))
+	spin, cancelSpin := context.WithTimeout(context.Background(), 5*time.Millisecond)
+	checks := pollingWastesCPU(spin, time.Second)
+	cancelSpin()
+	fmt.Printf("\n  4. spinning on Err() for 5ms made %d checks, on a core that did nothing else\n", checks)
+
+	parked, cancelParked := context.WithTimeout(context.Background(), 5*time.Millisecond)
+	fmt.Printf("     selecting on Done() for the same 5ms: parked, woke on cancel: %t\n",
+		selectingParksTheGoroutine(parked, time.Second))
+	cancelParked()
 
 	_, err := badCharge(context.Background())
 	fmt.Printf("\n  5. a required value in the context: %v\n", err)

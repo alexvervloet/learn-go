@@ -118,13 +118,15 @@ func genericFieldAccess[T any](items []T, extract func(T) string) []string {
 	return out
 }
 
-// manualJSON hand-writes the encoding, and is the benchmark's cautionary tale:
-// it is SLOWER than encoding/json (330 ns against 309 ns), because fmt.Sprint
-// is itself reflective. "Hand-written must be faster" is not automatic. Real
-// code generation (easyjson and friends) does win, and costs a build step.
+// manualJSON hand-writes the encoding with strconv, and beats encoding/json by
+// about 1.3x (240 ns against 313 ns in the README's run).
 //
-// Left deliberately naive, because the naive version is what people actually
-// write when they decide to hand-roll an encoder.
+// The first version used fmt.Sprint for the numbers and LOST to encoding/json,
+// 330 ns against 309 ns, because fmt is itself reflective. Swapping in
+// strconv.Format* was the whole difference. "Hand-written must be faster" is
+// not automatic, and even done carefully the win is 30%, not an order of
+// magnitude. Real code generation (easyjson and friends) does much better, and
+// costs a build step.
 func manualJSON(r Record) string {
 	var b strings.Builder
 

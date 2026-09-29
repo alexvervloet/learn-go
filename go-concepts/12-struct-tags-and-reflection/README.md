@@ -65,7 +65,7 @@ has one.
 ## reflect, in three types
 
 ```go
-reflect.TypeOf(v)   // *reflect.Type:  what type is this?
+reflect.TypeOf(v)   // reflect.Type:   what type is this? (an interface, not a pointer)
 reflect.ValueOf(v)  // reflect.Value:  the value, manipulable
 v.Kind()            // reflect.Kind:   the underlying category
 ```

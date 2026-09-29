@@ -215,9 +215,16 @@ func (v *Verifier) VerifyRequest(r *http.Request) ([]byte, error) {
 	// MaxBytesReader rather than io.LimitReader: LimitReader stops silently at the limit, so an
 	// oversized body arrives TRUNCATED and fails signature verification with a confusing error.
 	// MaxBytesReader returns an error, so the response can say what happened.
+	//
+	// Only a *http.MaxBytesError means "too large". The first version reported every read error that
+	// way, so a client that disconnected mid-body was told its payload was over the limit.
 	body, err := io.ReadAll(http.MaxBytesReader(nil, r.Body, limit))
 	if err != nil {
-		return nil, fmt.Errorf("%w: limit is %d bytes: %w", ErrBodyTooLarge, limit, err)
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			return nil, fmt.Errorf("%w: limit is %d bytes", ErrBodyTooLarge, limit)
+		}
+		return nil, fmt.Errorf("webhooks: reading the body: %w", err)
 	}
 
 	tsHeader := r.Header.Get(v.TimestampHeader)

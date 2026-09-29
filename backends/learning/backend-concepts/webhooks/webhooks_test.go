@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"sync"
 	"testing"
+	"testing/iotest"
 	"time"
 )
 
@@ -679,5 +680,18 @@ func TestVerifyComparesInConstantTime(t *testing.T) {
 
 	if !constantTime {
 		t.Error("Verify never calls hmac.Equal or subtle.ConstantTimeCompare")
+	}
+}
+
+// TestAReadErrorIsNotTooLarge: only exceeding MaxBody is ErrBodyTooLarge. A body that fails to read, a client
+// hanging up mid-request, is a different problem and must not be reported as an oversized payload.
+func TestAReadErrorIsNotTooLarge(t *testing.T) {
+	v := newTestVerifier()
+
+	req := httptest.NewRequest("POST", "/hooks", iotest.ErrReader(errors.New("connection reset")))
+
+	_, err := v.VerifyRequest(req)
+	if err == nil || errors.Is(err, ErrBodyTooLarge) {
+		t.Errorf("a failed read gave %v; it is not a size problem", err)
 	}
 }

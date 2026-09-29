@@ -24,8 +24,13 @@ This is the most-complained-about thing in the language and the design is
 deliberate. An exception is invisible control flow: reading a function body
 tells you nothing about where it can leave from. In Go, every exit is written
 down. The cost is verbosity. What you buy is that failure handling is ordinary
-code, reviewed like ordinary code, and impossible to forget silently, because
-an unused variable is a compile error.
+code, reviewed like ordinary code, and visible when it is skipped.
+
+Visible is not the same as impossible. An unused variable is a compile error, so
+`n, err := f()` followed by nothing fails to build. But `f.Close()` on its own
+line drops an error with no complaint from the compiler, and so do `_ = f()` and
+`err = g()` overwriting an `err` nobody checked. errcheck, which this repo's
+linter runs, catches the first; code review catches the rest.
 
 ## `error` is just an interface
 
@@ -125,7 +130,7 @@ across its API boundary for something a caller could have caused.
 | `sentinels.go` | Sentinel errors, `errors.Is`, why `==` breaks once wrapped |
 | `custom.go` | Custom error types, `errors.As`, `Unwrap`, carrying data |
 | `joining.go` | `errors.Join`, multi-error validation, `Is` over a joined error |
-| `patterns.go` | Retry with a retryable error, error groups, the `defer`-close idiom |
+| `patterns.go` | Retry with a retryable error, the `defer`-close idiom, the read loop, `Must` functions |
 | `main.go` | Runs every demo in order |
 | `*_test.go` | Table-driven tests over every helper here |
 

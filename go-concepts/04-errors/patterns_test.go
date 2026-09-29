@@ -136,8 +136,9 @@ func TestRetryHonoursTheDelayFromTheError(t *testing.T) {
 
 func TestWriteAndReadConfig(t *testing.T) {
 	// t.TempDir is cleaned up automatically, including on failure. Prefer it
-	// over os.MkdirTemp plus a defer, which loses the directory when the test
-	// panics.
+	// over os.MkdirTemp plus a defer: deferred calls do run when a test
+	// panics, but t.TempDir also names the directory after the test and fails
+	// the test if cleanup doesn't work, and there is no defer to forget.
 	path := filepath.Join(t.TempDir(), "config.toml")
 	content := []byte("key = value\nother = 2\n")
 

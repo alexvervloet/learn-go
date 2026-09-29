@@ -54,17 +54,11 @@ mem.pprof
 # than a .gitignore entry.
 #
 #   gRPC stubs:   backends/learning/grpc-concepts/generate.sh
-#   sqlc queries: `sqlc generate` in each database module
 #   gqlgen:       `go generate ./...` in graphql-concepts
 
 # Environment / secrets
 .env
 .env.local
-
-# Local databases created by the demos
-*.db
-*.sqlite
-*.sqlite3
 
 # Editors / OS
 .DS_Store

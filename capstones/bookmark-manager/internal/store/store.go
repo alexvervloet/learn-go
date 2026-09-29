@@ -276,9 +276,10 @@ func (s *Store) CreateBookmark(ctx context.Context, userID int64, in NewBookmark
 	b, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByPos[bookmarkRow])
 	if err != nil {
 		return nil, wrapUnique(err, map[string]error{
-			"bookmarks_user_id_url_key":   ErrURLSaved,
-			"bookmarks_category_id_fkey":  ErrNotFound,
-			"bookmarks_category_id_fkey1": ErrNotFound,
+			"bookmarks_user_id_url_key": ErrURLSaved,
+			// Migration 002's composite key. Someone else's category and a missing one fail the same
+			// constraint, so the caller cannot tell them apart, which is the point.
+			"bookmarks_category_owner_fkey": ErrNotFound,
 		})
 	}
 

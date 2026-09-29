@@ -546,6 +546,42 @@ func TestCategoriesAreScopedPerUser(t *testing.T) {
 	require.Equal(t, http.StatusConflict, again.Status)
 }
 
+// TestCannotFileIntoAnotherUsersCategory is the ownership check on WRITE, which listing does not cover.
+//
+// A plain REFERENCES categories(id) only proves the id exists. Without the composite key in migration 002, sam
+// could file a bookmark under alex's category, and could enumerate alex's category ids by watching for 201
+// versus 400. The answer must be the same "No such category" whether the id is someone else's or nobody's.
+func TestCannotFileIntoAnotherUsersCategory(t *testing.T) {
+	h := harness(t)
+
+	alex := h.Register(t, "alex@example.com", goodPassword)
+	sam := h.Register(t, "sam@example.com", goodPassword)
+
+	resp := h.Do(t, http.MethodPost, "/api/v1/categories", alex.Access, map[string]string{"name": "Private"})
+	require.Equal(t, http.StatusCreated, resp.Status)
+
+	var category struct {
+		ID int64 `json:"id"`
+	}
+
+	resp.JSON(t, &category)
+
+	theirs := h.Do(t, http.MethodPost, "/api/v1/bookmarks", sam.Access, map[string]any{
+		"url": "https://sam.example/", "title": "Sam's", "category_id": category.ID,
+	})
+	missing := h.Do(t, http.MethodPost, "/api/v1/bookmarks", sam.Access, map[string]any{
+		"url": "https://sam.example/", "title": "Sam's", "category_id": category.ID + 1_000_000,
+	})
+
+	require.Equal(t, http.StatusBadRequest, theirs.Status, "another user's category must be refused")
+	require.Equal(t, missing.Status, theirs.Status, "someone else's id and a missing id must look the same")
+
+	// And the owner can still use it.
+	createBookmark(t, h, alex.Access, map[string]any{
+		"url": "https://alex.example/", "title": "Alex's", "category_id": category.ID,
+	})
+}
+
 // TestTagCountsAreReported covers the LEFT JOIN through HTTP.
 func TestTagCountsAreReported(t *testing.T) {
 	h := harness(t)

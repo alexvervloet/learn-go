@@ -78,8 +78,9 @@ cd ../../.. && go work use ./backends/learning/whatever
 |---|---|
 | [go-concepts/](go-concepts/) | The language itself: goroutines, channels, interfaces, errors, generics, context, and the rest of what Python has no analogue for |
 | [dsa/](dsa/) | Data structures, sorting, searching, P vs NP, and the interview-pattern families |
-| `backends/learning/` | Concept-focused modules: HTTP, testing, databases, auth, caching, gRPC, GraphQL, jobs |
-| `backends/` | Capstone projects that put it together |
+| [backends/learning/](backends/learning/) | Concept-focused modules: HTTP, testing, databases, auth, caching, gRPC, GraphQL, jobs, AWS, Docker, CI, email, AI |
+| [capstones/](capstones/) | Two services that put it together: a URL shortener and a bookmark manager |
+| [utilities/](utilities/) | Small standalone packages: CLI flags, concurrent aggregation, pipelines |
 
 ## Suggested learning path
 
@@ -89,16 +90,16 @@ cd ../../.. && go work use ./backends/learning/whatever
 2. **[dsa/](dsa/)** — CS fundamentals, rewritten with generics. 🟢
 3. **backends/learning/http-tutorial/** — your first Go HTTP service. 🟢
 4. **backends/learning/testing-concepts/** — table-driven tests, `httptest`, fuzzing. 🟢
-5. **backends/learning/database-concepts/** — pgx, sqlc, migrations, transactions. 🐘
-6. **backends/learning/backend-concepts/** — auth, caching, rate limiting, real-time. 🟢/🔴
-7. **Specialized topics, as needed** — gRPC, GraphQL, jobs, AWS, Docker, CI.
+5. **backends/learning/database-concepts/** — pgx, goose migrations, transactions, indexes. 🐘
+6. **backends/learning/backend-concepts/** — auth, caching, rate limiting, real-time, messaging. 🐘🔴, plus Kafka for `messaging`
+7. **Specialized topics, as needed** — gRPC, GraphQL, jobs, AWS, Docker, CI, Makefiles, email, AI.
 8. **Capstones** — url-shortener first, then bookmark-manager. 🐘🔴
 
 ### What each module needs to run
 
 | Icon | Meaning |
 |---|---|
-| 🟢 | No infrastructure — pure Go, SQLite, or in-memory |
+| 🟢 | No infrastructure — pure Go, in-memory |
 | 🐘 | PostgreSQL |
 | 🔴 | Redis |
 | 🐳 | Docker / Docker Compose |
@@ -115,7 +116,7 @@ explains the mechanics, rather than reaching for a framework that hides them.
 |---|---|---|
 | HTTP routing | `net/http` (Go 1.22 patterns) | Gin and Echo are fine; the stdlib now does method and wildcard routing, and learning it means learning what the frameworks wrap |
 | Middleware | `chi` where composition gets repetitive | Still `http.Handler` underneath, so nothing is hidden |
-| Database | `pgx/v5` + `sqlc` | GORM generates SQL you cannot see; sqlc generates Go from SQL you wrote |
+| Database | `pgx/v5`, SQL written by hand | GORM generates SQL you cannot see. Here every query is in the source, scanned with pgx's generic row helpers. sqlc, which generates Go from SQL you wrote, is the usual next step and is not covered yet |
 | Migrations | `goose` | Plain SQL files, same model as Alembic's, without the Python |
 | Testing | stdlib `testing`, `testify/require` in the backend modules | `go-concepts/` and `dsa/` stay dependency-free on purpose |
 | Background jobs | `asynq` | The Celery analogue, Redis-backed |
@@ -125,24 +126,31 @@ explains the mechanics, rather than reaching for a framework that hides them.
 
 ## A note on the coverage number
 
-`make cover-summary` reports about 40% total, and that number is not worth
-chasing. Every lesson has a `main.go` plus a `demo*` function per topic, which
-exist so `go run ./04-errors` prints a guided tour. They are output formatting,
-they are never called from a test, and they are a large share of the statements.
+`make cover-summary` reports about 53% across the workspace, and go-concepts on its own reports 42%. Neither
+number is worth chasing. Every lesson has a `main.go` plus a `demo*` function per topic, which exist so
+`go run ./04-errors` prints a guided tour. They are output formatting, no test calls them, and they are a large
+share of the statements.
 
-The number that means something is coverage of the functions that teach
-something: **97.6% across 154 functions, with none at zero**. What remains is
-unreachable branches, mostly error paths on operations that cannot fail in a
-test.
+The number that means something is coverage of the functions that teach something. In go-concepts, leaving out
+`main`, `section` and the `demo*` printers, that is **801 functions at a mean of 96.5%, with 13 at zero**. Eight of
+the 13 can't be reached from a default test run by design: the no-op `debug_off.go` versions of functions whose
+real bodies are behind the `debug` build tag (CI runs `-tags debug` separately), a goroutine that exists to leak, a
+`Read` and a `Write` whose whole point is that `io.Copy` never calls them, and a benchmark-only helper. The other
+five are called only from demos, which is a gap. The measurement is:
 
-This is why the CI coverage job prints the total and does not enforce a
-threshold. A gate here would be satisfied by calling `demoErrors()` from a test
-and asserting nothing, which would raise the number and test nothing.
+```sh
+go test -coverprofile=c.out ./go-concepts/...
+go tool cover -func=c.out | awk '$2 !~ /^(main|demo|section)/'
+```
+
+This is why the CI coverage job prints the total and does not enforce a threshold. A gate here would be
+satisfied by calling `demoErrors()` from a test and asserting nothing, which would raise the number and test
+nothing.
 
 ## Development
 
 ```bash
-make check         # fmt-check, vet, lint, tidy-check, isolated-check, test
+make check         # fmt-check, vet, lint, tidy-check, isolated-check, test: CI's lint job plus the tests
 make test          # every test in every module
 make test-race     # under the race detector
 make bench         # benchmarks with allocation counts

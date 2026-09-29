@@ -50,13 +50,15 @@ func correctWaitGroup(n int) int {
 //	    defer wg.Done()
 //	}()
 //
-// fails the build with:
+// is reported by go vet with:
 //
 //	WaitGroup.Add called from inside new goroutine
 //
-// So this function has to launder the call through a method value to stay
-// runnable, which is the only reason `add` exists. Do not copy this shape; the
-// point is that you cannot easily write the bug any more.
+// It is not a compile error: go build and go test both accept it, and only vet
+// (which `make check` and CI's golangci-lint both run) says anything. So this
+// function launders the call through a method value to keep the repo's own
+// checks green, which is the only reason `add` exists. Do not copy this shape;
+// the point is that vet catches the obvious way to write the bug.
 //
 // The race detector also reports it, as a race on the WaitGroup itself.
 func addInsideTheGoroutineRaces(n int) int {

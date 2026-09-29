@@ -37,10 +37,13 @@ import (
 //
 //	_, _ = context.WithTimeout(parent, time.Hour)
 //
-// fails the build with:
+// is reported by go vet with:
 //
 //	the cancel function returned by context.WithTimeout should be called,
 //	not discarded, to avoid a context leak
+//
+// Reported, not refused: go build and go test accept it, and only vet, which
+// `make check` and CI's golangci-lint run, fails on it.
 //
 // So the cancels below are collected into a slice and dropped on the floor,
 // purely so this function can still demonstrate the leak. That is also exactly
@@ -175,8 +178,8 @@ func nilContextPanics() (message string) {
 
 	var ctx context.Context // nil interface
 
-	// Routed through a variable for the same reason as above: the direct
-	// `_, _ = context.WithCancel(ctx)` form does not get past go vet.
+	// Routed through a variable for the same reason as above: go vet reports
+	// the direct `_, _ = context.WithCancel(ctx)` form, and this repo runs vet.
 	_, cancel := context.WithCancel(ctx)
 	_ = cancel
 

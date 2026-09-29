@@ -112,7 +112,7 @@ isolated-check:
 	done
 	@echo "every module builds without the workspace"
 
-## check: everything CI runs, in CI's order
+## check: CI's lint job plus the tests; CI adds race, -tags debug and the service jobs
 check: fmt-check vet lint tidy-check isolated-check test
 
 ## clean: remove build and coverage artifacts

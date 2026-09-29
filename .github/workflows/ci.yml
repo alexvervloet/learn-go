@@ -161,9 +161,11 @@ jobs:
       # go-concepts/14-embed-and-build-tags/debug_on.go could be broken for
       # months and every job would stay green.
       #
-      # Every custom tag the repo uses belongs here.
+      # Every custom tag the repo uses belongs here. showrace compiles
+      # go-concepts/16-race-detector/showrace_test.go, whose test skips without
+      # -race; before it was listed, nothing compiled that file at all.
       - name: Test with build tags
-        run: go test -count=1 -tags debug $(go list -m -f '{{.Dir}}/...')
+        run: go test -count=1 -tags debug,showrace $(go list -m -f '{{.Dir}}/...')
 
       # The Makefile examples need GNU make, which ubuntu-latest has (4.3) and
       # macos-latest ships as 3.81. The test detects the version and skips the

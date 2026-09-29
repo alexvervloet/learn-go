@@ -2274,3 +2274,20 @@ already did. `go test ./go-concepts/...` works because that directory IS inside 
 mistake survived: the specific forms are fine and only the root one is not. This repository has a test for it,
 `TestWorkspaceModuleExpansion`, which asserts the failure and explains the workaround, and I still wrote the
 broken command.
+
+## The ownership fix could not migrate a database the bug had already been used on
+
+**Expected.** Migration 002 would swap bookmark-manager's `REFERENCES categories(id)` for a composite key on
+`(user_id, category_id)`, and the new test proving another user's category is refused would go green.
+
+**What happened.** Every API test failed at setup with SQLSTATE 23503 from inside the migration. The red run of
+the new test had done exactly what the bug allowed and filed one user's bookmark under another user's category.
+That row sat in the shared test database, and `ADD CONSTRAINT` validates every existing row and refuses the
+whole migration if one fails.
+
+That's the production situation in miniature. A constraint that closes a hole can't be added to a database the
+hole was already used on, and the migration that assumes clean data fails at deploy time.
+
+**Next time.** A migration that tightens a constraint starts with the query that finds rows violating it, and
+decides what to do with them (here, unfile the bookmark and keep it) before the `ALTER`. Running the failing
+test before the fix is still right, and it's what exposed this.

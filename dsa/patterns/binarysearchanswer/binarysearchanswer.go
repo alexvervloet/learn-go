@@ -105,15 +105,26 @@ func SearchMax(lo, hi int, feasible func(int) bool) (int, error) {
 // monotonic because eating faster never takes longer.
 //
 // Bounds: 1 is the slowest speed that makes progress at all, and max(piles) certainly works
-// whenever hours >= len(piles), because it finishes one pile per hour.
+// whenever there are at least as many hours as non-empty piles, because it finishes one pile
+// per hour. An empty pile costs no hour at any speed, so it does not count, and the upper
+// bound is at least 1 so the range is never empty. The first version counted every pile and
+// started the bound at 0, so all-empty piles, or empty ones beside a single real one, were
+// reported impossible.
 func MinEatingSpeed(piles []int, hours int) (int, error) {
-	if len(piles) == 0 || hours < len(piles) {
-		return 0, ErrImpossible // fewer hours than piles cannot work at any speed
+	if len(piles) == 0 {
+		return 0, ErrImpossible
 	}
 
-	largest := 0
+	largest, nonEmpty := 1, 0
 	for _, p := range piles {
 		largest = max(largest, p)
+		if p > 0 {
+			nonEmpty++
+		}
+	}
+
+	if hours < nonEmpty {
+		return 0, ErrImpossible // fewer hours than piles to eat cannot work at any speed
 	}
 
 	return Search(1, largest, func(speed int) bool {

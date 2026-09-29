@@ -148,6 +148,10 @@ func TestMinEatingSpeed(t *testing.T) {
 		{[]int{1, 1, 1}, 2, 0, true}, // fewer hours than piles
 		{nil, 5, 0, true},
 		{[]int{100}, 100, 1, false},
+		// Empty piles take no time. The first version searched speeds 1 to max(piles), an
+		// empty range when every pile is 0, and it counted empty piles against the hours.
+		{[]int{0, 0}, 1, 1, false},
+		{[]int{0, 0, 5}, 1, 5, false},
 	}
 
 	for _, tt := range tests {

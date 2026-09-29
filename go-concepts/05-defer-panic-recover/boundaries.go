@@ -216,21 +216,7 @@ func (p *exprParser) factor() int {
 // Eval is the public entry point, and the only place recover appears. Callers
 // get an error; the panic never escapes this function.
 func Eval(input string) (result int, err error) {
-	defer func() {
-		r := recover()
-		if r == nil {
-			return
-		}
-
-		// Rule 2: only OUR panic type is converted. A nil dereference caused by
-		// a bug in the parser must still crash, loudly, rather than being
-		// reported as a syntax error in the user's input.
-		perr, ok := r.(parseError)
-		if !ok {
-			panic(r)
-		}
-		err = fmt.Errorf("eval %q: %w", input, perr)
-	}()
+	defer convertParseError(input, &err)
 
 	p := &exprParser{input: input}
 	result = p.expr()
@@ -240,6 +226,32 @@ func Eval(input string) (result int, err error) {
 	}
 
 	return result, nil
+}
+
+// convertParseError is Eval's boundary: it turns the parser's own panic into
+// an error and lets every other panic keep unwinding.
+//
+// A named function rather than a closure so the test can drive it with a panic
+// the parser can't produce. recover works here because this function is the
+// one `defer` calls directly; a helper called FROM a deferred closure would
+// get nil (see recoverViaHelperDoesNotWork). An earlier version kept this logic
+// in a closure inside Eval, and its test copied the logic instead of calling
+// it, so a regression in Eval would not have failed anything.
+func convertParseError(input string, err *error) {
+	r := recover()
+	if r == nil {
+		return
+	}
+
+	// Rule 2: only OUR panic type is converted. A nil dereference caused by a
+	// bug in the parser must still crash, loudly, rather than being reported
+	// as a syntax error in the user's input.
+	perr, ok := r.(parseError)
+	if !ok {
+		panic(r)
+	}
+
+	*err = fmt.Errorf("eval %q: %w", input, perr)
 }
 
 // demoBoundaries prints the middleware and the parser.

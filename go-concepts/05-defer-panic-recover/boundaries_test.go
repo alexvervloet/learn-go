@@ -162,20 +162,29 @@ func TestEvalErrorsCarryPosition(t *testing.T) {
 // pattern. A panic that is not the parser's own must keep unwinding, or a nil
 // dereference in the parser would be reported as a syntax error in the input.
 func TestEvalDoesNotSwallowRealBugs(t *testing.T) {
-	// Eval's recover re-panics anything that is not a parseError. Drive that
-	// path directly, since the parser itself has no such bug.
+	// The parser has no such bug to trigger, so this defers the exact function
+	// Eval defers and panics with something that is not a parseError.
 	msg := capturePanic(func() {
-		defer func() {
-			r := recover()
-			if _, ok := r.(parseError); !ok && r != nil {
-				panic(r)
-			}
-		}()
+		var err error
+		defer convertParseError("1 + 1", &err)
+
 		panic("a genuine bug, not a parse error")
 	})
 
 	if msg != "a genuine bug, not a parse error" {
 		t.Errorf("a non-parseError panic should keep unwinding, got %q", msg)
+	}
+
+	// And the parser's own panic becomes an error, through the same function.
+	err := func() (err error) {
+		defer convertParseError("1 +", &err)
+
+		panic(parseError{pos: 3, msg: "unexpected end of input"})
+	}()
+
+	var perr parseError
+	if !errors.As(err, &perr) || perr.pos != 3 {
+		t.Errorf("a parseError should come back as an error, got %v", err)
 	}
 }
 

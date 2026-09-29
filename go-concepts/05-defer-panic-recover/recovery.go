@@ -87,11 +87,13 @@ func deferRecoverDirectlyDoesNotWork() {
 // pointer six months later, and the entire server exits.
 
 // panicInGoroutineIsUnrecoverable shows the shape that does not work. The
-// recover in the parent never fires, so if the goroutine actually panicked the
-// process would die.
+// recover in the parent never fires, so when the goroutine panics the whole
+// process dies.
 //
-// It is written to NOT panic, because running it otherwise would end the demo.
-// The test alongside it exercises the working version instead.
+// The demo calls it with false, because true ends the program.
+// TestPanicInGoroutineIsUnrecoverable calls it with true in a child process
+// and checks that the child died. The first version never panicked at all: the
+// "panic" was a string assignment, so nothing proved the claim.
 func panicInGoroutineIsUnrecoverable(shouldPanic bool) (parentRecovered bool, done bool) {
 	var wg sync.WaitGroup
 
@@ -107,9 +109,8 @@ func panicInGoroutineIsUnrecoverable(shouldPanic bool) (parentRecovered bool, do
 	go func() {
 		defer wg.Done()
 		if shouldPanic {
-			// Uncommenting a real panic here would kill the process, parent
-			// recover or not. That is the point of the function.
-			_ = "this would be panic(\"boom\")"
+			// Kills the process, parent recover or not. That is the point.
+			panic("boom")
 		}
 		done = true
 	}()
@@ -168,8 +169,11 @@ func workerPoolSurvivesOneBadJob(jobs []func() int) (results []int, panics []str
 
 // repanicPreservesTheStack is the pattern for a recover that inspects a panic
 // and decides it should not have been caught. Re-panicking with the original
-// value keeps the program's behaviour; the stack trace will point here rather
-// than at the original site, which is the cost.
+// value keeps the program's behaviour, and the crash output keeps the original
+// site: the traceback still includes the frame that first panicked, and since
+// Go 1.23 the header says "panic: <value> [recovered, repanicked]". An earlier
+// version of this comment said the trace would point only at the re-panic;
+// TestRepanicPreservesTheStack runs it in a child process and reads the trace.
 func repanicPreservesTheStack(value any, handle func(any) bool) (handled bool) {
 	defer func() {
 		r := recover()

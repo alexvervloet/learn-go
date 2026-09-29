@@ -132,9 +132,12 @@ func MaxOfEachWindow(nums []int, k int) ([]int, error) {
 		// Drop the front if it has fallen out of the window.
 		//
 		// deque[1:] walks the slice header forward, which is the shape queue/README.md
-		// is about. It is fine here because the deque never holds more than k indices
-		// and append reallocates a bounded number of times over the whole run, but an
-		// explicit head index would avoid the reallocation entirely.
+		// is about. It is fine here because the deque never holds more than k indices:
+		// once the front has walked through a backing array of about k slots, append
+		// copies the live ones into a new array, so a run over n elements reallocates
+		// about n/k times, each copying at most k. That is O(n) work in total, but not
+		// a bounded number of reallocations as an earlier version of this comment
+		// said. An explicit head index would avoid them entirely.
 		if deque[0] <= right-k {
 			deque = deque[1:]
 		}

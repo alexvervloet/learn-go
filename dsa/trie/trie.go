@@ -5,9 +5,10 @@
 // starting with "go" it has to look at every key. A trie walks two nodes and
 // then collects a subtree.
 //
-// The shape is the point. Each node holds one character and a map of children,
-// so the word "go" is not stored anywhere: it is the path from the root through
-// 'g' to 'o', and the node at the end carries a flag saying a word finishes here.
+// The shape is the point. Each node stands for one character, which lives as the
+// key in its parent's map of children rather than in the node, so the word "go" is
+// not stored anywhere: it is the path from the root through 'g' to 'o', and the
+// node at the end carries a flag saying a word finishes here.
 //
 //	        (root)
 //	       /      \

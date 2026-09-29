@@ -95,7 +95,13 @@ func RotationPoint[T cmp.Ordered](s []T) int {
 }
 
 // FindPeak returns the index of any element greater than both its neighbours,
-// treating out-of-range neighbours as negative infinity.
+// treating out-of-range neighbours as negative infinity, provided no two adjacent
+// elements are equal.
+//
+// The precondition matters. With a plateau there may be no element strictly
+// greater than its neighbours at all: every index of [1 1 1] has an equal
+// neighbour, and this returns 2, which is only greater-or-equal. On such input
+// the result is an element no smaller than its neighbours.
 //
 // There is no sorted order here at all, and it is still O(log n). The predicate is
 // "is s[i] > s[i+1]", which is false while climbing and true once descending. A

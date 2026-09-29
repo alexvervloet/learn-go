@@ -74,7 +74,7 @@ func (m *MedianStream[T]) Add(v T) {
 // Median returns the middle value, and whether there is one.
 //
 // For an even count it returns the LOWER of the two middle values rather than their
-// mean, because T is cmp.Ordered and averaging is not defined for strings. MedianOf
+// mean, because T is cmp.Ordered and averaging is not defined for strings. MedianFloat
 // below is the numeric version.
 func (m *MedianStream[T]) Median() (T, bool) {
 	return m.lower.Peek()

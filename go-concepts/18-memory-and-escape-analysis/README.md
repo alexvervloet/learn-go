@@ -118,6 +118,16 @@ memory can fragment.
 It is tuned for **latency**, not throughput. Pauses are sub-millisecond, and the
 price is that it does more total work than a stop-the-world collector would.
 
+The marking itself changed recently. The classic collector follows pointers one
+object at a time, which jumps all over memory and spends much of its time
+waiting on cache misses. **Green Tea** marks small objects a span at a time
+instead (a span is a contiguous run of same-sized objects), queueing spans and
+scanning each in one pass, so the work walks memory in order. It is the default
+in this toolchain: `internal/buildcfg` in Go 1.27 lists `GreenTeaGC: true` in its
+baseline, and `GOEXPERIMENT=nogreenteagc` turns it off to compare. None of the
+advice below changes: fewer pointers and fewer allocations still mean less
+marking.
+
 | Knob | Default | What it does |
 |---|---|---|
 | `GOGC` | 100 | Collect when the heap has grown by this percentage since the last cycle |

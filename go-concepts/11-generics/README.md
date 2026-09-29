@@ -71,26 +71,37 @@ Zero[int]()                  // required: nothing to infer from
 When inference fails, the fix is to write the type argument. There is no
 penalty for being explicit, and it is often clearer.
 
-## Methods cannot have type parameters
+## Methods can have type parameters (Go 1.27), but not in interfaces
 
-This is the limitation people hit first:
-
-```go
-func (s *Stack[T]) Map[U any](f func(T) U) *Stack[U]   // DOES NOT COMPILE
-```
-
-A **type** can have type parameters; a **method** cannot add its own. The reason
-is that it would make interface satisfaction undecidable, since an interface
-would need to match an infinite family of methods.
-
-The workaround is a plain function:
+From Go 1.18 to 1.26 this was the limitation people hit first:
 
 ```go
-func MapStack[T, U any](s *Stack[T], f func(T) U) *Stack[U]
+func (s *Stack[T]) Map[U any](f func(T) U) *Stack[U]   // 1.26: method must have no type parameters
 ```
 
-This is why `slices.Map` does not exist as a method and why most of the generic
-standard library is functions rather than methods.
+Since 1.27 it compiles, and `U` is inferred like a function's: `s.Map(strconv.Itoa)`. This lesson's `Stack.Map`
+and `Result.Map` are methods. Under 1.26 they had to be functions, `MapStack(s, f)` and `MapResult(r, f)`, and
+most of the generic standard library still looks like that because it was written first.
+
+The old objection didn't go away. An interface that could require `Map[U any]` would have to match an infinite
+family of methods, one per `U`. 1.27 answers it by leaving generic methods **out of the method set**:
+
+```go
+type Mapper interface {
+    Map[U any](func(int) U) []U   // interface method must have no type parameters
+}
+
+func (S) Get[T any]() T { ... }
+var _ interface{ Get() int } = S{}   // S does not implement it: have Get[T any]() T, want Get() int
+```
+
+`reflect` agrees: `*Stack[int]` lists `Items Len Peek Pop Push` and not `Map`, which
+`TestGenericMethodsAreNotInTheMethodSet` checks. A generic method also has to be instantiated before it can be a
+value: `f := s.Map[string]` works, `f := s.Map` does not.
+
+So a generic method is a function with method-call syntax. Use one when the call reads better left to right
+(`r.Map(f).ValueOr(x)` rather than `MapResult(r, f).ValueOr(x)`), and a plain function when the operation belongs
+to no single type or an interface has to express it.
 
 ## When not to use generics
 
@@ -184,7 +195,7 @@ or that goroutine leaks. `defer stop()`, every time.
 |---|---|
 | `basics.go` | Type parameters, inference, explicit arguments, the single-use smell |
 | `constraints.go` | `comparable`, `cmp.Ordered`, type sets, `~`, method constraints |
-| `types.go` | Generic structs, why methods cannot add parameters, the workaround |
+| `types.go` | Generic structs, generic methods (Go 1.27), and why they are not in the method set |
 | `containers.go` | `Set[T]`, `Result[T]`, `Optional[T]`, `Cache[K,V]` |
 | `iterators.go` | `iter.Seq`, `iter.Seq2`, writing and consuming one, early exit |
 | `costs.go` | GC shape stenciling, dictionaries, and when generic is slower |

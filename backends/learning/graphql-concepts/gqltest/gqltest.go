@@ -84,10 +84,8 @@ func New(t testing.TB, opts Options) *Server {
 	// more than `title`, so the cost function is where that knowledge lives, and it is a second place
 	// to keep in sync with the schema.
 	cfg.Complexity.Book.Similar = func(childComplexity int, limit *int) int {
-		n := 5
-		if limit != nil {
-			n = *limit
-		}
+		// The same default and cap as the resolver, from the same function. See resolvers.Cost.
+		n := resolvers.Cost(limit, 5, resolvers.MaxSimilar)
 
 		// childComplexity times the number of items, which is the whole idea: a list field's cost is
 		// its children's cost times how many there will be. Without the multiplication, `first: 1000`
@@ -103,21 +101,11 @@ func New(t testing.TB, opts Options) *Server {
 	}
 
 	cfg.Complexity.Query.Books = func(childComplexity int, first *int, after *string, last *int, before *string) int {
-		n := 10
-		if first != nil {
-			n = *first
-		}
-
-		return childComplexity * n
+		return childComplexity * resolvers.Cost(first, 10, resolvers.MaxPageSize)
 	}
 
 	cfg.Complexity.Query.Authors = func(childComplexity int, limit *int) int {
-		n := 10
-		if limit != nil {
-			n = *limit
-		}
-
-		return childComplexity * n
+		return childComplexity * resolvers.Cost(limit, 10, resolvers.MaxAuthors)
 	}
 
 	es := generated.NewExecutableSchema(cfg)

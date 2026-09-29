@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/alexvervloet/learn-go/backends/learning/graphql-concepts/gqltest"
+	"github.com/alexvervloet/learn-go/backends/learning/graphql-concepts/graph/resolvers"
 )
 
 // TestErrorsArePartialSuccess is the thing REST has no equivalent for.
@@ -372,6 +373,79 @@ func TestPageSizeIsCapped(t *testing.T) {
 
 	t.Log("the Relay spec says nothing about a maximum page size, so every connection needs one " +
 		"and every schema that does not have one has an endpoint that returns the table")
+}
+
+// TestEveryListArgumentIsValidated, not only books(first:).
+//
+// The first version validated `first` on books and nothing else. `authors(limit: -1)` returned every author,
+// because the store reads "not positive" as "no limit"; `similar(limit: -1)` panicked in make() and came back
+// as "internal system error"; and `similar(limit: 0)` returned one book, because the length check ran after
+// the append.
+func TestEveryListArgumentIsValidated(t *testing.T) {
+	srv := gqltest.New(t, gqltest.Options{Authors: 20, BooksPerAuthor: 5})
+
+	for _, q := range []string{
+		`{ authors(limit: -1) { id } }`,
+		`{ books(first: 1) { edges { node { similar(limit: -1) { id } } } } }`,
+	} {
+		resp := srv.RawQuery(t, q, nil)
+
+		t.Logf("%s -> %v", q, resp.Err)
+
+		if !resp.HasError() {
+			t.Errorf("%s was accepted", q)
+		}
+		if strings.Contains(resp.ErrorMessage, "internal system error") {
+			t.Errorf("%s panicked rather than being rejected", q)
+		}
+	}
+
+	var zero struct {
+		Books struct {
+			Edges []struct {
+				Node struct {
+					Similar []struct{ ID string }
+				}
+			}
+		}
+	}
+
+	srv.Query(t, `{ books(first: 1) { edges { node { similar(limit: 0) { id } } } } }`, &zero)
+
+	if got := len(zero.Books.Edges[0].Node.Similar); got != 0 {
+		t.Errorf("similar(limit: 0) returned %d books", got)
+	}
+
+	var many struct{ Authors []struct{ ID string } }
+
+	srv.Query(t, `{ authors(limit: 100000) { id } }`, &many)
+
+	if len(many.Authors) > resolvers.MaxAuthors {
+		t.Errorf("authors(limit: 100000) returned %d; the cap is %d", len(many.Authors), resolvers.MaxAuthors)
+	}
+}
+
+// TestANegativeArgumentCannotBuyComplexity checks a bypass that looks real and isn't, so it stays that way.
+//
+// A list field's cost is its children's cost times the argument, and the first version of the cost functions
+// multiplied by a negative number without complaint. That reads like a bypass: a negative field cost would
+// subtract from the total and pay for an expensive sibling. An audit reported it as one. This test was written
+// to prove it and passed against the unfixed code, because gqlgen discards any custom cost below 1 and its
+// saturating add ignores negative operands. It pins that behaviour, so a gqlgen upgrade that changes it fails
+// here rather than in production.
+func TestANegativeArgumentCannotBuyComplexity(t *testing.T) {
+	limited := gqltest.New(t, gqltest.Options{Authors: 50, BooksPerAuthor: 5, ComplexityLimit: 1000})
+
+	resp := limited.RawQuery(t, `{
+		discount: books(first: -1000000) { edges { node { id } } }
+		authors(limit: 50) { books { similar(limit: 50) { similar(limit: 50) { id } } } }
+	}`, nil)
+
+	t.Logf("an expensive query with a negative sibling: %v", resp.Err)
+
+	if !strings.Contains(resp.ErrorMessage, "complexity") {
+		t.Errorf("the expensive half ran: a negative argument lowered the query's cost (%v)", resp.Err)
+	}
 }
 
 // TestComplexityLimiting is the denial-of-service vector GraphQL has and REST does not.

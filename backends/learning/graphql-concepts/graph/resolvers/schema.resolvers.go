@@ -92,9 +92,9 @@ func (r *bookResolver) Author(ctx context.Context, obj *model.Book) (*model.Auth
 // Deliberately expensive: it fetches the author's books and returns some. The point is that nothing in the
 // schema marks it as costing more than `title`, which is why complexity limiting exists.
 func (r *bookResolver) Similar(ctx context.Context, obj *model.Book, limit *int) ([]model.Book, error) {
-	n := 5
-	if limit != nil {
-		n = *limit
+	n, err := Limit("limit", limit, 5, MaxSimilar)
+	if err != nil {
+		return nil, err
 	}
 
 	books, err := r.Store.BooksByAuthor(ctx, obj.AuthorID)
@@ -105,6 +105,12 @@ func (r *bookResolver) Similar(ctx context.Context, obj *model.Book, limit *int)
 	out := make([]model.Book, 0, n)
 
 	for _, b := range books {
+		// Checked BEFORE the append, so limit: 0 returns nothing. The first version checked after
+		// and returned one book for limit: 0.
+		if len(out) >= n {
+			break
+		}
+
 		if b.ID == obj.ID {
 			continue
 		}
@@ -115,10 +121,6 @@ func (r *bookResolver) Similar(ctx context.Context, obj *model.Book, limit *int)
 			PriceCents: b.PriceCents,
 			AuthorID:   b.AuthorID,
 		})
-
-		if len(out) >= n {
-			break
-		}
 	}
 
 	return out, nil
@@ -220,9 +222,14 @@ func (r *queryResolver) Author(ctx context.Context, id string) (*model.Author, e
 
 // Authors is the resolver for the authors field.
 func (r *queryResolver) Authors(ctx context.Context, limit *int) ([]model.Author, error) {
-	n := 10
-	if limit != nil {
-		n = *limit
+	n, err := Limit("limit", limit, 10, MaxAuthors)
+	if err != nil {
+		return nil, err
+	}
+
+	// A limit of 0 is a request for nothing, and the store reads 0 as "no limit", so it never gets there.
+	if n == 0 {
+		return []model.Author{}, nil
 	}
 
 	authors, err := r.Store.Authors(ctx, n)
@@ -262,20 +269,11 @@ func (r *queryResolver) Books(ctx context.Context, first *int, after *string, la
 		return nil, errors.New("backward pagination is not supported; use first and after")
 	}
 
-	n := 10
-	if first != nil {
-		n = *first
-	}
-
 	// A cap, because `first: 100000` is a denial of service with no syntax error. Every connection
 	// needs one and the Relay spec does not mention it.
-	const maxPageSize = 100
-
-	if n < 0 {
-		return nil, errors.New("first must not be negative")
-	}
-	if n > maxPageSize {
-		n = maxPageSize
+	n, err := Limit("first", first, 10, MaxPageSize)
+	if err != nil {
+		return nil, err
 	}
 
 	cursor := ""

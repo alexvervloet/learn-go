@@ -100,3 +100,49 @@ func wrap(op string, err error) error {
 	}
 	return fmt.Errorf("%s: %w", op, err)
 }
+
+// The caps on every list argument. Exported because the complexity functions have to use the same numbers: a
+// cost function that assumes a smaller page than the resolver serves under-counts, and one that assumes a
+// larger page rejects queries that would have been cheap.
+const (
+	MaxPageSize = 100 // books(first:)
+	MaxAuthors  = 100 // authors(limit:)
+	MaxSimilar  = 20  // Book.similar(limit:)
+)
+
+// ErrNegativeLimit is returned for a list argument below zero.
+var ErrNegativeLimit = errors.New("must not be negative")
+
+// Limit resolves an optional list argument: def when it is absent, an error when it is negative, and max when
+// it is larger.
+//
+// One function for every list argument, because the first version validated books(first:) by hand and nothing
+// else. authors(limit: -1) returned every row, because the store treats "not positive" as "no limit", and
+// similar(limit: -1) panicked. An argument that is a size needs the same three checks wherever it appears.
+func Limit(name string, arg *int, def, maxN int) (int, error) {
+	if arg == nil {
+		return def, nil
+	}
+
+	if *arg < 0 {
+		return 0, fmt.Errorf("%s: %w", name, ErrNegativeLimit)
+	}
+
+	return min(*arg, maxN), nil
+}
+
+// Cost is Limit for a complexity function, which runs before any resolver and cannot return an error.
+//
+// A negative argument costs the maximum. Multiplying by it would make the field's cost negative, and it is
+// tempting to think that subtracts from the query's total and lets an expensive sibling through. It does not,
+// because gqlgen discards a custom cost below 1 and its saturating add ignores negative operands
+// (complexity/complexity.go); TestANegativeArgumentCannotBuyComplexity pins that. Returning the maximum keeps
+// this function correct on its own rather than relying on the library to clean up after it.
+func Cost(arg *int, def, maxN int) int {
+	n, err := Limit("", arg, def, maxN)
+	if err != nil {
+		return maxN
+	}
+
+	return n
+}

@@ -115,10 +115,27 @@ isolated-check:
 ## check: CI's lint job plus the tests; CI adds race, -tags debug and the service jobs
 check: fmt-check vet lint tidy-check isolated-check test
 
-## clean: remove build and coverage artifacts
+# Pinned for the same reason as golangci-lint. `go run pkg@version` needs no
+# install and no go.mod entry: a tool dependency in any one module of a
+# workspace would raise shared dependency versions for every module.
+GOVULNCHECK_VERSION := v1.8.0
+
+## vuln: report known vulnerabilities in code each module actually calls
+vuln:
+	@status=0; for mod in $$(go list -m -f '{{.Dir}}'); do \
+		echo "govulncheck $$mod"; \
+		(cd $$mod && GOWORK=off go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...) || status=1; \
+	done; exit $$status
+
+## clean: remove this repo's coverage files, and nothing from the shared Go build cache
+#
+# It used to run `go clean -cache -testcache`, which empties the build cache for
+# every Go project on the machine, not just this one. Nothing in this repository
+# needs that. `go clean -testcache` on its own is the narrowest way to force
+# tests to rerun, and -count=1 (make test-count) avoids the cache without
+# clearing anything.
 clean:
-	go clean -cache -testcache
 	rm -f coverage.out coverage.html
 
 .PHONY: help build test test-v test-race test-count cover cover-summary bench \
-        vet lint lint-fix fmt fmt-check tidy tidy-check isolated-check tools check clean
+        vet lint lint-fix fmt fmt-check tidy tidy-check isolated-check tools check vuln clean

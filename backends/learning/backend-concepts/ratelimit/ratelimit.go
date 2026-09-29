@@ -82,9 +82,12 @@ type Decision struct {
 
 // WriteHeaders sets the standard rate limit headers.
 //
-// The draft IETF names (RateLimit-Limit and so on) rather than the X- prefixed ones, which are what most APIs
-// still send. Both are in the wild; sending the unprefixed set is the direction the standard went and
-// clients that only know the X- names are not broken by it, they just ignore these.
+// The three-header names from the EARLY IETF drafts (RateLimit-Limit, -Remaining, -Reset) rather than the X-
+// prefixed ones most APIs still send. Worth knowing that the draft has since moved on: later versions of
+// draft-ietf-httpapi-ratelimit-headers replace the three with two structured fields, RateLimit and
+// RateLimit-Policy, carrying the same numbers. It is still a draft, so all three spellings are in the wild, and a
+// client that knows only one of them ignores the others rather than breaking. Check the current draft before
+// copying these names into a new API.
 //
 // Retry-After is the one that matters, because it is the only one with an RFC behind it and the only one a
 // generic HTTP client library knows how to obey. Seconds rather than a date, and rounded UP: rounding down

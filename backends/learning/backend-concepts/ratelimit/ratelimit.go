@@ -156,8 +156,9 @@ type FixedWindow struct {
 	Window time.Duration
 	Clock  Clock
 
-	mu      sync.Mutex
-	windows map[string]*fixedCounter
+	mu        sync.Mutex
+	windows   map[string]*fixedCounter
+	lastSweep time.Time // see sweepExpired: without it every key ever seen stays forever
 }
 
 type fixedCounter struct {
@@ -189,6 +190,10 @@ func (f *FixedWindow) Allow(_ context.Context, key string) (Decision, error) {
 
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
+	sweepExpired(&f.lastSweep, now, f.Window, f.windows, func(c *fixedCounter) bool {
+		return !c.start.After(start.Add(-f.Window)) // its window ended before this one began
+	})
 
 	c, ok := f.windows[key]
 	if !ok || !c.start.Equal(start) {
@@ -232,8 +237,9 @@ type SlidingLog struct {
 	Window time.Duration
 	Clock  Clock
 
-	mu   sync.Mutex
-	hits map[string][]time.Time
+	mu        sync.Mutex
+	hits      map[string][]time.Time
+	lastSweep time.Time
 }
 
 // NewSlidingLog builds one.
@@ -256,6 +262,10 @@ func (s *SlidingLog) Allow(_ context.Context, key string) (Decision, error) {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	sweepExpired(&s.lastSweep, now, s.Window, s.hits, func(times []time.Time) bool {
+		return len(times) == 0 || !times[len(times)-1].After(cutoff) // every hit has left the window
+	})
 
 	times := s.hits[key]
 
@@ -316,8 +326,9 @@ type SlidingCounter struct {
 	Window time.Duration
 	Clock  Clock
 
-	mu      sync.Mutex
-	windows map[string]*slidingPair
+	mu        sync.Mutex
+	windows   map[string]*slidingPair
+	lastSweep time.Time
 }
 
 type slidingPair struct {
@@ -346,6 +357,10 @@ func (s *SlidingCounter) Allow(_ context.Context, key string) (Decision, error) 
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	sweepExpired(&s.lastSweep, now, s.Window, s.windows, func(p *slidingPair) bool {
+		return !p.start.After(start.Add(-2 * s.Window)) // neither its current nor previous window counts now
+	})
 
 	p, ok := s.windows[key]
 	if !ok {

@@ -466,7 +466,12 @@ func TestWaitRespectsTheContext(t *testing.T) {
 	})
 }
 
-// TestKeyedLimitersAreSwept is the memory leak, measured.
+// TestKeyedLimitersAreSwept is the memory leak, measured under a sustained scan.
+//
+// The first version evicted at most 1,000 keys per sweep, once a minute, and its test only checked that a
+// one-off burst eventually drained. A scan that brings more than 1,000 new keys a minute outruns that forever.
+// Here 2,000 new keys arrive every minute for an hour. Evicting everything past its TTL on each sweep holds the
+// map at about one TTL's worth of keys; the batched version kept growing and ended past 60,000.
 func TestKeyedLimitersAreSwept(t *testing.T) {
 	ctx := context.Background()
 
@@ -476,49 +481,66 @@ func TestKeyedLimitersAreSwept(t *testing.T) {
 	b.keyed.now = clock.Now
 	b.keyed.lastSweep = clock.Now()
 
-	// 5,000 distinct keys, which is what a scan across an IP range looks like.
-	for i := range 5_000 {
-		if _, err := b.Allow(ctx, "ip-"+itoa(i)); err != nil {
+	const perMinute = 2_000
+
+	peak := 0
+	for minute := range 60 {
+		for i := range perMinute {
+			if _, err := b.Allow(ctx, "ip-"+itoa(minute*perMinute+i)); err != nil {
+				t.Fatal(err)
+			}
+		}
+		peak = max(peak, b.Len())
+		clock.Advance(time.Minute)
+	}
+
+	t.Logf("peak after an hour of %d new keys a minute: %d limiters", perMinute, peak)
+
+	// A TTL of 10 minutes and a sweep every minute keep at most 11 minutes of keys, plus the minute in progress.
+	if limit := 12 * perMinute; peak > limit {
+		t.Errorf("peak %d limiters; a TTL sweep should hold at most about %d", peak, limit)
+	}
+}
+
+// TestAlgorithmLimitersForgetIdleKeys: the fixed window, sliding log and sliding counter each keep a map entry
+// per key, and the first versions never removed one. 1,000 clients that each made one request stayed in memory
+// for as long as the limiter lived.
+func TestAlgorithmLimitersForgetIdleKeys(t *testing.T) {
+	ctx := context.Background()
+	clock := newFakeClock()
+
+	fixed := NewFixedWindow(10, time.Minute)
+	fixed.Clock = clock.Now
+	log := NewSlidingLog(10, time.Minute)
+	log.Clock = clock.Now
+	counter := NewSlidingCounter(10, time.Minute)
+	counter.Clock = clock.Now
+
+	for i := range 1_000 {
+		key := "ip-" + itoa(i)
+		for _, l := range []Limiter{fixed, log, counter} {
+			if _, err := l.Allow(ctx, key); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	// Past every window, then one request from someone else triggers the sweep.
+	clock.Advance(3 * time.Minute)
+	for _, l := range []Limiter{fixed, log, counter} {
+		if _, err := l.Allow(ctx, "a-real-client"); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	t.Logf("after 5,000 distinct keys: %d limiters held", b.Len())
-
-	if b.Len() != 5_000 {
-		t.Errorf("holding %d limiters, want 5000", b.Len())
-	}
-
-	// Past the TTL, and one more request triggers the sweep.
-	clock.Advance(11 * time.Minute)
-
-	if _, err := b.Allow(ctx, "a-real-client"); err != nil {
-		t.Fatal(err)
-	}
-
-	t.Logf("after the TTL and one request: %d limiters held", b.Len())
-
-	// The batch is 1,000, so one sweep removes at most 1,000. That bound is the point: one request
-	// does not pay for 5,000 evictions.
-	if b.Len() > 4_001 {
-		t.Errorf("holding %d limiters; the sweep should have removed a batch", b.Len())
-	}
-	if b.Len() < 4_000 {
-		t.Errorf("holding %d limiters; the sweep removed more than its batch of 1,000", b.Len())
-	}
-
-	// Enough sweeps and it drains.
-	for i := range 10 {
-		clock.Advance(2 * time.Minute)
-		if _, err := b.Allow(ctx, "a-real-client"); err != nil {
-			t.Fatalf("sweep %d: %v", i, err)
+	for name, n := range map[string]int{
+		"FixedWindow":    len(fixed.windows),
+		"SlidingLog":     len(log.hits),
+		"SlidingCounter": len(counter.windows),
+	} {
+		if n != 1 {
+			t.Errorf("%s holds %d keys after every window passed, want 1", name, n)
 		}
-	}
-
-	t.Logf("after ten more sweeps: %d limiters held", b.Len())
-
-	if b.Len() > 2 {
-		t.Errorf("holding %d limiters after repeated sweeps", b.Len())
 	}
 }
 

@@ -21,8 +21,14 @@ import (
 //	  resets that client's budget, which an attacker can force by cycling keys.
 //	a TTL plus a background sweeper goroutine. Works, and the goroutine has to be stopped or it
 //	  outlives the limiter, which is the leak again in a different shape.
-//	a TTL swept lazily, on write, in bounded batches. No goroutine, no dependency, and the bound
-//	  is what keeps one unlucky request from paying for 100,000 evictions.
+//	a TTL swept lazily, on write, at most once per interval. No goroutine and no dependency.
+//
+// The sweep evicts EVERY expired entry. The first version capped it at 1,000 per sweep to spare
+// the unlucky request that runs it, and that cap is a leak with extra steps: a scan bringing more
+// than 1,000 new keys a minute outruns it forever (TestKeyedLimitersAreSwept measured 71,000 held
+// after an hour at 2,000 a minute). The honest cost is a walk over every live entry once per
+// interval, paid by one request, and in exchange the map never holds much more than one TTL's
+// worth of distinct keys.
 type keyedLimiters struct {
 	mu       sync.Mutex
 	limiters map[string]*keyedEntry
@@ -31,10 +37,8 @@ type keyedLimiters struct {
 	// in its traffic, short enough that a scan's keys are gone quickly.
 	ttl time.Duration
 
-	// sweepEvery bounds how often a sweep runs, and sweepBatch how much it does. Together they make
-	// the amortised cost of the map constant.
+	// sweepEvery bounds how often a sweep runs.
 	sweepEvery time.Duration
-	sweepBatch int
 
 	lastSweep time.Time
 	now       func() time.Time
@@ -50,7 +54,6 @@ func newKeyedLimiters() *keyedLimiters {
 		limiters:   make(map[string]*keyedEntry),
 		ttl:        10 * time.Minute,
 		sweepEvery: time.Minute,
-		sweepBatch: 1_000,
 		now:        time.Now,
 	}
 }
@@ -75,29 +78,30 @@ func (k *keyedLimiters) get(key string, limit rate.Limit, burst int) *rate.Limit
 	return l
 }
 
-// maybeSweep drops expired entries, at most sweepBatch at a time and at most once per sweepEvery.
-//
-// Called with the mutex held.
-//
-// Ranging over a map and deleting during the range is safe in Go and is specified to be: a key deleted before
-// it is reached will not be produced. That is one of the few map guarantees worth knowing, and it is what
-// makes the batch limit work without collecting the keys first.
+// maybeSweep drops every expired entry, at most once per sweepEvery. Called with the mutex held.
 func (k *keyedLimiters) maybeSweep(now time.Time) {
-	if now.Sub(k.lastSweep) < k.sweepEvery {
-		return
-	}
-
-	k.lastSweep = now
 	cutoff := now.Add(-k.ttl)
 
-	swept := 0
-	for key, e := range k.limiters {
-		if swept >= k.sweepBatch {
-			break
-		}
-		if e.lastSeen.Before(cutoff) {
-			delete(k.limiters, key)
-			swept++
+	sweepExpired(&k.lastSweep, now, k.sweepEvery, k.limiters, func(e *keyedEntry) bool {
+		return e.lastSeen.Before(cutoff)
+	})
+}
+
+// sweepExpired deletes the entries of m for which expired returns true, if at least every has
+// passed since *last. Called with the owning lock held.
+//
+// Ranging over a map and deleting during the range is safe in Go and is specified to be: a key
+// deleted before it is reached will not be produced. That is one of the few map guarantees worth
+// knowing, and it is what lets this delete as it goes without collecting the keys first.
+func sweepExpired[V any](last *time.Time, now time.Time, every time.Duration, m map[string]V, expired func(V) bool) {
+	if now.Sub(*last) < every {
+		return
+	}
+	*last = now
+
+	for key, v := range m {
+		if expired(v) {
+			delete(m, key)
 		}
 	}
 }

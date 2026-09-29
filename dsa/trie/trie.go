@@ -29,6 +29,7 @@ package trie
 import (
 	"iter"
 	"slices"
+	"unicode/utf8"
 )
 
 // node is one character in the tree. Nothing stores the character itself: it is
@@ -328,24 +329,27 @@ func (t *Trie) LongestPrefixOf(s string) (string, bool) {
 
 	current := t.root
 	best, bestLen := "", -1
-	consumed := 0
 
 	if current.terminal {
 		best, bestLen = "", 0
 	}
 
-	for _, c := range s {
+	for i, c := range s {
 		child, ok := current.children[c]
 		if !ok {
 			break
 		}
 
-		consumed += len(string(c))
+		// The end of this rune in s, in bytes. Not i + len(string(c)): an invalid byte
+		// ranges as utf8.RuneError, which is ONE byte of s and THREE bytes re-encoded, and
+		// the first version sliced past the end of the input on exactly that.
+		_, size := utf8.DecodeRuneInString(s[i:])
+		end := i + size
 		current = child
 
 		// Keep walking past a match: a longer one may be further down.
 		if current.terminal {
-			best, bestLen = s[:consumed], consumed
+			best, bestLen = s[:end], end
 		}
 	}
 

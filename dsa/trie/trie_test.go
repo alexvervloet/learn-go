@@ -370,3 +370,24 @@ func TestEmptyStringIsAWord(t *testing.T) {
 		t.Error("deleting the empty string took another word with it")
 	}
 }
+
+// TestLongestPrefixOfInvalidUTF8 feeds bytes that are not UTF-8. Ranging over a string turns each invalid byte
+// into utf8.RuneError, which is one byte in the input and three bytes when re-encoded. The first version counted
+// the re-encoded width, so after Insert("�") a lookup of "\xff" sliced past the end of the input and
+// panicked, and "\xffabc" matched a prefix two bytes too long.
+func TestLongestPrefixOfInvalidUTF8(t *testing.T) {
+	tr := New()
+	tr.Insert("�")
+	tr.Insert("�a")
+
+	for in, want := range map[string]string{
+		"\xff":     "\xff",
+		"\xffabc":  "\xffa",
+		"�ab": "�a",
+	} {
+		got, ok := tr.LongestPrefixOf(in)
+		if !ok || got != want {
+			t.Errorf("LongestPrefixOf(%q) = %q, %t; want %q", in, got, ok, want)
+		}
+	}
+}

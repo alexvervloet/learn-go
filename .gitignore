@@ -54,7 +54,7 @@ mem.pprof
 # than a .gitignore entry.
 #
 #   gRPC stubs:   backends/learning/grpc-concepts/generate.sh
-#   gqlgen:       `go generate ./...` in graphql-concepts
+#   gqlgen:       `go run github.com/99designs/gqlgen generate` in graphql-concepts
 
 # Environment / secrets
 .env

@@ -7,9 +7,12 @@ package main
 // `//go:build linux || darwin || freebsd || openbsd || netbsd || dragonfly ||
 // solaris || aix`, which is exactly as pleasant as it looks.
 //
-// Note the blank line after the constraint. It is REQUIRED: without it the
-// comment is attached to the package clause as a doc comment and is not a
-// build constraint at all. go vet's buildtag analyser catches that.
+// The blank line after the constraint is gofmt's, not the compiler's. With
+// `//go:build` the line directly above `package` still works: tested with
+// `//go:build ignore`, the file was excluded and go vet said nothing. gofmt
+// inserts the blank line so the constraint can't be mistaken for the package
+// doc comment. The blank line WAS required by the old `// +build` syntax,
+// which is where the advice comes from.
 
 // unixPlatform is the Unix implementation of Platform.
 type unixPlatform struct{}

@@ -88,13 +88,18 @@ binary's read-only data section, so embedding a 50MB file makes a 50MB binary.
 ## Build tags
 
 The modern syntax is `//go:build`, and it must appear **before the package
-clause** with a blank line after it:
+clause**. gofmt puts a blank line after it:
 
 ```go
 //go:build linux && amd64
 
 package main
 ```
+
+The blank line is gofmt's convention, not a rule: with `//go:build` directly
+above `package`, the file is still constrained and vet says nothing. The rule
+you may have read, that a missing blank line turns the constraint into a doc
+comment, belongs to the old `// +build` syntax.
 
 The old `// +build` form still works and `gofmt` keeps the two in sync, but new
 code uses `//go:build` only.

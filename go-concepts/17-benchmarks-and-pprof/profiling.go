@@ -15,9 +15,17 @@ import (
 //
 // Six profiles, all in the standard library:
 //
-//	CPU     where time goes                    -cpuprofile
+//	CPU     where on-CPU time goes             -cpuprofile
 //	heap    what is allocated AND still live   -memprofile
-//	allocs  every allocation ever made         -memprofile -memprofilerate=1
+//	allocs  everything allocated, live or not  -memprofile, then pprof -sample_index=alloc_space
+//
+// heap and allocs are ONE profile with two default views. -memprofile writes
+// it; `go tool pprof` opens it as heap (inuse_space), and -sample_index picks
+// the allocation totals instead. Both are sampled, about one record per 512KB
+// allocated. -memprofilerate=1 records every allocation, which makes the
+// numbers exact and the program much slower; it changes the sampling, not
+// which profile you get. An earlier version of this table said allocs meant
+// -memprofilerate=1.
 //	block   time blocked on channels and locks -blockprofile
 //	mutex   lock contention                    -mutexprofile
 //	trace   the scheduler, GC and goroutines   -trace
@@ -38,7 +46,7 @@ func profileKinds() []ProfileKind {
 	return []ProfileKind{
 		{
 			Name:      "cpu",
-			Shows:     "where wall-clock time is spent, sampled at 100Hz",
+			Shows:     "where ON-CPU time is spent, sampled at 100Hz; blocked and sleeping time does not appear",
 			TestFlag:  "-cpuprofile=cpu.out",
 			WhenToUse: "the service is slow and busy",
 		},
@@ -50,8 +58,8 @@ func profileKinds() []ProfileKind {
 		},
 		{
 			Name:      "allocs",
-			Shows:     "every allocation ever made, live or not",
-			TestFlag:  "-memprofile=mem.out -memprofilerate=1",
+			Shows:     "everything allocated since start, live or not (the same file as heap)",
+			TestFlag:  "-memprofile=mem.out, then go tool pprof -sample_index=alloc_space mem.out",
 			WhenToUse: "GC pressure is high but memory is not growing",
 		},
 		{
@@ -79,9 +87,9 @@ func profileKinds() []ProfileKind {
 func heapVsAllocs() []string {
 	return []string{
 		"heap:   what is STILL REACHABLE when the profile is taken -> finds LEAKS",
-		"allocs: every allocation ever made                        -> finds GC PRESSURE",
+		"allocs: everything allocated since start, sampled         -> finds GC PRESSURE",
 		"a program allocating 10GB and freeing it all has a huge allocs profile and a tiny heap",
-		"a program holding 100MB forever has a small allocs profile and a heap that grows",
+		"a program leaking 100MB shows it in both: allocs counts every byte ever allocated, heap only the live ones",
 		"they answer different questions; taking the wrong one wastes an afternoon",
 	}
 }

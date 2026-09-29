@@ -102,9 +102,9 @@ benchstat old.txt new.txt
 
 | Profile | What it shows | Flag |
 |---|---|---|
-| CPU | where time goes | `-cpuprofile` |
+| CPU | where on-CPU time goes (time spent blocked or asleep is invisible) | `-cpuprofile` |
 | heap | what is allocated and still reachable | `-memprofile` |
-| allocs | every allocation ever made | `-memprofile` with `-memprofilerate=1` |
+| allocs | everything allocated since start, live or not | the same `-memprofile` file, read with `-sample_index=alloc_space` |
 | block | time blocked on channels and locks | `-blockprofile` |
 | mutex | lock contention | `-mutexprofile` |
 | trace | scheduler, GC and goroutine timeline | `-trace` |

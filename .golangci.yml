@@ -1,7 +1,10 @@
 # golangci-lint configuration — the analogue of the Python repo's ruff.toml.
 #
-# Run:  golangci-lint run ./...
-# Fix:  golangci-lint run --fix ./...
+# Run:  make lint
+# Fix:  make lint-fix
+#
+# Not `golangci-lint run ./...`: the repository root is a workspace, not a
+# module, so ./... matches nothing there. The Makefile expands every module.
 #
 # The default linter set is deliberately small. These additions are the ones
 # that catch bugs this repo teaches about, so the linter agrees with the prose.
@@ -45,7 +48,7 @@ linters:
       # Demo fixtures repeat sample names ("Ana", "alice@example.com") across a
       # handful of examples in one file. At the default threshold of 3 that is
       # pure noise, and hoisting a constant would make the examples harder to
-      # read, not easier. Five is high enough that a genuine magic string still
+      # read, not easier. Six is high enough that a genuine magic string still
       # gets caught.
       min-occurrences: 6
       min-len: 4

@@ -100,7 +100,7 @@ func TestLongestBalancedPrefixAgreesWithIsBalanced(t *testing.T) {
 
 func BenchmarkIsBalanced(b *testing.B) {
 	input := ""
-	for i := 0; i < 500; i++ {
+	for range 500 {
 		input += "([{}])"
 	}
 

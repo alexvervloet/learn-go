@@ -51,7 +51,7 @@ func TestPeekDoesNotRemove(t *testing.T) {
 	s.Push("bottom")
 	s.Push("top")
 
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		got, ok := s.Peek()
 		if !ok || got != "top" {
 			t.Errorf("Peek = %q, %t; want top, true", got, ok)
@@ -219,10 +219,10 @@ func TestSearchAndRemoveZeroesTheTail(t *testing.T) {
 func BenchmarkPushPop(b *testing.B) {
 	for b.Loop() {
 		var s Stack[int]
-		for i := 0; i < 1000; i++ {
+		for i := range 1000 {
 			s.Push(i)
 		}
-		for i := 0; i < 1000; i++ {
+		for range 1000 {
 			s.Pop()
 		}
 	}
@@ -231,10 +231,10 @@ func BenchmarkPushPop(b *testing.B) {
 func BenchmarkPushPopPresized(b *testing.B) {
 	for b.Loop() {
 		s := New[int](1000)
-		for i := 0; i < 1000; i++ {
+		for i := range 1000 {
 			s.Push(i)
 		}
-		for i := 0; i < 1000; i++ {
+		for range 1000 {
 			s.Pop()
 		}
 	}

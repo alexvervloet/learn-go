@@ -193,7 +193,7 @@ func TestRemoveDoesNotCorruptTheRest(t *testing.T) {
 		l.AddToTail(i)
 	}
 
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		if _, ok := l.RemoveFromHead(); !ok {
 			t.Fatalf("removal %d failed", i)
 		}
@@ -339,7 +339,7 @@ func TestReverseThenAppend(t *testing.T) {
 func BenchmarkAddToTail(b *testing.B) {
 	for b.Loop() {
 		var l LinkedList[int]
-		for i := 0; i < 1000; i++ {
+		for i := range 1000 {
 			l.AddToTail(i)
 		}
 	}
@@ -350,7 +350,7 @@ func BenchmarkAddToTail(b *testing.B) {
 func BenchmarkSliceAppend(b *testing.B) {
 	for b.Loop() {
 		s := make([]int, 0, 1000)
-		for i := 0; i < 1000; i++ {
+		for i := range 1000 {
 			s = append(s, i)
 		}
 		_ = s
@@ -361,7 +361,7 @@ func BenchmarkSliceAppend(b *testing.B) {
 func BenchmarkListPrepend(b *testing.B) {
 	for b.Loop() {
 		var l LinkedList[int]
-		for i := 0; i < 1000; i++ {
+		for i := range 1000 {
 			l.AddToHead(i)
 		}
 	}
@@ -370,7 +370,7 @@ func BenchmarkListPrepend(b *testing.B) {
 func BenchmarkSlicePrepend(b *testing.B) {
 	for b.Loop() {
 		var s []int
-		for i := 0; i < 1000; i++ {
+		for i := range 1000 {
 			s = append([]int{i}, s...) // the O(n) prepend
 		}
 		_ = s

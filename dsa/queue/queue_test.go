@@ -213,7 +213,7 @@ func TestStringRendersFrontToBack(t *testing.T) {
 func TestChurnDoesNotGrowTheBuffer(t *testing.T) {
 	q := New[int](8)
 
-	for i := 0; i < 100_000; i++ {
+	for i := range 100_000 {
 		q.Push(i)
 		if q.Len() > 4 {
 			q.Pop()

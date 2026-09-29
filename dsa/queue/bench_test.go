@@ -9,7 +9,7 @@ const window = 1000
 
 func BenchmarkRingBuffer(b *testing.B) {
 	q := New[int](window)
-	for i := 0; i < window; i++ {
+	for i := range window {
 		q.Push(i)
 	}
 
@@ -22,7 +22,7 @@ func BenchmarkRingBuffer(b *testing.B) {
 
 func BenchmarkNaiveReslice(b *testing.B) {
 	var q naiveReslice[int]
-	for i := 0; i < window; i++ {
+	for i := range window {
 		q.Push(i)
 	}
 
@@ -35,7 +35,7 @@ func BenchmarkNaiveReslice(b *testing.B) {
 
 func BenchmarkShiftDown(b *testing.B) {
 	var q shiftDown[int]
-	for i := 0; i < window; i++ {
+	for i := range window {
 		q.Push(i)
 	}
 
@@ -55,7 +55,7 @@ func BenchmarkDrain(b *testing.B) {
 	b.Run("ring", func(b *testing.B) {
 		for b.Loop() {
 			q := New[int](8)
-			for i := 0; i < n; i++ {
+			for i := range n {
 				q.Push(i)
 			}
 			for q.Len() > 0 {
@@ -67,7 +67,7 @@ func BenchmarkDrain(b *testing.B) {
 	b.Run("reslice", func(b *testing.B) {
 		for b.Loop() {
 			var q naiveReslice[int]
-			for i := 0; i < n; i++ {
+			for i := range n {
 				q.Push(i)
 			}
 			for q.Len() > 0 {
@@ -79,7 +79,7 @@ func BenchmarkDrain(b *testing.B) {
 	b.Run("shift", func(b *testing.B) {
 		for b.Loop() {
 			var q shiftDown[int]
-			for i := 0; i < n; i++ {
+			for i := range n {
 				q.Push(i)
 			}
 			for q.Len() > 0 {

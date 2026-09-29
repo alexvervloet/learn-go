@@ -9,6 +9,11 @@ go test ./...
 
 Without LocalStack every test skips and says how to start it.
 
+The compose file pins `localstack/localstack:3.8.1`, the last 3.x release, and that pin is deliberate. Current
+LocalStack images refuse to start without a `LOCALSTACK_AUTH_TOKEN`, which needs an account (free for
+non-commercial use). 3.8.1 needs nothing. If you move to a newer image, set the token in your environment and
+pass it through in `docker-compose.yml`, or the container exits at startup and every test skips.
+
 ## What is here
 
 | Package | Subject |

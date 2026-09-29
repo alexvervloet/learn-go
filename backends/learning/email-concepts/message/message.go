@@ -33,12 +33,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"mime"
 	"mime/multipart"
 	"mime/quotedprintable"
 	"net/mail"
 	"net/textproto"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 )
@@ -49,6 +51,9 @@ var (
 	ErrNoSender     = errors.New("no sender")
 	ErrHeaderInject = errors.New("header injection attempt")
 	ErrNoBody       = errors.New("no body")
+
+	// ErrReservedHeader means Headers tried to set a header the message writes itself.
+	ErrReservedHeader = errors.New("reserved header")
 )
 
 // Address is a name and an email address.
@@ -190,9 +195,25 @@ func (m *Message) Validate() error {
 		if err := checkHeaderValue("header name", name); err != nil {
 			return err
 		}
+		if name == "" || strings.ContainsAny(name, ": \t") {
+			return fmt.Errorf("%w: %q is not a header name", ErrHeaderInject, name)
+		}
+
+		// The headers this type writes itself cannot come in through Headers. Without this check,
+		// Headers{"Bcc": ...} wrote a Bcc header into a message whose whole design is that Bcc
+		// never appears in it, and Headers{"From": ...} produced a second From.
+		if reservedHeaders[textproto.CanonicalMIMEHeaderKey(name)] {
+			return fmt.Errorf("%w: %s is set by the message, not through Headers", ErrReservedHeader, name)
+		}
 	}
 
 	return nil
+}
+
+// reservedHeaders are the ones Bytes writes from the Message's own fields, plus Bcc, which it never writes.
+var reservedHeaders = map[string]bool{
+	"Bcc": true, "Cc": true, "To": true, "From": true, "Reply-To": true, "Subject": true, "Date": true,
+	"Mime-Version": true, "Content-Type": true, "Content-Transfer-Encoding": true,
 }
 
 // checkHeaderValue rejects anything that could inject a header.
@@ -248,8 +269,11 @@ func (m *Message) Bytes() ([]byte, error) {
 		writeHeader(&buf, h.name, h.value)
 	}
 
-	for name, value := range m.Headers {
-		writeHeader(&buf, name, value)
+	// Sorted, so a message renders the same bytes every time; ranging over the map, as the first
+	// version did, put them in a different order on every call and broke SetBoundary's promise of a
+	// byte-identical message. And encoded, like Subject, so a non-ASCII value is legal on the wire.
+	for _, name := range slices.Sorted(maps.Keys(m.Headers)) {
+		writeHeader(&buf, name, encodeHeader(m.Headers[name]))
 	}
 
 	if err := m.writeBody(&buf); err != nil {
@@ -560,10 +584,27 @@ func encodeHeader(value string) string {
 	return mime.QEncoding.Encode("utf-8", value)
 }
 
+// writeHeader writes one header, folded.
+//
+// RFC 5322 says a line SHOULD be at most 78 characters and MUST be at most 998. A long header is FOLDED:
+// broken at whitespace, with each continuation line starting with a space. The first version wrote every header
+// on one line, so a long subject made a line over 998 that a strict server rejects. Encoded values fold too,
+// because mime's Q encoding already splits a long value into space-separated encoded-words of at most 75.
 func writeHeader(buf *bytes.Buffer, name, value string) {
-	buf.WriteString(name)
-	buf.WriteString(": ")
-	buf.WriteString(value)
+	const limit = 78
+
+	line := name + ":"
+
+	for _, word := range strings.Fields(value) {
+		if len(line)+1+len(word) > limit && len(line) > len(name)+1 {
+			buf.WriteString(line)
+			buf.WriteString("\r\n")
+			line = ""
+		}
+		line += " " + word
+	}
+
+	buf.WriteString(line)
 	buf.WriteString("\r\n")
 }
 
@@ -613,8 +654,10 @@ func quoteBoundary(b string) string {
 //
 // # The normalisation
 //
-// The body is normalised to CRLF first. quotedprintable.Writer passes a lone \n through as a soft line break
-// candidate and the result is a message with mixed line endings, which a strict server rejects during the DATA
+// The body is normalised to CRLF first, and with this encoder that is belt and braces: quotedprintable.Writer
+// in text mode (Binary false, the default) already turns \n, \r and \r\n into CRLF. An earlier version of this
+// comment said it passes a lone \n through; checked, it does not. The normalisation stays because a body can
+// reach an SMTP server by other paths than this encoder, and mixed line endings are rejected during the DATA
 // phase with an error that names neither the line nor the reason.
 func writeQuotedPrintable(w io.Writer, body string) error {
 	encoder := quotedprintable.NewWriter(w)

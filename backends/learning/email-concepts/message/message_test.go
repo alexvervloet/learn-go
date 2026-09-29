@@ -637,3 +637,77 @@ func itoa(n int) string {
 	}
 	return string(digits)
 }
+
+// TestExtraHeadersAreSafeAndStable covers the free-form Headers map, which the first version wrote by ranging
+// over the map: in a different order on every call, a Bcc header straight into the message, non-ASCII values
+// unencoded, and nothing stopping a caller from writing a second From.
+func TestExtraHeadersAreSafeAndStable(t *testing.T) {
+	t.Run("the output is byte-identical every time", func(t *testing.T) {
+		m := plainMessage()
+		m.SetBoundary("fixed")
+		m.Headers = map[string]string{
+			"List-Unsubscribe": "<mailto:unsub@example.test>",
+			"X-Campaign":       "welcome",
+			"X-Priority":       "3",
+			"In-Reply-To":      "<abc@example.test>",
+			"X-Trace":          "t-1",
+		}
+
+		first, err := m.Bytes()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for range 30 {
+			again, _ := m.Bytes()
+			if !bytes.Equal(first, again) {
+				t.Fatal("two renders of the same message differ: the extra headers came out in map order")
+			}
+		}
+	})
+
+	t.Run("a reserved name is refused, in any case", func(t *testing.T) {
+		for _, name := range []string{"Bcc", "bcc", "From", "to", "Subject", "MIME-Version", "Content-Type"} {
+			m := plainMessage()
+			m.Headers = map[string]string{name: "someone@example.test"}
+
+			if err := m.Validate(); !errors.Is(err, message.ErrReservedHeader) {
+				t.Errorf("Headers[%q]: err = %v, want ErrReservedHeader", name, err)
+			}
+		}
+	})
+
+	t.Run("a non-ASCII value is encoded", func(t *testing.T) {
+		m := plainMessage()
+		m.Headers = map[string]string{"X-Note": "Café"}
+
+		raw, err := m.Bytes()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(raw), "X-Note: =?utf-8?q?Caf=C3=A9?=") {
+			t.Errorf("the value was not RFC 2047 encoded:\n%s", raw)
+		}
+	})
+}
+
+// TestLongHeadersAreFolded: RFC 5322 caps a line at 998 characters. The first version wrote every header on one
+// line, so a 1,500-character subject produced a 1,509-character line that a strict server rejects.
+func TestLongHeadersAreFolded(t *testing.T) {
+	m := plainMessage()
+	m.Subject = strings.Repeat("A very long subject with plenty of words. ", 40)
+
+	raw, err := m.Bytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for i, line := range strings.Split(string(raw), "\r\n") {
+		if len(line) > 998 {
+			t.Fatalf("line %d is %d characters, over RFC 5322's 998", i, len(line))
+		}
+	}
+
+	if !strings.Contains(string(raw), "\r\n ") {
+		t.Error("no folded continuation line in the output")
+	}
+}

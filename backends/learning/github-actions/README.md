@@ -98,11 +98,12 @@ the ambiguity, which is why nearly every real `run:` is written with a `|`.
 | Claim | Where |
 |---|---|
 | The workflow parses with a model that rejects unknown keys | `TestOwnCIParses` |
+| Every rule in the table above passes, with no findings at all | `TestOwnCIIsClean` |
 | No expression an outsider controls reaches a shell | `TestOwnCIHasNoScriptInjection` |
 | Every `needs` names a job that exists, and there is no cycle | `TestOwnCINeedsAreConsistent` |
-| Nothing uses `needs`, so all 10 jobs run in parallel | `TestOwnCIJobsAreIndependent` |
-| 21 first-party actions, 1 third-party, sha-pinned | `TestOwnCIPinsEveryThirdPartyAction` |
-| All 5 service containers declare a health check | `TestOwnCIServiceContainersHaveHealthChecks` |
+| Nothing uses `needs`, so every job runs in parallel | `TestOwnCIJobsAreIndependent` |
+| Every third-party action is pinned to a full commit sha | `TestOwnCIPinsEveryThirdPartyAction` |
+| Every service container declares a health check | `TestOwnCIServiceContainersHaveHealthChecks` |
 
 That last one is not cosmetic. Without a health check a service container is "available" as soon as the
 **container** starts, which is before Postgres accepts connections. In this repository every database test skips

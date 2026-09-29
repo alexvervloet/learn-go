@@ -34,12 +34,22 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.27"
-          # setup-go keys its cache on every go.sum in the repo, which is the
-          # right key for a workspace: adding a dependency anywhere
-          # invalidates it. Until a module has dependencies there is no go.sum
-          # and the step logs "Dependencies file is not found". That warning is
-          # expected here and resolves itself once the backend modules land.
+          # cache-dependency-path is not optional in a workspace. Without it
+          # setup-go looks for a go.sum at the repository root, finds none
+          # (a workspace root has go.work.sum and no go.mod), logs "Restore
+          # cache failed: Dependencies file is not found" and caches nothing.
+          # Every job in this file did that on every run until the path was
+          # added. The comment here used to call the warning temporary.
+          #
+          # Every module's go.sum plus go.work.sum is the right key: adding a
+          # dependency anywhere invalidates it.
           cache: true
+          cache-dependency-path: |
+            **/go.sum
+            go.work.sum
+          CACHEPATH_DONE: |
+            **/go.sum
+            go.work.sum
 
       # gofmt is not a style preference in Go, it is the format. There is one
       # correct output per file, so this is a hard failure rather than advice.
@@ -128,6 +138,9 @@ jobs:
         with:
           go-version: ${{ matrix.go }}
           cache: true
+          cache-dependency-path: |
+            **/go.sum
+            go.work.sum
 
       - name: Build
         run: go build $(go list -m -f '{{.Dir}}/...')
@@ -200,6 +213,9 @@ jobs:
         with:
           go-version: "1.27"
           cache: true
+          cache-dependency-path: |
+            **/go.sum
+            go.work.sum
 
       # One run, not two. -v so the skip messages are visible, tee so the output
       # reaches the log whether the run passes or fails.
@@ -297,6 +313,9 @@ jobs:
         with:
           go-version: "1.27"
           cache: true
+          cache-dependency-path: |
+            **/go.sum
+            go.work.sum
 
       # Redpanda as a `docker run` step rather than a service container, and the
       # reason is a real limitation: a service container takes an image and
@@ -449,6 +468,9 @@ jobs:
         with:
           go-version: "1.27"
           cache: true
+          cache-dependency-path: |
+            **/go.sum
+            go.work.sum
 
       - name: Test the url-shortener
         working-directory: capstones/url-shortener
@@ -580,6 +602,9 @@ jobs:
         with:
           go-version: "1.27"
           cache: true
+          cache-dependency-path: |
+            **/go.sum
+            go.work.sum
 
       - name: Test against LocalStack
         working-directory: backends/learning/aws-concepts
@@ -626,6 +651,9 @@ jobs:
         with:
           go-version: "1.27"
           cache: true
+          cache-dependency-path: |
+            **/go.sum
+            go.work.sum
 
       - name: Install protoc
         # The pinned release, not apt.
@@ -711,6 +739,9 @@ jobs:
         with:
           go-version: "1.27"
           cache: true
+          cache-dependency-path: |
+            **/go.sum
+            go.work.sum
 
       # BuildKit, for the cache-mount Dockerfile. It is the default since Docker
       # 23 and the runner has a newer one, so this is belt and braces and it
@@ -758,6 +789,9 @@ jobs:
         with:
           go-version: "1.27"
           cache: true
+          cache-dependency-path: |
+            **/go.sum
+            go.work.sum
 
       - name: Test with -race
         run: go test -race -count=1 $(go list -m -f '{{.Dir}}/...')
@@ -828,6 +862,9 @@ jobs:
         with:
           go-version: "1.27"
           cache: true
+          cache-dependency-path: |
+            **/go.sum
+            go.work.sum
 
       # Build only; these targets cannot all be RUN here, and a build failure
       # is what this job is looking for.
@@ -866,6 +903,9 @@ jobs:
         with:
           go-version: "1.27"
           cache: true
+          cache-dependency-path: |
+            **/go.sum
+            go.work.sum
 
       - name: Test with coverage
         run: go test -coverprofile=coverage.out $(go list -m -f '{{.Dir}}/...')

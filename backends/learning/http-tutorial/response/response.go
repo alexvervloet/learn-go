@@ -331,10 +331,14 @@ func Negotiate(r *http.Request, available ...string) string {
 }
 
 // acceptQuality returns the q-value the Accept header assigns to one media type, or 0.
+//
+// When several ranges match, the MOST SPECIFIC one decides, not the highest q (RFC 9110 section 12.5.1).
+// "*/*;q=1, application/json;q=0" means "anything but JSON", and the first version, which kept the highest q
+// among all matches, served JSON to it.
 func acceptQuality(header, offer string) float64 {
 	offerType, offerSub, _ := strings.Cut(offer, "/")
 
-	best := 0.0
+	best, bestSpecificity := 0.0, 0
 
 	for _, part := range strings.Split(header, ",") {
 		media, params, _ := strings.Cut(strings.TrimSpace(part), ";")
@@ -353,12 +357,19 @@ func acceptQuality(header, offer string) float64 {
 
 		mediaType, mediaSub, _ := strings.Cut(media, "/")
 
-		matches := media == "*/*" ||
-			(mediaType == offerType && mediaSub == "*") ||
-			(mediaType == offerType && mediaSub == offerSub)
+		specificity := 0
 
-		if matches && q > best {
-			best = q
+		switch {
+		case mediaType == offerType && mediaSub == offerSub:
+			specificity = 3
+		case mediaType == offerType && mediaSub == "*":
+			specificity = 2
+		case media == "*/*":
+			specificity = 1
+		}
+
+		if specificity > bestSpecificity || (specificity == bestSpecificity && specificity > 0 && q > best) {
+			best, bestSpecificity = q, specificity
 		}
 	}
 

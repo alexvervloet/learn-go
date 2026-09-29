@@ -445,3 +445,20 @@ func TestNegotiatePrefersTheServersOrderOnATie(t *testing.T) {
 		t.Errorf("Negotiate = %q, want the first offer on a tie", got)
 	}
 }
+
+// TestNegotiateUsesTheMostSpecificRange: "anything but JSON" must not get JSON. The first version took the
+// highest q among every range that matched, so the */*;q=1 outvoted application/json;q=0.
+func TestNegotiateUsesTheMostSpecificRange(t *testing.T) {
+	negotiate := func(accept string) string {
+		r := httptest.NewRequest("GET", "/", nil)
+		r.Header.Set("Accept", accept)
+		return Negotiate(r, "application/json", "text/plain")
+	}
+
+	if got := negotiate("*/*;q=1, application/json;q=0"); got != "text/plain" {
+		t.Errorf("Negotiate(anything but JSON) = %q, want text/plain", got)
+	}
+	if got := negotiate("text/*;q=0.1, text/plain;q=0.9, */*;q=0.5"); got != "text/plain" {
+		t.Errorf("Negotiate = %q, want text/plain at its exact q of 0.9", got)
+	}
+}

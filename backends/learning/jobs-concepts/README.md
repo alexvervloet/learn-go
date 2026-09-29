@@ -137,8 +137,14 @@ has to name the work and nothing else.
 this once for this user" means. It is what an idempotency key is.
 
 And at the handler end: asynq's task id is stable across retries, so it is the right key for a
-"have I already done this" check. Same caveat as everywhere else in this repo: an in-memory map is wrong for
-more than one worker, and the real one is a unique constraint in the same transaction as the work.
+"have I already done this" check. The check reads before the work and records **after** it succeeds. The
+first version recorded first, so a send that failed left the id behind, the retry found it and returned
+nil, and the email was never sent while asynq reported the task completed.
+`TestIdempotencyIsRecordedAfterTheWork` fails the first send and requires a second one.
+
+Same caveat as everywhere else in this repo: an in-memory map is wrong for more than one worker, and a crash
+between the work and the record still repeats the work. The real fix is a unique constraint in the same
+transaction as the work, or an idempotency key the downstream service honours.
 
 ## Queues are weighted, not prioritised
 

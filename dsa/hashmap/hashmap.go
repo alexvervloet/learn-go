@@ -1,6 +1,11 @@
 // Package hashmap implements a hash table with open addressing and linear
-// probing, the same design as Go's own map but written out so every decision is
-// visible.
+// probing, written out so every decision is visible.
+//
+// Go's own map has been open addressing too since Go 1.24, when it became a
+// Swiss table. It probes GROUPS of eight slots at a time, checking all eight
+// with one-byte tags before touching a key, where this table probes one slot
+// at a time. Before 1.24 the builtin map was a different design altogether:
+// buckets of eight that chained to overflow buckets when full.
 //
 // Use the builtin map. This exists so that when a profile shows a map is the
 // bottleneck, or an interviewer asks what happens on a collision, the answer is
@@ -43,8 +48,8 @@ type slot[K comparable, V any] struct {
 // 0.7 is the usual compromise. Linear probing degrades sharply as a table fills,
 // because the expected probe count for an unsuccessful lookup is roughly
 // (1 + 1/(1-load)^2)/2: at 0.5 that is about 2.5 probes, at 0.7 about 6, at 0.9
-// about 50. Go's own map grows at 0.8125 (13/16), with buckets of 8 rather than
-// single slots, which changes the arithmetic.
+// about 50. Go's own map allows an average of 7 used slots in each group of 8
+// (0.875), which is affordable because a probe checks a whole group at once.
 const maxLoad = 0.7
 
 // HashMap maps keys to values. The zero value is an empty map ready to use.

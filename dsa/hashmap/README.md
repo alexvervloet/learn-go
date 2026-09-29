@@ -11,9 +11,13 @@ miss. The numbers are further down.
 
 | Decision | This table | Go's builtin map |
 |---|---|---|
-| Where a key goes | `hash(key) & (capacity-1)` | same, on a bucket of 8 |
-| What happens on a collision | linear probing: try the next slot | fill the bucket, then chain to an overflow bucket |
-| When to grow | load factor 0.7, double | load factor 0.8125 (13/16) |
+| Where a key goes | `hash(key) & (capacity-1)` | same, but to a **group** of 8 slots (a Swiss table, since Go 1.24) |
+| What happens on a collision | linear probing: try the next slot | quadratic probing: try the next group, checking all 8 slots at once |
+| When to grow | load factor 0.7, double | average 7 of 8 slots per group (0.875); tables of up to 1024 slots split or double |
+
+Before Go 1.24 the right-hand column was different: buckets of 8 that chained to
+overflow buckets, growing at 13/16. Much of what you'll read about Go maps
+describes that design.
 
 ## Linear probing
 
@@ -168,22 +172,23 @@ usable.
 | build, from empty | 523 µs | 403 µs | 1.3x faster |
 
 The hash accounts for about 5 ns of that 20.9, so the gap is in the probe loop,
-not in the hashing. What the runtime has and this does not: buckets of 8 keys with
-a one-byte tag per key, so a bucket is scanned with a few comparisons before any
-key is touched; hash functions in assembly with AES instructions where the CPU has
-them; generated code per map type rather than a generic function; and incremental
-growth that spreads a resize across many operations instead of stopping the world
-for one O(n) rebuild.
+not in the hashing. What the runtime has and this does not: groups of 8 slots
+with a one-byte control tag per slot (7 bits of the hash), so a whole group is
+checked with a few word-sized operations before any key is touched; hash
+functions in assembly with AES instructions where the CPU has them; specialised
+fast paths for 32-bit, 64-bit and string keys; and a map split into tables of at
+most 1024 slots, so a resize copies one table rather than stopping for one O(n)
+rebuild of everything.
 
-Two places where this table does better, both for the same reason:
+Two differences worth understanding, both from the same design choice:
 
 **Misses cost more here, relatively, than hits.** Linear probing on a miss walks
-to the end of the chain; a bucketed table rejects a whole bucket on eight tag
-bytes.
+to the end of the chain; a Swiss table rejects a whole group of eight on its tag
+bytes, and stops at the first group with an empty slot.
 
 **Fewer, larger allocations.** 2 allocations to build presized against the
-builtin's 33, because one flat slice is one allocation and a bucketed map is
-many. It uses more bytes in total (524 KB against 437 KB) since every slot
+builtin's 33, because one flat slice is one allocation, and the builtin splits
+a large map into tables of at most 1024 slots, each allocated on its own. It uses more bytes in total (524 KB against 437 KB) since every slot
 carries a key, a value and a state byte with padding.
 
 Also worth noting: fixing the growth factor from 4x to 2x made building from

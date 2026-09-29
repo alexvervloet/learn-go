@@ -7,8 +7,8 @@ import (
 
 // The comparison that matters: this table against the builtin map. The builtin
 // should win, and by how much is the interesting part, because it says what the
-// runtime buys with bucketed storage, top-byte tags, and hash functions written
-// in assembly.
+// runtime buys with grouped Swiss-table storage, one-byte tags, and hash
+// functions written in assembly.
 
 func benchKeys(n int) []string {
 	keys := make([]string, n)

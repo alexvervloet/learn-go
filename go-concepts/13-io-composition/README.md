@@ -26,7 +26,10 @@ it.
 
 > **Read can return `n > 0` and `err == io.EOF` at the same time.**
 
-So this loses the last chunk of every file that ends without a trailing read:
+`gzip.Reader` does exactly that: four bytes at a time over "hello" gives `(4, nil)`
+then `(1, EOF)`. `*os.File`, `strings.Reader` and `bytes.Reader` don't; they give
+`(1, nil)` and then `(0, EOF)`. So this loop works on every file and string you
+test it with, and drops the last chunk of a gzip stream:
 
 ```go
 for {

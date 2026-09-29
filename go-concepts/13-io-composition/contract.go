@@ -18,12 +18,18 @@ import (
 	"strings"
 )
 
-// eofWithDataReader returns data and io.EOF in the SAME call, which is legal
-// and is what strings.Reader, bytes.Reader and many network readers do.
+// eofWithDataReader returns data and io.EOF in the SAME call, which is legal.
+// compress/gzip's Reader does it: reading "hello" four bytes at a time gives
+// (4, nil) then (1, EOF). strings.Reader, bytes.Reader and *os.File do not;
+// they give (4, nil), (1, nil), (0, EOF). An earlier version of this comment
+// named strings.Reader and bytes.Reader as examples, and they are the
+// opposite.
 //
-// Most readers happen to return (n, nil) then (0, io.EOF), which is why the
-// broken loop below usually works and fails only sometimes. That is the worst
-// kind of bug.
+// Because the common readers never do it, the broken loop below works on every
+// file and string you try, and loses data the first time it reads a gzip
+// stream. That is the worst kind of bug. The standard library's
+// testing/iotest.DataErrReader wraps any reader to behave this way, which is
+// how to test a read loop without writing a reader like this one.
 type eofWithDataReader struct {
 	data []byte
 	pos  int

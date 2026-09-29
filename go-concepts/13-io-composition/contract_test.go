@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
 	"errors"
 	"io"
 	"strings"
 	"testing"
+	"testing/iotest"
 )
 
 // TestReadContractLosesTheLastChunk is the headline bug of this lesson,
@@ -153,5 +156,52 @@ func TestEOFIsNotAnError(t *testing.T) {
 	}
 	if !strings.Contains(right, "completed") {
 		t.Errorf("the good example should report completion, got %q", right)
+	}
+}
+
+// TestWhichReadersReturnDataWithEOF checks the lesson's claim against real readers rather than the one written
+// for it. gzip's Reader hands back its last bytes together with io.EOF, so the broken loop loses them; the readers
+// people usually test with do not, so the broken loop passes on them. iotest.DataErrReader turns any reader into
+// the gzip kind, which is how to test a read loop without writing a reader.
+func TestWhichReadersReturnDataWithEOF(t *testing.T) {
+	const payload = "hello, contract"
+
+	gzipped := func() io.Reader {
+		var buf bytes.Buffer
+
+		w := gzip.NewWriter(&buf)
+		_, _ = w.Write([]byte(payload))
+		_ = w.Close()
+
+		r, err := gzip.NewReader(&buf)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		return r
+	}
+
+	for _, tc := range []struct {
+		name      string
+		reader    func() io.Reader
+		losesData bool
+	}{
+		{"strings.Reader", func() io.Reader { return strings.NewReader(payload) }, false},
+		{"bytes.Reader", func() io.Reader { return bytes.NewReader([]byte(payload)) }, false},
+		{"gzip.Reader", gzipped, true},
+		{"iotest.DataErrReader", func() io.Reader { return iotest.DataErrReader(strings.NewReader(payload)) }, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := readBroken(tc.reader())
+
+			if lost := got != payload; lost != tc.losesData {
+				t.Errorf("the broken loop read %q; losing data = %t, want %t", got, lost, tc.losesData)
+			}
+
+			correct, err := readCorrect(tc.reader())
+			if err != nil || correct != payload {
+				t.Errorf("the correct loop read %q, %v", correct, err)
+			}
+		})
 	}
 }

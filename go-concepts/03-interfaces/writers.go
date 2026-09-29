@@ -145,8 +145,10 @@ func demoWriters() {
 	// The compressed size is LARGER than the input here, and that is correct:
 	// a gzip stream carries a 10-byte header, an 8-byte trailer and a Huffman
 	// table, which an 87-byte payload cannot earn back. Compression is a
-	// bet that only pays above a few hundred bytes, which is why net/http
-	// does not gzip small responses.
+	// bet that only pays above a few hundred bytes, which is why compression
+	// middleware (chi's Compress, for one) skips small responses. net/http
+	// itself never compresses a response; it only decompresses on the
+	// client side.
 	fmt.Printf("  Report(gzip.Writer, ...)   -> %d compressed bytes from %d raw (overhead wins at this size)\n", gzipped, len(out))
 	fmt.Printf("  Report(io.Discard, ...)    -> err=%v\n", discarded)
 	fmt.Printf("  Report(countingWriter, ..) -> %d bytes, %d lines\n", counted[0], counted[1])

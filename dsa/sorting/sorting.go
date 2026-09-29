@@ -12,7 +12,9 @@
 //
 //	insertion sort below a size threshold    because quicksort's recursion is
 //	                                         pure overhead on 12 elements
-//	a median-of-medians pivot on bad input   because a bad pivot is O(n^2)
+//	a median-of-three pivot, or Tukey's      because a bad pivot is O(n^2)
+//	ninther on larger slices, plus random
+//	swaps when a partition goes badly
 //	a switch to heapsort if recursion is     because that is the guarantee
 //	deep                                     quicksort cannot give
 //
@@ -23,7 +25,7 @@
 //	insertion   O(n)        O(n^2)      O(n^2)      O(1)      yes
 //	selection   O(n^2)      O(n^2)      O(n^2)      O(1)      no
 //	merge       O(n log n)  O(n log n)  O(n log n)  O(n)      yes
-//	quick       O(n log n)  O(n log n)  O(n^2)      O(log n)  no
+//	quick       O(n log n)  O(n log n)  O(n^2)      O(log n)  no     (plain; QuickFunc below is O(n log n) worst case, see it)
 //	heap        O(n log n)  O(n log n)  O(n log n)  O(1)      no
 //
 // Three of those entries are the whole story. Insertion sort's O(n) best case is

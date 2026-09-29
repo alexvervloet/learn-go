@@ -17,8 +17,8 @@ package sorting
 
 // MergeFunc sorts s using merge sort.
 //
-// The only O(n log n) sort here that is stable, and the only one that is O(n log n)
-// in the worst case as well as the average. The price is the buffer.
+// The only O(n log n) sort here that is stable. Heapsort shares its O(n log n) worst
+// case; merge sort buys stability with the buffer.
 //
 // One buffer is allocated once and reused, rather than one per merge. For 100,000
 // elements that is 1 allocation of 803 KB against the textbook version's 32,767
@@ -96,9 +96,14 @@ func merge[T any](s, buf []T, mid int, compare Compare[T]) {
 
 // QuickFunc sorts s in place using quicksort.
 //
-// Fastest here on random data and the one that can fail. Its worst case is
-// O(n^2), and the input that triggers it is not exotic: with a naive pivot choice
-// it is *sorted input*, which is the most common shape real data has.
+// Fastest here on random data. Plain quicksort's worst case is O(n^2), and the input
+// that triggers it is not exotic: with a naive pivot choice it is *sorted input*,
+// which is the most common shape real data has.
+//
+// This one cannot get there. After a budget of bad partitions it hands the rest to
+// heapsort (see budgetFor), which makes it introsort, O(n log n) in the worst case.
+// An earlier version of this comment, and of the table in sorting.go, still called
+// it the sort that can fail.
 //
 // Two decisions keep this version out of that hole, and both are in pdqsort too:
 //
@@ -150,7 +155,7 @@ func budgetFor(n int) int {
 func quickSort[T any](s []T, compare Compare[T], budget int, fallback func([]T, Compare[T])) {
 	for len(s) > 12 {
 		// Out of budget means the splits have been consistently terrible, which
-		// for a median-of-three pivot takes deliberately constructed input.
+		// with a ninther pivot takes deliberately constructed input.
 		if budget <= 0 {
 			fallback(s, compare)
 			return

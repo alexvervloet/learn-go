@@ -88,6 +88,7 @@ the index below groups them by topic.
 - [A JWT cannot express a sub-second TTL, and nothing tells you](#a-jwt-cannot-express-a-sub-second-ttl-and-nothing-tells-you)
 - [One rate-limit bucket per path is two limits that together allow twice the traffic](#one-rate-limit-bucket-per-path-is-two-limits-that-together-allow-twice-the-traffic)
 - [A 300ms JWT TTL is zero about 70% of the time and one second the rest](#a-300ms-jwt-ttl-is-zero-about-70-of-the-time-and-one-second-the-rest)
+- [ParseMultipartForm swallows the error of the parser it calls first](#parsemultipartform-swallows-the-error-of-the-parser-it-calls-first)
 
 **gRPC, GraphQL, jobs, email and Docker.**
 
@@ -2489,3 +2490,18 @@ the test states which one it expected.
 Linux: 4109 bytes against a bound of 4096. A race build doubles `StackGuardMultiplier`, so every goroutine reserves
 twice the guard area and outgrows its first 2KB stack immediately. Build mode belongs on the list of things that
 change a "fixed" runtime number, next to the OS.
+
+## ParseMultipartForm swallows the error of the parser it calls first
+
+**Expected.** http-tutorial's `ParseForm` tried `r.ParseMultipartForm` and, on `http.ErrNotMultipart`, fell back
+to `r.ParseForm`. An audit said the limit it passed only capped memory, so the fix was to wrap the body in
+`http.MaxBytesReader` and add a test for a malformed urlencoded body while I was there.
+
+**What happened.** The malformed body (`a=%zz`) parsed with no error, before and after the change.
+`ParseMultipartForm` calls `ParseForm` first, discards that error, and reports "not multipart". The fallback
+`ParseForm` then finds `r.Form` already set and returns nil. Every malformed urlencoded form had been accepted
+all along, and no test had tried one.
+
+**Next time.** Don't use one parser's failure to decide to call another parser that shares its state. Decide from
+the input: here, `mime.ParseMediaType` on the Content-Type picks the one parser that runs. And a test of the
+error path needs input that really is malformed, because the happy path can't reveal an error that was swallowed.

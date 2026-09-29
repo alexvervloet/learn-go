@@ -183,7 +183,7 @@ func TestEvalDoesNotSwallowRealBugs(t *testing.T) {
 // most languages that is the first thing an attacker reaches for.
 //
 // Python raises RecursionError at a default depth of 1000. C overflows a fixed
-// 8MB stack and segfaults. Go starts each goroutine with an 8KB stack and GROWS
+// 8MB stack and segfaults. Go starts each goroutine with a 2KB stack and GROWS
 // it by copying, up to 1GB by default, so a million levels of recursion is
 // merely slow. Nothing here needs a depth limit to stay safe from a crash.
 //

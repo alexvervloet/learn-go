@@ -122,7 +122,7 @@ most common way a Go service dies in production, and it comes up again in
 
 A recursive parser is the classic place to worry about blowing the stack.
 Python raises `RecursionError` at a default depth of 1000, and C segfaults on a
-fixed 8MB stack. Go starts every goroutine with an **8KB** stack and grows it by
+fixed 8MB stack. Go starts every goroutine with a **2KB** stack and grows it by
 copying, up to 1GB by default, so `Eval` in `boundaries.go` parses a million
 nested parentheses in about a fifth of a second. The test covers 100,000 levels.
 

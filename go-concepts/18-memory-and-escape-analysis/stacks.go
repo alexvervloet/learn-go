@@ -9,7 +9,7 @@ import (
 // Stack growth
 // ============
 //
-// A goroutine stack starts at 8KB and grows by COPYING: the runtime allocates
+// A goroutine stack starts at 2KB and grows by COPYING: the runtime allocates
 // a larger stack, copies every frame, and rewrites the pointers into them. The
 // default maximum is 1GB on 64-bit.
 //
@@ -76,7 +76,7 @@ func measureStackGrowth(depth int) (beforeKB, duringKB uint64) {
 // stackFacts are the numbers worth knowing.
 func stackFacts() map[string]string {
 	return map[string]string{
-		"initial size":  "8KB per goroutine (2KB before Go 1.19 raised it)",
+		"initial size":  "2KB (runtime stackMin); since Go 1.19 it starts at the program's average stack use when that is larger",
 		"growth":        "by copying: allocate bigger, copy the frames, rewrite the pointers",
 		"maximum":       "1GB on 64-bit, 250MB on 32-bit; SetMaxStack changes it",
 		"exceeding it":  "fatal error: stack overflow, which recover cannot catch",

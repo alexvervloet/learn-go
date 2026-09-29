@@ -60,15 +60,21 @@ func TestGoroutineStackCost(t *testing.T) {
 
 	t.Logf("~%d bytes of stack per parked goroutine", perGoroutine)
 
-	// A goroutine starts at 8KB of ADDRESS SPACE but the runtime does not
-	// commit it all, and StackInuse is measured in spans, so the per-goroutine
-	// figure is well under 8192. The assertion is a sanity bound rather than a
-	// precise claim: this is indicative, not exact.
+	// A goroutine starts on a 2KB stack, the runtime's stackMin, and this
+	// measures about that. The lesson used to say 8KB, and this comment
+	// explained the gap as uncommitted address space. It wasn't: an 8KB stack
+	// occupies an 8KB span in StackInuse. The number was wrong, not the
+	// measurement.
+	//
+	// The upper bound is 8KB rather than a tight 2KB because since Go 1.19 the
+	// runtime starts goroutines at the program's average stack use when that is
+	// larger, and other tests in this binary recurse deeply. Under 8KB is still
+	// enough to rule out the old claim.
 	if perGoroutine == 0 {
 		t.Error("measured 0 bytes per goroutine, which cannot be right")
 	}
-	if perGoroutine > 16*1024 {
-		t.Errorf("measured %d bytes per goroutine, which is implausibly high", perGoroutine)
+	if perGoroutine >= 8*1024 {
+		t.Errorf("measured %d bytes per goroutine; a 2KB start should be well under 8KB", perGoroutine)
 	}
 }
 

@@ -2,7 +2,7 @@
 //
 //	go f()   runs f concurrently and returns immediately
 //
-// A goroutine starts on an 8KB stack that grows by copying. An OS thread starts
+// A goroutine starts on a 2KB stack that grows by copying. An OS thread starts
 // at 1MB or more, fixed. Creating a goroutine costs a few hundred nanoseconds;
 // creating a thread costs a syscall. That ratio is why Go programs start one
 // goroutine per unit of work instead of pooling them.
@@ -131,8 +131,9 @@ func goroutineCost(n int) (elapsed time.Duration, perGoroutine time.Duration) {
 
 // manyGoroutines starts a large number simultaneously and reports the peak
 // count, to make the scale concrete. 100,000 OS threads would exhaust memory;
-// 100,000 goroutines is roughly 800MB of stack at worst and usually far less,
-// because most never grow past their initial 8KB.
+// 100,000 goroutines that never grow past their initial 2KB stack is about
+// 200MB, and lesson 18's TestGoroutineStackCost measures roughly that per
+// parked goroutine.
 func manyGoroutines(n int) (peak int) {
 	var (
 		wg    sync.WaitGroup

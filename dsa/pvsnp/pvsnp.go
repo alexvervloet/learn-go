@@ -42,6 +42,7 @@ package pvsnp
 
 import (
 	"errors"
+	"math"
 	"math/bits"
 )
 
@@ -190,14 +191,27 @@ func SubsetSumDP(numbers []int, target int) ([]int, error) {
 	return out, nil
 }
 
+// ErrOverflow means a count is too large for an int.
+var ErrOverflow = errors.New("pvsnp: count overflows int")
+
 // SubsetSumCount returns how many subsets sum to target.
 //
 // Counting is not easier than finding, and for some problems it is strictly harder:
 // counting solutions is #P-complete, a class above NP. Here the same table does it,
 // because the sums compose additively.
-func SubsetSumCount(numbers []int, target int) int {
+//
+// Two ways it can fail, and the first version handled neither. A negative number makes
+// ways[s-v] index past the end of the table, which panicked, while SubsetSumDP returned an
+// error for the same input. And the count itself can outgrow an int: n zeros give 2^n
+// subsets that sum to 0, so 63 zeros wrapped silently to a negative count.
+func SubsetSumCount(numbers []int, target int) (int, error) {
 	if target < 0 {
-		return 0
+		return 0, nil
+	}
+	for _, v := range numbers {
+		if v < 0 {
+			return 0, errors.New("pvsnp: SubsetSumCount requires non-negative numbers")
+		}
 	}
 
 	ways := make([]int, target+1)
@@ -208,9 +222,12 @@ func SubsetSumCount(numbers []int, target int) int {
 			continue
 		}
 		for s := target; s >= v; s-- {
+			if ways[s] > math.MaxInt-ways[s-v] {
+				return 0, ErrOverflow
+			}
 			ways[s] += ways[s-v]
 		}
 	}
 
-	return ways[target]
+	return ways[target], nil
 }

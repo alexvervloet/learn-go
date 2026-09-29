@@ -74,9 +74,17 @@ func ExampleSubsetSumDP() {
 // Counting solutions is a different question from finding one, and in general it is
 // harder: counting is #P-complete, a class above NP.
 func ExampleSubsetSumCount() {
-	fmt.Println(pvsnp.SubsetSumCount([]int{1, 2, 3, 4, 5}, 5)) // {5}, {1,4}, {2,3}
-	fmt.Println(pvsnp.SubsetSumCount([]int{1, 1, 1}, 2))       // three ways
-	fmt.Println(pvsnp.SubsetSumCount([]int{2, 4, 6}, 7))
+	count := func(numbers []int, target int) int {
+		n, err := pvsnp.SubsetSumCount(numbers, target)
+		if err != nil {
+			panic(err)
+		}
+		return n
+	}
+
+	fmt.Println(count([]int{1, 2, 3, 4, 5}, 5)) // {5}, {1,4}, {2,3}
+	fmt.Println(count([]int{1, 1, 1}, 2))       // three ways
+	fmt.Println(count([]int{2, 4, 6}, 7))
 
 	// Output:
 	// 3

@@ -12,13 +12,19 @@ import (
 // binary that grows accordingly), and does not do what Java does either
 // (erase everything to Object and box the primitives).
 //
-// It uses GC SHAPE STENCILING. Types are grouped into "gcshapes" by memory
-// layout and pointer positions, and one copy is compiled per shape:
+// It uses GC SHAPE STENCILING. Types are grouped into "gcshapes", and one copy
+// is compiled per shape. A shape is the UNDERLYING type, except that every
+// pointer type shares one:
 //
-//	int, int64          one shape   (8 bytes, no pointers)
-//	*User, *Order, *T   ONE shape   (all pointers look alike to the GC)
-//	string              one shape   (16 bytes, one pointer)
-//	struct{a,b int}     one shape   (16 bytes, no pointers)
+//	int, type ID int    one shape   (same underlying type)
+//	int, int64          TWO shapes  (same size and no pointers, but different types)
+//	*User, *Order, *T   ONE shape   (all pointers look alike)
+//	string              its own shape
+//	struct{a,b int}     its own shape
+//
+// An earlier version of this table put int and int64 in one shape, grouping by
+// size and pointer layout. That was the original design proposal; the compiler
+// as shipped groups by underlying type.
 //
 // Where a shape covers several types, the instantiation receives a hidden
 // DICTIONARY argument holding the type-specific details: method addresses,
@@ -107,7 +113,7 @@ func (l label) String() string { return fmt.Sprintf("%d:%s", l.id, l.text) }
 // implementation of stenciling, not from anything measurable in this file.
 func typesShareAShape() []string {
 	return []string{
-		"int and int64 on a 64-bit platform: one shape (8 bytes, no pointers)",
+		"int and a named type with int underneath: one shape; int and int64: two, despite the same layout",
 		"*User, *Order and every other pointer: ONE shape, plus a dictionary",
 		"string: its own shape (16 bytes, one pointer at offset 0)",
 		"struct{a, b int}: its own shape (16 bytes, no pointers)",

@@ -101,10 +101,15 @@ func cancelIsIdempotent() (panicked bool) {
 // timeoutFiresOnItsOwn: WithTimeout cancels itself when the duration elapses,
 // with Err reporting DeadlineExceeded rather than Canceled.
 func timeoutFiresOnItsOwn(d time.Duration) (elapsed time.Duration, err error) {
+	// The clock is read BEFORE WithTimeout, which computes its deadline as
+	// now+d. Reading it after, as the first version did, starts the stopwatch
+	// late, and on a busy macOS CI runner the measured wait came out at 29.93ms
+	// for a 30ms timeout. The timer was right; the stopwatch was not.
+	start := time.Now()
+
 	ctx, cancel := context.WithTimeout(context.Background(), d)
 	defer cancel()
 
-	start := time.Now()
 	<-ctx.Done()
 
 	return time.Since(start), ctx.Err()

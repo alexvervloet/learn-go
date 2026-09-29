@@ -2314,3 +2314,18 @@ the same assumption as the flush.
 ownership (the marker) before destroying anything, and assign namespaces explicitly (a table of database numbers)
 rather than trusting a hash with more users than slots. Tests should assert on their own keys, or on the
 difference they made, and not on the state of the whole database.
+
+## A reported GraphQL complexity bypass was already closed by gqlgen
+
+**Expected.** An audit reported that multiplying a list field's cost by a negative argument made the field's
+cost negative, which would subtract from the query's total and let an expensive sibling past the complexity
+limit. The cost functions did multiply by the raw argument, so it looked right.
+
+**What happened.** The test written to prove it passed against the unfixed code. gqlgen ignores a custom
+complexity below 1 and falls back to its default. Its saturating add also discards negative operands. The rest
+of that report was real: `authors(limit: -1)` returned every row, `similar(limit: -1)` panicked, and
+`similar(limit: 0)` returned one book.
+
+**Next time.** Write the failing test before the fix, and believe it when it doesn't fail. A test that passes
+before the fix proves something else is doing the job, and reading the library's source takes a minute. That
+test stays in the suite to pin gqlgen's behaviour, and its comment says why.

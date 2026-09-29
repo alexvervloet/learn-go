@@ -1,6 +1,6 @@
 module github.com/alexvervloet/learn-go/utilities
 
-go 1.27.1
+go 1.27
 
 require (
 	github.com/stretchr/testify v1.12.1

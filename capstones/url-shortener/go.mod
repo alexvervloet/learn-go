@@ -1,6 +1,6 @@
 module github.com/alexvervloet/learn-go/capstones/url-shortener
 
-go 1.27.1
+go 1.27
 
 require (
 	github.com/go-chi/chi/v5 v5.3.2

@@ -6,8 +6,9 @@
 // queue and an accidentally quadratic one.
 //
 // In Go a slice beats a linked list for almost everything: contiguous memory,
-// a working prefetcher, and amortised O(1) append. The list wins only on
-// prepend and remove-from-front, both O(1) here against O(n) for a slice.
+// a working prefetcher, and amortised O(1) append. The list wins on prepend,
+// O(1) here against O(n) for a slice. Remove-from-front is O(1) for both:
+// `q = q[1:]` just reslices, and dsa/queue measures it matching a ring buffer.
 package linkedlist
 
 import (
@@ -85,12 +86,12 @@ func (l *LinkedList[T]) RemoveFromHead() (T, bool) {
 	}
 	l.size--
 
-	// Clear the removed node's link. Without this, a caller holding the node
-	// (or a profiler walking the heap) keeps the whole rest of the chain
-	// reachable, so removing one element frees nothing. The same trap as
-	// deleting from a slice without zeroing the vacated slot.
-	removed.next = nil
-
+	// No need to clear removed.next. An earlier version did, reasoning that a
+	// caller holding the removed node would keep the rest of the chain alive.
+	// No caller can hold it: nodes are unexported. And once nothing points AT
+	// the removed node it is garbage, and garbage that points at live nodes
+	// keeps nothing alive. The slice case, where zeroing a vacated slot does
+	// matter, is different because the backing array is still reachable.
 	return removed.value, true
 }
 

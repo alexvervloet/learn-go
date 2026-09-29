@@ -27,7 +27,8 @@ whose `Timeout` is `0`, which means "no timeout" to most libraries, silently.
 | `int`, `float64`, all numerics | `0` | Yes |
 | `bool` | `false` | Yes |
 | `string` | `""` | Yes |
-| pointer, `func`, `chan`, `interface` | `nil` | No, dereferencing or calling panics |
+| pointer, `func`, `interface` | `nil` | No, dereferencing or calling panics |
+| `chan` | `nil` | No, and it doesn't panic: a send or receive **blocks forever**, and only `close` panics. Lesson 08 uses that on purpose to switch off a `select` case |
 | slice | `nil` | Partly. `len`, `range` and `append` work; indexing panics |
 | map | `nil` | Read-only. Reading returns the zero value, **writing panics** |
 | struct | every field at its own zero | Yes, recursively |

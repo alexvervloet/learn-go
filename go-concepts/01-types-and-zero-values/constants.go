@@ -28,12 +28,14 @@ const (
 const typedFactor int = 3
 
 // Level is an enum built with iota. iota resets to 0 at each const block and
-// increments once per ConstSpec line, so the values below are 1, 2, 3, 4.
+// increments once per ConstSpec line, so the values below are 0 to 4.
 type Level int
 
-// The enum starts at iota + 1 on purpose. If Debug were 0 it would also be
+// The real levels start at 1 on purpose. If Debug were 0 it would also be
 // Level's zero value, and a struct field nobody set would silently mean Debug.
-// Starting at 1 leaves 0 free to mean "unset", which LevelUnset names.
+// So iota's 0 goes to LevelUnset, which names "nobody set this", and Debug is
+// 1. The other common spelling is `LevelDebug Level = iota + 1` with no name for
+// 0; naming it is better, because the zero value then prints as "unset".
 const (
 	LevelUnset Level = iota // 0, the zero value, explicitly meaningless
 	LevelDebug              // 1

@@ -773,3 +773,25 @@ func TestDefaultKeyIsTheAddressNotTheConnection(t *testing.T) {
 		t.Errorf("remoteIP([2001:db8::1]:443) = %q", got)
 	}
 }
+
+// TestTokenBucketUsesItsClock refills a bucket by moving a fake clock rather than sleeping.
+func TestTokenBucketUsesItsClock(t *testing.T) {
+	ctx := context.Background()
+	clock := newFakeClock()
+
+	b := NewTokenBucket(60, time.Minute, 1) // one token a second, burst of one
+	b.Clock = clock.Now
+
+	if d, _ := b.Allow(ctx, "k"); !d.Allowed {
+		t.Fatal("the first request was refused")
+	}
+	if d, _ := b.Allow(ctx, "k"); d.Allowed {
+		t.Fatal("a second request in the same instant was allowed with a burst of one")
+	}
+
+	clock.Advance(time.Second)
+
+	if d, _ := b.Allow(ctx, "k"); !d.Allowed {
+		t.Error("one second on the Clock did not refill the token; Allow is not reading the Clock")
+	}
+}

@@ -25,6 +25,10 @@ type TokenBucket struct {
 	limit rate.Limit
 	burst int
 
+	// Clock is the time source for Allow's decisions, like the other limiters' Clock fields. The first
+	// version called time.Now directly, so its behaviour over time could only be tested by sleeping.
+	Clock Clock
+
 	// One limiter per key. A sync.Map is tempting and wrong here: the zero value of a rate.Limiter
 	// does not work, so every lookup needs a construct-if-missing, and LoadOrStore constructs
 	// eagerly on every call. A plain map behind a mutex is clearer and the mutex is not the
@@ -52,9 +56,9 @@ func (t *TokenBucket) Allow(_ context.Context, key string) (Decision, error) {
 
 	l := t.keyed.get(key, t.limit, t.burst)
 
-	// AllowN with the current time, rather than Allow, only to make it explicit that the decision is
-	// a function of time. They are the same call.
-	now := time.Now()
+	// AllowN with an explicit time, rather than Allow, so the decision is a function of the Clock and
+	// a test can move time instead of waiting for it.
+	now := t.Clock.now()
 
 	if !l.AllowN(now, 1) {
 		// Reserve tells us when a token will be available, and CancelAt gives it back so asking

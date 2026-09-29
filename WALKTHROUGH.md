@@ -110,7 +110,7 @@ container sits there.
 |---|---|---|---|
 | `database-concepts` | 5433 | | |
 | `backend-concepts` | 5436 | 6380 | Kafka on 19092 |
-| `jobs-concepts` | | 6381 | asynqmon on 8090 |
+| `jobs-concepts` | | 6381 | asynqmon on 8090, commented out until you want it |
 | `email-concepts` | | | Mailpit on 1026 and 8026 |
 | `aws-concepts` | | | LocalStack on 4566 |
 | `docker-concepts` | | | the demo app on 8081 |
@@ -130,10 +130,12 @@ rather than being emptied.
 | 8, 9 | `bookmark-manager`: api, ratelimit |
 | 10 to 15 | a package not in the table, by hash |
 
-Three files bound 5433 until the day this walkthrough was written. Checking is one line:
+Three files bound 5433 until the day this walkthrough was written. Checking is one line, which prints nothing
+when there's no collision. It skips commented-out services and catches five-digit ports like Kafka's 19092, which
+the first version of this line missed:
 
 ```sh
-find . -name docker-compose.yml | xargs grep -ohE '"[0-9]{4}:[0-9]{4}"' | tr -d '"' | cut -d: -f1 | sort | uniq -d
+find . -name docker-compose.yml | xargs grep -hE '^\s*- "?[0-9]+:[0-9]+' | grep -oE '^\s*- "?[0-9]+' | grep -oE '[0-9]+' | sort | uniq -d
 ```
 
 #### Connecting to them

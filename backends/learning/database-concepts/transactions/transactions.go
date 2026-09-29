@@ -149,9 +149,11 @@ func WithTx(ctx context.Context, db Beginner, opts pgx.TxOptions, fn func(pgx.Tx
 // Rollback issues ROLLBACK TO SAVEPOINT. So the body of this function is the same shape as WithTx and
 // only the Begin call differs.
 //
-// The cost is real. Each savepoint is a subtransaction, Postgres caches 64 of them per backend, and
-// past that every visibility check on a row written by a subtransaction goes to disk. A loop taking a
-// savepoint per row over tens of thousands of rows is a documented way to make a database crawl.
+// The cost is real, and it has two parts. Each savepoint is two extra statements (SAVEPOINT, then
+// RELEASE or ROLLBACK TO), so a savepoint per row triples the round trips. And each is a subtransaction:
+// Postgres caches 64 per backend, and past that visibility checks on rows a subtransaction wrote go to
+// pg_subtrans, which can mean disk. A loop taking a savepoint per row over tens of thousands of rows is a
+// documented way to make a database crawl. The README's 1.41x mixes both costs.
 func WithSavepoint(ctx context.Context, tx pgx.Tx, fn func(pgx.Tx) error) (err error) {
 	sp, err := tx.Begin(ctx)
 	if err != nil {

@@ -186,8 +186,10 @@ later statement returns `25P02`; a `COMMIT` is then accepted and performs a ROLL
 notices and returns `pgx.ErrTxCommitRollback`, which most drivers do not.
 
 Savepoints are not free: 2,000 updates in one transaction take 289ms, and the same 2,000 each wrapped in
-its own savepoint take 406ms, **1.41x**. Postgres caches 64 subtransactions per backend and past that
-every visibility check on a subtransaction's row goes to disk.
+its own savepoint take 406ms, **1.41x**. Two costs are mixed in that number and the test does not
+separate them. Each savepoint is two more statements, `SAVEPOINT` and `RELEASE`, so the second run sends
+three times as many round trips. And Postgres caches 64 subtransactions per backend; past that, visibility
+checks on rows a subtransaction wrote have to consult `pg_subtrans`, which can mean disk.
 
 ### `SELECT ... FOR UPDATE SKIP LOCKED` is a job queue
 

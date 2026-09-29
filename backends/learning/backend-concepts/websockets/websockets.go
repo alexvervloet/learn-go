@@ -10,13 +10,16 @@
 //
 // # The four failures
 //
-//	CONCURRENT WRITES     a WebSocket connection is NOT safe for concurrent writers. Two goroutines
-//	                      calling Write at once interleave frames and corrupt the stream; coder's
-//	                      library panics rather than corrupting, which is better and still a crash.
-//	                      The fix is one writer goroutine and a channel.
-//	NO READ DEADLINE      a client that opens a connection and never speaks holds a goroutine and a
-//	                      file descriptor forever. This is Slowloris again, at a different layer,
-//	                      and the fix is the same: a deadline on every read.
+//	CONCURRENT WRITES     with gorilla/websocket, two goroutines calling WriteMessage at once panic
+//	                      ("concurrent write to websocket connection"). coder/websocket locks
+//	                      internally and documents every method except Read as safe to call
+//	                      concurrently, so here it is not a crash. One writer goroutine and a
+//	                      channel are still the design, for a different reason: see Conn.
+//	NO LIVENESS CHECK     a client that opens a connection and never reads holds a goroutine and a
+//	                      file descriptor forever. This is Slowloris again, at a different layer.
+//	                      The fix is NOT a deadline on every read, which also cuts off clients
+//	                      that only listen: it is the ping, which a live client answers and a
+//	                      dead or idle-flooding one does not.
 //	DEAD CONNECTIONS      TCP does not notice a peer that vanished (laptop lid closed, mobile
 //	                      network dropped) until it tries to write and the retransmits time out,
 //	                      which can be fifteen minutes. A ping every N seconds with a pong deadline
@@ -53,8 +56,10 @@ import (
 
 // Config holds the settings that decide whether a connection survives contact with a real network.
 type Config struct {
-	// ReadTimeout bounds a single read. A client that connects and says nothing is disconnected
-	// after this, which is what stops an idle-connection flood.
+	// ReadTimeout is the longest a connection may go without a sign of life: a message from the
+	// peer, or a ping it answered. A client that listens and answers pings stays connected
+	// indefinitely, which a subscriber has to. One that has vanished, or never reads, stops
+	// answering pings and is dropped, which is what stops an idle-connection flood.
 	ReadTimeout time.Duration
 
 	// WriteTimeout bounds a single write. Without it, a write to a client whose TCP window is full
@@ -89,9 +94,9 @@ func DefaultConfig() Config {
 		ReadTimeout:  60 * time.Second,
 		WriteTimeout: 10 * time.Second,
 
-		// Shorter than ReadTimeout, so a ping happens before the read deadline fires on an idle
-		// connection. If PingInterval were longer, every idle connection would be dropped by the
-		// read timeout before it was ever pinged, and the ping would be dead code.
+		// Shorter than ReadTimeout, so a quiet but live connection answers a ping before it has
+		// been silent for ReadTimeout. If PingInterval were longer, every quiet connection would
+		// be dropped before it was ever pinged.
 		PingInterval: 20 * time.Second,
 
 		SendBuffer:      16,
@@ -163,15 +168,18 @@ func (p OverflowPolicy) String() string {
 	}
 }
 
-// Conn is one client, with the single writer that makes concurrent sends safe.
+// Conn is one client, with a single writer goroutine.
 //
 // # The single-writer pattern
 //
-// A WebSocket connection has one writer goroutine. Everything that wants to send puts a message on a channel,
-// and that goroutine is the only thing that ever calls Write. This is not a style preference: the library
-// panics on concurrent writes, and a panic in a goroutine takes the process down.
+// Everything that wants to send puts a message on a channel, and one goroutine is the only thing that ever calls
+// Write. Not because coder/websocket needs it: its Write is safe to call concurrently (gorilla's is not, and
+// panics). An earlier version of this comment said the library panics; it doesn't. The reason is BACKPRESSURE.
+// A broadcaster calling Write directly blocks on the slowest client for up to WriteTimeout, once per message.
+// With a bounded channel in between, a send never blocks the broadcaster, and a client that cannot keep up hits
+// the overflow policy instead of stalling everyone else.
 //
-// The same is true for reads, and is less often a problem because there is usually only one reader anyway.
+// Reads are different: coder/websocket allows only one concurrent reader, and there is usually only one anyway.
 type Conn struct {
 	ws  *websocket.Conn
 	cfg Config
@@ -187,8 +195,12 @@ type Conn struct {
 	policy OverflowPolicy
 
 	// Counters, so the tests can assert on behaviour and a service can export it.
-	sent      atomic.Int64
-	received  atomic.Int64
+	sent     atomic.Int64
+	received atomic.Int64
+
+	// lastAlive is when the peer last showed it was there: a data message, or an answered ping.
+	// Unix nanoseconds, atomic because the reader and the writer both set it.
+	lastAlive atomic.Int64
 	dropped   atomic.Int64
 	pingsSent atomic.Int64
 }
@@ -290,6 +302,7 @@ func (c *Conn) Send(data []byte) error {
 // reading. That is deliberate: the alternative (a goroutine per message) is unbounded concurrency per client
 // and loses message ordering, which for most protocols is a correctness problem rather than a performance one.
 func (c *Conn) Run(ctx context.Context, handle func(context.Context, []byte) error) error {
+	c.lastAlive.Store(time.Now().UnixNano()) // the handshake just happened
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -325,20 +338,19 @@ func (c *Conn) Run(ctx context.Context, handle func(context.Context, []byte) err
 
 func (c *Conn) readLoop(ctx context.Context, handle func(context.Context, []byte) error) error {
 	for {
-		// A deadline on EVERY read, not once at the start. This is the Slowloris defence: a client
-		// that connects and says nothing is disconnected after ReadTimeout, and a client that sends
-		// one byte an hour gets the same treatment because the deadline resets per message and not
-		// per byte.
-		readCtx, cancel := context.WithTimeout(ctx, c.cfg.ReadTimeout)
-
-		typ, data, err := c.ws.Read(readCtx)
-
-		cancel()
-
+		// No deadline on the read itself. The first version put ReadTimeout on every Read, as the
+		// Slowloris defence, and cut off every client that only listens: coder/websocket answers
+		// pongs INSIDE Read and returns only for data messages, so a successful ping could never
+		// reset that deadline. Liveness is the writer's job instead (see writeLoop): a peer that has
+		// vanished, or never reads, stops answering pings and is dropped, while one that listens
+		// and answers stays. TestAListeningClientStaysConnected and
+		// TestAClientThatNeverReadsIsDropped hold both halves.
+		typ, data, err := c.ws.Read(ctx)
 		if err != nil {
 			return fmt.Errorf("reading: %w", err)
 		}
 
+		c.lastAlive.Store(time.Now().UnixNano())
 		c.received.Add(1)
 
 		if typ != websocket.MessageText && typ != websocket.MessageBinary {
@@ -377,6 +389,13 @@ func (c *Conn) writeLoop(ctx context.Context) error {
 			c.sent.Add(1)
 
 		case <-ticker.C:
+			// The backstop: however the pings are going, a peer silent for longer than
+			// ReadTimeout (no message, no answered ping) is gone.
+			if silent := time.Since(time.Unix(0, c.lastAlive.Load())); silent > c.cfg.ReadTimeout {
+				return fmt.Errorf("no message or pong for %v, over the %v ReadTimeout",
+					silent.Round(time.Millisecond), c.cfg.ReadTimeout)
+			}
+
 			// Ping with a deadline. coder/websocket's Ping BLOCKS until the pong arrives or
 			// the context expires, which is exactly the semantics wanted: a peer that has
 			// vanished fails here rather than being discovered minutes later by a write.
@@ -390,6 +409,7 @@ func (c *Conn) writeLoop(ctx context.Context) error {
 				return fmt.Errorf("ping: %w", err)
 			}
 
+			c.lastAlive.Store(time.Now().UnixNano())
 			c.pingsSent.Add(1)
 		}
 	}

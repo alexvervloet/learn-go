@@ -134,10 +134,11 @@ func TestEchoRoundTrip(t *testing.T) {
 	}
 }
 
-// TestConcurrentWritesAreSafe is the failure the single-writer pattern exists to prevent.
+// TestConcurrentWritesAreSafe sends from many goroutines at once through one connection.
 //
-// A WebSocket connection is not safe for concurrent writers. This test sends from many goroutines at once, which
-// would panic if Send wrote directly instead of queueing.
+// With gorilla/websocket, concurrent writers panic. coder/websocket's Write is safe to call concurrently, so a
+// direct Write would not crash here either; the queue is what keeps a slow client from blocking the senders, and
+// what gives the overflow policy something to act on.
 func TestConcurrentWritesAreSafe(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.SendBuffer = 256
@@ -199,8 +200,7 @@ func TestConcurrentWritesAreSafe(t *testing.T) {
 		t.Error("nothing arrived")
 	}
 
-	t.Log("with a direct Write instead of a queue, coder/websocket panics on the second " +
-		"concurrent writer, and a panic in a goroutine takes the process down")
+	t.Log("every sender went through one queue and one writer, so no sender waited on the network")
 }
 
 // TestSlowClientPolicies measures what each overflow policy does.
@@ -291,8 +291,14 @@ func TestSlowClientPolicies(t *testing.T) {
 		"stream that has holes it cannot see.")
 }
 
-// TestReadTimeoutDisconnectsASilentClient is Slowloris at the WebSocket layer.
-func TestReadTimeoutDisconnectsASilentClient(t *testing.T) {
+// TestAListeningClientStaysConnected: a subscriber that only listens (a price feed, a notification stream)
+// sends nothing, and it is alive for as long as it answers pings.
+//
+// The first version put ReadTimeout on every data read. coder/websocket handles pongs inside Read and only
+// returns for data messages, so a successful ping never reset that deadline, and a listening client was cut off
+// every ReadTimeout however many pings it answered. The test that was here asserted exactly that, under the
+// name "disconnects a silent client".
+func TestAListeningClientStaysConnected(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.ReadTimeout = 300 * time.Millisecond
 	cfg.PingInterval = 100 * time.Millisecond
@@ -301,28 +307,58 @@ func TestReadTimeoutDisconnectsASilentClient(t *testing.T) {
 
 	ws, ctx := dial(t, srv)
 
-	start := time.Now()
+	// Read the whole time, which is what answers pings, and hand each message over.
+	got := make(chan string, 1)
+	go func() {
+		for {
+			_, data, err := ws.Read(ctx)
+			if err != nil {
+				close(got)
+				return
+			}
+			got <- string(data)
+		}
+	}()
 
-	// Say nothing and wait for the server to give up. The client's Read returns when the server
-	// closes.
-	readCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
+	// Three read timeouts of saying nothing.
+	time.Sleep(3 * cfg.ReadTimeout)
 
-	_, _, err := ws.Read(readCtx)
-
-	elapsed := time.Since(start)
-
-	t.Logf("a silent client was disconnected after %v: %v", elapsed.Round(10*time.Millisecond), err)
-
-	if err == nil {
-		t.Fatal("the server kept a silent connection open")
+	if err := ws.Write(ctx, websocket.MessageText, []byte("still here")); err != nil {
+		t.Fatalf("the server dropped a client that answered every ping: %v", err)
 	}
-	if elapsed > 2*time.Second {
-		t.Errorf("took %v; the read timeout is %v", elapsed, cfg.ReadTimeout)
+
+	select {
+	case msg, ok := <-got:
+		if !ok {
+			t.Fatal("the connection closed while the client was listening and answering pings")
+		}
+		t.Logf("after %v of silence the echo came back: %q", 3*cfg.ReadTimeout, msg)
+	case <-time.After(2 * time.Second):
+		t.Fatal("no echo")
+	}
+}
+
+// TestAClientThatNeverReadsIsDropped is the Slowloris defence at the WebSocket layer, and it is the ping that
+// provides it. A client that connects and never reads never answers a ping, so the ping fails after
+// WriteTimeout and the server closes the connection, instead of holding a goroutine and a file descriptor forever.
+func TestAClientThatNeverReadsIsDropped(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.ReadTimeout = 300 * time.Millisecond
+	cfg.PingInterval = 100 * time.Millisecond
+	cfg.WriteTimeout = 100 * time.Millisecond
+
+	srv, hub := echoServer(t, cfg, DropNewest)
+
+	dial(t, srv) // and then never read
+
+	deadline := time.Now().Add(3 * time.Second)
+	for hub.Len() != 0 && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
 	}
 
-	t.Log("without a deadline on every read, that goroutine and file descriptor are held " +
-		"forever, which is Slowloris at a different layer")
+	if n := hub.Len(); n != 0 {
+		t.Errorf("the hub still holds %d connection(s) from a client that never answered a ping", n)
+	}
 }
 
 // TestPingDetectsADeadPeer, because TCP will not, and it taught me something about who answers a ping.

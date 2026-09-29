@@ -191,11 +191,13 @@ GOOS=windows GOARCH=amd64 go build -o app.exe
 No toolchain to install, no container. `go tool dist list` prints every
 supported pair, and there are over forty.
 
-The caveat is **cgo**. Anything using cgo (the standard `net` and `os/user`
-packages on some platforms, and every C library binding) needs a C
-cross-compiler. `CGO_ENABLED=0` avoids it, and gives a genuinely static binary
-that runs on a scratch container, at the cost of the pure-Go DNS resolver rather
-than the system one.
+The caveat is **cgo**, and Go handles it for you: when the target differs from
+the host, `CGO_ENABLED` defaults to 0 (`GOOS=linux go env CGO_ENABLED` prints
+`0` on a Mac; a native build prints `1`). The standard `net` and `os/user`
+packages fall back to their pure-Go versions, and the result is a static binary
+that runs on a scratch container, using the pure-Go DNS resolver rather than the
+system one. A package that REQUIRES cgo, such as a C library binding, fails to
+build, and turning cgo back on for a cross build needs a C cross-compiler.
 
 ## What the files cover
 

@@ -15,8 +15,11 @@ package main
 // production: the code is not in the binary, so there is no branch to predict,
 // no flag to read, and no way to enable it by accident.
 //
-// This is what `if debug { ... }` cannot give you, because that still compiles
-// the body and still evaluates the condition.
+// `if debug { ... }` with a VARIABLE cannot give you that: the body is compiled
+// in and the flag is read at run time. With a CONSTANT, as DebugEnabled below
+// is, the compiler drops the body just as completely. What a constant cannot
+// do is change which imports, types and functions exist per build, and that is
+// what the pair of build-tagged files is for.
 
 // DebugEnabled reports whether this build has the debug tag. A constant, so
 // the compiler folds every `if DebugEnabled` away entirely.

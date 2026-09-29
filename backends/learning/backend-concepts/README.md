@@ -212,11 +212,13 @@ explicitly invalid.
 
 Three of the four failures are demonstrated and the fourth is measured three ways.
 
-A silent client is disconnected after the read deadline, 300ms in the test, which is Slowloris at a different
-layer. A vanished peer is noticed within one ping interval plus one write timeout rather than by TCP's
-retransmit timeout, which can be fifteen minutes. 50 goroutines sending 268 messages through one connection
-produced no corrupted frames, which a direct `Write` could not do: coder/websocket panics on the second
-concurrent writer.
+A client that never reads never answers a ping, and is dropped within one ping interval plus one write timeout,
+which is Slowloris at a different layer. A client that only listens, answering pings, stays connected. The first
+version put a deadline on every read and cut off listeners too, because coder/websocket answers pongs inside
+`Read` and returns only for data messages; a successful ping never reset the deadline. A vanished peer is noticed
+the same way, rather than by TCP's retransmit timeout, which can be fifteen minutes. 50 goroutines sending 268
+messages through one connection produced no corrupted frames. That isn't the single writer's doing:
+coder/websocket's `Write` is safe to call concurrently (gorilla's panics). The queue is there for backpressure.
 
 The slow-client policies, with a buffer of 4 and 20 messages: drop-newest keeps messages 0 to 3, drop-oldest
 keeps 16 to 19, disconnect closes with `StatusPolicyViolation`. There is no right default, and shipping whichever
@@ -306,8 +308,8 @@ dependency, and it makes the mechanism visible rather than configured.
   three of four leaks on one verb.
 - `observability.CaptureRoute`: publishes the matched route through a mutable holder in the context, which is the
   only way to get `r.Pattern` out to a middleware that wraps the mux.
-- `websockets.Conn`: one writer goroutine, a deadline on every read, a ping with a pong deadline, and a bounded
-  send buffer with a chosen overflow policy.
+- `websockets.Conn`: one writer goroutine, liveness from pings rather than read deadlines, a ping with a pong
+  deadline, and a bounded send buffer with a chosen overflow policy.
 - `messaging.Consumer`: `FetchMessage` and `CommitMessages` kept separate so the delivery guarantee is a
   parameter, and the commit uses `context.Background()` so a graceful shutdown does not lose the offset.
 - `apitesting.Shape`: asserts the fields and types it names and nothing else, reports every mismatch rather than

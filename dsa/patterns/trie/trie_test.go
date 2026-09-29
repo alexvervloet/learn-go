@@ -1,6 +1,7 @@
 package trie
 
 import (
+	"math"
 	"math/rand/v2"
 	"slices"
 	"strings"
@@ -574,4 +575,43 @@ func TestWordSearchImplementationsAgree(t *testing.T) {
 				g, dict, byNode, byPrefix)
 		}
 	}
+}
+
+// TestBitTrieWidths covers values wider than 32 bits. The first version turned NewBitTrie(64) into a 32-bit
+// trie without saying so, and MaxXORPair always built a 32-bit one, so any value of 2^32 or more lost its high
+// bits: MaxXORPair([2^40, 0]) returned 0.
+func TestBitTrieWidths(t *testing.T) {
+	if got, ok := MaxXORPair([]int{1 << 40, 0}); !ok || got != 1<<40 {
+		t.Errorf("MaxXORPair([2^40, 0]) = %d, %t; want 2^40", got, ok)
+	}
+
+	if got, _ := MaxXORPair([]int{math.MaxInt, 0, 5}); got != math.MaxInt {
+		t.Errorf("MaxXORPair with MaxInt = %d, want MaxInt", got)
+	}
+
+	wide := NewBitTrie(63)
+	wide.Insert(math.MaxInt)
+	if got, _ := wide.MaxXORWith(0); got != math.MaxInt {
+		t.Errorf("a 63-bit trie gave %d for MaxInt XOR 0", got)
+	}
+
+	for _, bad := range []int{0, 64, -1} {
+		func() {
+			defer func() {
+				if recover() == nil {
+					t.Errorf("NewBitTrie(%d) did not panic; a silent change of width is how values lose bits", bad)
+				}
+			}()
+			NewBitTrie(bad)
+		}()
+	}
+
+	func() {
+		defer func() {
+			if recover() == nil {
+				t.Error("Insert(-1) did not panic; a negative value's sign bits would be read as data")
+			}
+		}()
+		NewBitTrie(8).Insert(-1)
+	}()
 }

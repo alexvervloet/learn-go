@@ -40,6 +40,8 @@ package trie
 
 import (
 	"cmp"
+	"fmt"
+	"math/bits"
 	"slices"
 	"strings"
 
@@ -429,21 +431,31 @@ func WordSearchIIByPrefix(grid [][]rune, dictionary []string) []string {
 // O(bits) instead of O(n).
 type BitTrie struct {
 	children [2]*BitTrie
-	count    int // values passing through, so Remove can prune
+	count    int // values passing through this node; MaxXORWith skips a branch at zero
 	bits     int
 }
 
-// NewBitTrie returns a trie for values of the given bit width. 32 covers every uint32 and is
-// the usual choice; 64 covers every non-negative int.
+// NewBitTrie returns a trie for non-negative values of the given bit width, 1 to 63. 32
+// covers every uint32 and 63 covers every non-negative int.
+//
+// It panics on any other width. The first version quietly used 32 instead, so a caller who
+// asked for 64 got a trie that dropped the top 32 bits of every value, with no error
+// anywhere. A width is a constant the programmer chose, so a wrong one is a bug to report at
+// once, the way make panics on a negative size.
 func NewBitTrie(bits int) *BitTrie {
-	if bits <= 0 || bits > 63 {
-		bits = 32
+	if bits < 1 || bits > 63 {
+		panic(fmt.Sprintf("trie: NewBitTrie(%d): width must be 1 to 63 bits", bits))
 	}
 	return &BitTrie{bits: bits}
 }
 
-// Insert adds a value.
+// Insert adds a value. It panics on a negative value, whose sign bits would otherwise be
+// read as data, and on one too wide for the trie.
 func (b *BitTrie) Insert(value int) {
+	if value < 0 || bits.Len(uint(value)) > b.bits {
+		panic(fmt.Sprintf("trie: Insert(%d) does not fit a %d-bit trie of non-negative values", value, b.bits))
+	}
+
 	node := b
 	node.count++
 
@@ -494,16 +506,20 @@ func (b *BitTrie) MaxXORWith(x int) (int, bool) {
 	return best, true
 }
 
-// MaxXORPair returns the largest XOR of any two values in the slice.
+// MaxXORPair returns the largest XOR of any two values in the slice, which must be
+// non-negative.
 //
 // O(n * bits) with the trie, against O(n^2) for every pair. At n = 200,000 that is the
 // difference between 6 million operations and 40 billion.
+//
+// The width comes from the largest value. The first version always used 32 bits, so
+// MaxXORPair([2^40, 0]) returned 0.
 func MaxXORPair(values []int) (int, bool) {
 	if len(values) < 2 {
 		return 0, false
 	}
 
-	t := NewBitTrie(32)
+	t := NewBitTrie(max(1, bits.Len(uint(slices.Max(values)))))
 	t.Insert(values[0])
 
 	best := 0

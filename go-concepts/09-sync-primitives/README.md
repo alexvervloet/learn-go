@@ -143,9 +143,9 @@ true. Measured on an M2 Max, 12 cores:
 
 `RWMutex` only wins when there is **no contention at all**, and then by ten
 percent. Add real concurrency and it loses badly, because every `RLock` and
-`RUnlock` touches one shared cacheline that all twelve cores fight over, while
-`sync.Map` serves reads from a per-processor structure that needs no
-coordination.
+`RUnlock` writes to one shared cacheline that all twelve cores fight over, while
+a `sync.Map` read is a chain of atomic loads down the trie, which writes nothing
+and so has nothing to fight over.
 
 The likely reason the old advice no longer holds: Go 1.24 replaced `sync.Map`'s
 internals with a hash-trie implementation, and it got much faster across the

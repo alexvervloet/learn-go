@@ -9,19 +9,19 @@ import (
 // sync.Map
 // ========
 //
-// Not "a map with a mutex". It is a specialised structure tuned for two access
-// patterns, and outside them a plain map behind a RWMutex is usually faster AND
-// typed, which sync.Map's `any` interface is not.
+// Not "a map with a mutex". The standard library documentation still names two
+// cases it is built for:
 //
-// The two cases the standard library documentation names:
-//
-//  1. A key is written once and read many times. Entries are effectively
-//     append-only, and reads of settled keys take a lock-free fast path.
+//  1. A key is written once and read many times.
 //  2. Goroutines work on DISJOINT key sets, so they rarely contend.
 //
-// Everything else: start with a RWMutex map. Move only when a profile says the
-// lock is the bottleneck. The benchmark in maps_test.go measures both on your
-// machine rather than asserting a winner.
+// The advice that usually comes with that, "otherwise a RWMutex map is faster",
+// did not survive measurement on Go 1.27. Since 1.24 sync.Map is a hash-trie,
+// and in this lesson's benchmarks it wins every contended workload, by 4x to
+// 68x, and loses only single-goroutine reads, by about 10%. The README has the
+// table. What a RWMutex map still has going for it is types: sync.Map's API is
+// `any`. The benchmark in maps_test.go measures both on your machine rather
+// than asserting a winner.
 
 // rwMutexMap is the baseline: a plain map with a read-write lock, generic so
 // it keeps its types.

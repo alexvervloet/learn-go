@@ -32,6 +32,7 @@ the index below groups them by topic.
 - [A channel orders the channel operations, not the statements after them](#a-channel-orders-the-channel-operations-not-the-statements-after-them)
 - [`runtime.NumGoroutine` counts the whole process, so it cannot measure one leak](#runtimenumgoroutine-counts-the-whole-process-so-it-cannot-measure-one-leak)
 - [singleflight collapses the callers that are IN FLIGHT, which is not all of them](#singleflight-collapses-the-callers-that-are-in-flight-which-is-not-all-of-them)
+- [A goroutine's panic let its parent run on before the process died](#a-goroutines-panic-let-its-parent-run-on-before-the-process-died)
 
 **Benchmarks and measurement.**
 
@@ -2434,3 +2435,17 @@ of that report was real: `authors(limit: -1)` returned every row, `similar(limit
 **Next time.** Write the failing test before the fix, and believe it when it doesn't fail. A test that passes
 before the fix proves something else is doing the job, and reading the library's source takes a minute. That
 test stays in the suite to pin gqlgen's behaviour, and its comment says why.
+
+## A goroutine's panic let its parent run on before the process died
+
+**Expected.** Lesson 05's demo of an unrecoverable goroutine panic had never actually panicked: the "panic" was a
+string assignment. The fix was to panic for real in a child process, and to check that the child died and that
+the line after `wg.Wait()` never printed.
+
+**What happened.** The child always died, and that line printed in 16 runs out of 20. The panicking goroutine's
+deferred `wg.Done()` runs while the panic unwinds, which releases `wg.Wait()` in the parent. The parent then runs
+until the runtime finishes killing the process.
+
+**Next time.** "The process dies" and "nothing else runs" are different claims, and a test should assert the one
+the code guarantees. The test now checks for a line one second after `Wait`, which never prints. The README says
+code after a `Wait` is not proof that the goroutines behind it finished cleanly.

@@ -52,16 +52,37 @@ var (
 	checkErr error
 )
 
-// database picks a Redis database from the test binary's name, leaving 0 alone.
+// database picks this binary's Redis database, leaving 0 for a person poking at Redis by hand.
+//
+// Every test binary in the repository that uses Redis has a database number of its own, listed in
+// WALKTHROUGH.md and in a table like this one in each module's harness:
+//
+//	1-3   backend-concepts   caching, ratelimit, redistest
+//	4-5   jobs-concepts      worker, jobtest
+//	6-7   url-shortener      api, cache
+//	8-9   bookmark-manager   api, ratelimit
+//	10-15 anything unlisted, by hash
+//
+// `make test` runs every package of every module at once against the same default Redis, so two binaries
+// sharing a database flush each other's keys mid-test. The first version hashed the binary name into 15
+// slots, and both capstones' api packages landed on the same one. A table cannot collide; the hash is only
+// for a package added without updating it.
 func database() int {
 	base := filepath.Base(os.Args[0])
 	base = strings.TrimSuffix(strings.TrimSuffix(base, ".exe"), ".test")
 
-	h := fnv.New32a()
-	_, _ = h.Write([]byte("jobs-" + base))
+	if db, ok := databases[base]; ok {
+		return db
+	}
 
-	return int(h.Sum32()%15) + 1
+	h := fnv.New32a()
+	_, _ = h.Write([]byte("jobs-concepts-" + base))
+
+	return int(h.Sum32()%6) + 10
 }
+
+// databases is this module's share of the table above.
+var databases = map[string]int{"worker": 4, "jobtest": 5}
 
 // RedisOpt returns the connection options asynq needs.
 func RedisOpt() asynq.RedisClientOpt {

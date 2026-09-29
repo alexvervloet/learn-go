@@ -79,23 +79,37 @@ func connect() (*redis.Client, error) {
 	return c, nil
 }
 
-// databaseFor picks a Redis database number from the test binary's name.
+// databaseFor picks this binary's Redis database, leaving 0 for a person poking at Redis by hand.
 //
-// Databases 1 to 15, leaving 0 alone: a developer poking at Redis by hand is on 0, and a test suite that
-// flushes 0 deletes whatever they were looking at.
+// Every test binary in the repository that uses Redis has a database number of its own, listed in
+// WALKTHROUGH.md and in a table like this one in each module's harness:
 //
-// A hash rather than a counter, because the number has to be stable across runs of the same package and
-// there is nothing shared between the binaries to count with. Collisions are possible with more than 15
-// packages and the consequence is two packages sharing a database, which is the situation without this at all.
+//	1-3   backend-concepts   caching, ratelimit, redistest
+//	4-5   jobs-concepts      worker, jobtest
+//	6-7   url-shortener      api, cache
+//	8-9   bookmark-manager   api, ratelimit
+//	10-15 anything unlisted, by hash
+//
+// `make test` runs every package of every module at once against the same default Redis, so two binaries
+// sharing a database flush each other's keys mid-test. The first version hashed the binary name into 15
+// slots, and both capstones' api packages landed on the same one. A table cannot collide; the hash is only
+// for a package added without updating it.
 func databaseFor(binary string) int {
 	base := filepath.Base(binary)
 	base = strings.TrimSuffix(strings.TrimSuffix(base, ".exe"), ".test")
 
-	h := fnv.New32a()
-	_, _ = h.Write([]byte(base))
+	if db, ok := databases[base]; ok {
+		return db
+	}
 
-	return int(h.Sum32()%15) + 1
+	h := fnv.New32a()
+	_, _ = h.Write([]byte("backend-concepts-" + base))
+
+	return int(h.Sum32()%6) + 10
 }
+
+// databases is this module's share of the table above.
+var databases = map[string]int{"caching": 1, "ratelimit": 2, "redistest": 3}
 
 // Flush empties this test binary's database, if the database is this harness's to empty.
 //

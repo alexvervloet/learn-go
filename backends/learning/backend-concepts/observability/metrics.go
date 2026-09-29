@@ -1,10 +1,12 @@
 package observability
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"io"
 	"math"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -243,10 +245,14 @@ func (r *statusRecorder) WriteHeader(status int) {
 		return
 	}
 
-	r.status = status
-	r.wroteHeader = true
-
 	r.ResponseWriter.WriteHeader(status)
+
+	// A 1xx (103 Early Hints) is followed by the real status, so it does not end the header phase.
+	// Recording it as final swallowed the real status, the same bug http-tutorial's recorder had.
+	if status >= 200 {
+		r.status = status
+		r.wroteHeader = true
+	}
 }
 
 // Write counts the bytes and implies a 200 if no status was set, which is what net/http does.
@@ -263,6 +269,16 @@ func (r *statusRecorder) Write(b []byte) (int, error) {
 
 // Unwrap lets http.NewResponseController reach the underlying writer.
 func (r *statusRecorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
+
+// Flush and Hijack make the recorder an http.Flusher and http.Hijacker for middleware that type-asserts rather
+// than using http.ResponseController. Unwrap alone is not enough for those; see http-tutorial's recorder, where
+// its absence broke streaming and WebSocket upgrades behind chi's Compress.
+func (r *statusRecorder) Flush() { _ = http.NewResponseController(r.ResponseWriter).Flush() }
+
+// Hijack takes over the connection for an upgrade; see Flush for why it is here.
+func (r *statusRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	return http.NewResponseController(r.ResponseWriter).Hijack()
+}
 
 // SeriesCount counts the time series Prometheus would STORE, which is not the number of label combinations.
 //

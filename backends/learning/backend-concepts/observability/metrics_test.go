@@ -302,3 +302,36 @@ func TestRouteFromPattern(t *testing.T) {
 	t.Log("the method is stripped because it duplicates the method label, and the host because " +
 		"it would split one route into one series per hostname")
 }
+
+// TestMetricsRecorderKeepsCapabilitiesAndStatus: a 1xx must not become the recorded status, and middleware that
+// type-asserts Flusher and Hijacker must find them.
+func TestMetricsRecorderKeepsCapabilitiesAndStatus(t *testing.T) {
+	m := NewMetrics("caps", RouteFromPattern, nil)
+
+	var flusher, hijacker bool
+
+	h := m.Middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, flusher = w.(http.Flusher)
+		_, hijacker = w.(http.Hijacker)
+		w.WriteHeader(http.StatusEarlyHints)
+		w.WriteHeader(http.StatusAccepted)
+	}))
+
+	// A real server, because httptest.ResponseRecorder itself keeps the first status it is given, 103
+	// included, and would hide the difference this checks.
+	srv := httptest.NewServer(h)
+	t.Cleanup(srv.Close)
+
+	resp, err := http.Get(srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+
+	if !flusher || !hijacker {
+		t.Errorf("Flusher=%t Hijacker=%t through the metrics recorder", flusher, hijacker)
+	}
+	if resp.StatusCode != http.StatusAccepted {
+		t.Errorf("status %d after a 103, want 202", resp.StatusCode)
+	}
+}

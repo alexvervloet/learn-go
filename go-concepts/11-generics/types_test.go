@@ -1,6 +1,7 @@
 package main
 
 import (
+	"reflect"
 	"slices"
 	"testing"
 )
@@ -92,12 +93,12 @@ func TestStackPopZeroesTheSlot(t *testing.T) {
 	}
 }
 
-func TestMapStack(t *testing.T) {
+func TestStackMap(t *testing.T) {
 	s := NewStack[string](3)
 	s.Push("go")
 	s.Push("generics")
 
-	lengths := MapStack(s, func(v string) int { return len(v) })
+	lengths := s.Map(func(v string) int { return len(v) })
 
 	if want := []int{2, 8}; !slices.Equal(lengths.Items(), want) {
 		t.Errorf("got %v, want %v", lengths.Items(), want)
@@ -105,6 +106,28 @@ func TestMapStack(t *testing.T) {
 	// The source stack is untouched.
 	if s.Len() != 2 {
 		t.Errorf("source Len = %d, want 2", s.Len())
+	}
+}
+
+// TestGenericMethodsAreNotInTheMethodSet is the rule Go 1.27 added with generic methods.
+//
+// Stack has Push, Pop, Peek, Len, Items and the generic Map. reflect lists the first five. An interface can't
+// require Map and Map can't satisfy an interface, and this is the runtime half of the same rule.
+func TestGenericMethodsAreNotInTheMethodSet(t *testing.T) {
+	typ := reflect.TypeFor[*Stack[int]]()
+
+	var names []string
+	for m := range typ.Methods() {
+		names = append(names, m.Name)
+	}
+
+	t.Logf("*Stack[int] method set: %v", names)
+
+	if slices.Contains(names, "Map") {
+		t.Error("the generic method Map is in the method set")
+	}
+	if !slices.Contains(names, "Push") {
+		t.Error("the ordinary method Push is missing, so this test is not looking at the right type")
 	}
 }
 

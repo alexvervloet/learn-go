@@ -3,6 +3,7 @@ package main
 import (
 	"cmp"
 	"fmt"
+	"reflect"
 )
 
 // Generic types
@@ -10,15 +11,17 @@ import (
 //
 //	type Stack[T any] struct { items []T }
 //
-// A TYPE can have type parameters. A METHOD cannot add its own:
+// A TYPE can have type parameters, and since Go 1.27 a METHOD can add its own:
 //
-//	func (s *Stack[T]) Map[U any](f func(T) U) *Stack[U]   // DOES NOT COMPILE
-//	  -> method must have no type parameters
+//	func (s *Stack[T]) Map[U any](f func(T) U) *Stack[U]
 //
-// The reason is interface satisfaction: a method with its own type parameter
-// would mean an interface had to match an infinite family of methods, which is
-// undecidable. The workaround is a plain function, which is why the generic
-// standard library is mostly functions.
+// Before 1.27 that was "method must have no type parameters". The objection was
+// interface satisfaction: an interface would have had to match an infinite
+// family of methods. 1.27 kept the objection and answered it by leaving generic
+// methods OUT of the method set. An interface cannot declare one, a generic
+// method never satisfies an interface method, and reflect does not list it.
+// It is a function with method-call syntax, which is why most of the generic
+// standard library, written before 1.27, is still functions.
 
 // Stack is a generic LIFO container. The zero value is usable, following the
 // rule from lesson 01.
@@ -75,9 +78,12 @@ func (s *Stack[T]) Items() []T {
 	return out
 }
 
-// MapStack is the workaround for the method that cannot exist. A plain
-// function can introduce U, so the transform lives here rather than on Stack.
-func MapStack[T, U any](s *Stack[T], f func(T) U) *Stack[U] {
+// Map returns a new stack holding f applied to each item, bottom to top.
+//
+// U is the method's own type parameter, which needs Go 1.27. Before that this
+// had to be a function, MapStack(s, f), and the call read inside out. It is
+// inferred from f, so a call is s.Map(strconv.Itoa) with no brackets.
+func (s *Stack[T]) Map[U any](f func(T) U) *Stack[U] {
 	out := NewStack[U](s.Len())
 	for _, item := range s.items {
 		out.Push(f(item))
@@ -214,8 +220,8 @@ func demoTypes() {
 	_, ok := NewStack[int](0).Pop()
 	fmt.Printf("  Pop() on an empty stack: ok=%t\n", ok)
 
-	lengths := MapStack(s, func(v string) int { return len(v) })
-	fmt.Printf("  MapStack(stack, len) -> %v   <- a function, because a method cannot add U\n",
+	lengths := s.Map(func(v string) int { return len(v) })
+	fmt.Printf("  s.Map(len) -> %v   <- a method with its own type parameter U (Go 1.27)\n",
 		lengths.Items())
 
 	p := MakePair("answer", 42)
@@ -235,7 +241,8 @@ func demoTypes() {
 	}
 	fmt.Printf("  Tree[string]: %v\n", words.InOrder())
 
-	fmt.Println("\n  a method cannot add a type parameter:")
-	fmt.Println("    func (s *Stack[T]) Map[U any](...)  -> method must have no type parameters")
-	fmt.Println("    func MapStack[T, U any](s *Stack[T], ...)  -> the workaround")
+	fmt.Println("\n  a generic method is not in the method set:")
+	fmt.Printf("    reflect lists %d method(s) on *Stack[int]; Map is not one of them\n",
+		reflect.TypeFor[*Stack[int]]().NumMethod())
+	fmt.Println("    so no interface can require it, and it cannot satisfy one")
 }

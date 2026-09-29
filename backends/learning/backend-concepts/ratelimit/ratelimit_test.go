@@ -723,3 +723,31 @@ func itoa(n int) string {
 	}
 	return string(digits)
 }
+
+// TestDefaultKeyIsTheAddressNotTheConnection: RemoteAddr is "ip:port", and a client gets a new source port with
+// every new connection. The first version keyed on RemoteAddr itself, so reconnecting was a fresh budget and a
+// per-IP limit limited nothing.
+func TestDefaultKeyIsTheAddressNotTheConnection(t *testing.T) {
+	h := Middleware(NewFixedWindow(1, time.Minute), nil)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+
+	codes := make([]int, 0, 2)
+	for _, addr := range []string{"203.0.113.7:50001", "203.0.113.7:50002"} {
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
+		r.RemoteAddr = addr
+
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		codes = append(codes, w.Code)
+	}
+
+	if codes[1] != http.StatusTooManyRequests {
+		t.Errorf("the same IP on a second connection got %v; the port must not be part of the key", codes)
+	}
+
+	// IPv6, where the address itself contains colons.
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r.RemoteAddr = "[2001:db8::1]:443"
+	if got := remoteIP(r); got != "2001:db8::1" {
+		t.Errorf("remoteIP([2001:db8::1]:443) = %q", got)
+	}
+}

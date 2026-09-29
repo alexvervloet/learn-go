@@ -43,6 +43,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"strconv"
 	"sync"
@@ -461,13 +462,27 @@ func (f FailOpen) Allow(ctx context.Context, key string) (Decision, error) {
 	}, nil
 }
 
+// remoteIP is the default key: the client's address WITHOUT the port.
+//
+// RemoteAddr is "ip:port", and a client gets a new source port with every connection. The first
+// version keyed on RemoteAddr as it came, so reconnecting was a fresh budget and a per-IP limit
+// limited nothing. net.SplitHostPort, not a cut at the last colon, so "[2001:db8::1]:443" works.
+// Behind a proxy RemoteAddr is the proxy's address; see http-tutorial's RealIP for that.
+func remoteIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr // no port at all, as RealIP leaves it
+	}
+	return host
+}
+
 // Middleware turns a Limiter into HTTP middleware.
 //
 // KeyFunc is a parameter because the key is the design decision, not the algorithm. A single implementation
 // serves per-IP, per-user and per-endpoint limiting; hard-coding the IP inside would not.
 func Middleware(l Limiter, keyFunc func(*http.Request) string) func(http.Handler) http.Handler {
 	if keyFunc == nil {
-		keyFunc = func(r *http.Request) string { return r.RemoteAddr }
+		keyFunc = remoteIP
 	}
 
 	return func(next http.Handler) http.Handler {

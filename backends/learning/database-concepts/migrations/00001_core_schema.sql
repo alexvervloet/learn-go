@@ -19,7 +19,7 @@ CREATE EXTENSION IF NOT EXISTS citext;
 --
 -- Where this schema deliberately breaks 3NF: orders.total_cents. The trigger below keeps it
 -- correct, and a denormalised column with no mechanism to keep it correct is a bug waiting
--- for a deploy. The README has the measurement that justifies it.
+-- for a deploy. The justification is read cost: an order's total without a SUM over its lines.
 
 CREATE TABLE authors (
     id          bigserial PRIMARY KEY,

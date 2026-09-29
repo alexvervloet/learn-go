@@ -23,9 +23,9 @@
 // with 20 connections and queries averaging 2ms, the pool can serve 10,000 queries a second. Most
 // services do not need that and reach for 200 connections anyway.
 //
-// # The four query modes
+// # The five query modes
 //
-// pgx can send a query four ways, and the default is not the obvious one:
+// pgx can send a query five ways, and the default is not the obvious one:
 //
 //	QueryExecModeCacheStatement  the default. Prepares the statement, caches it per connection
 //	                             by SQL text, reuses it. Fastest for repeated queries, and the

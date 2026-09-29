@@ -16,9 +16,10 @@
 //
 // # COPY, not INSERT
 //
-// The seeder uses pgx's CopyFrom, which speaks the COPY protocol. The benchmark in pgxdemo measures
-// what that is worth; the short version is that it is the difference between a seeder that takes a
-// second and one that takes a minute, and it is why this package can afford 10,000 rows.
+// The seeder uses pgx's CopyFrom, which speaks the COPY protocol: one streamed statement instead of a
+// round trip per row. That is the difference between a seeder that takes a second and one that takes a
+// minute, and it is why this package can afford 10,000 rows. (An earlier version of this comment pointed
+// at a CopyFrom benchmark in pgxdemo, which does not exist.)
 package seed
 
 import (
@@ -182,8 +183,8 @@ func loadOrders(ctx context.Context, db bulkLoader, r *rand.Rand, c Counts) erro
 	}
 
 	// The trigger on order_items fires per row, so loading 15,000 lines runs 15,000 UPDATEs
-	// on orders. That is the cost of the denormalised column, it is real, and it is measured
-	// in the README. Disabling the trigger for the bulk load and recomputing once afterwards
+	// on orders. That is the cost of the denormalised column, and it is real. Disabling the
+	// trigger for the bulk load and recomputing once afterwards
 	// is the production answer; keeping it on here is deliberate, so the seeder pays what a
 	// real insert path pays.
 	_, err := db.CopyFrom(ctx, pgx.Identifier{"order_items"},

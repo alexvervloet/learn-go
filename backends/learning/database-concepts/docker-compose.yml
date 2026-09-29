@@ -26,7 +26,7 @@ services:
       - "5433:5432"
 
     # The tests create one database per package (see dbtest), so the container needs to allow more than
-    # the default number of connections: nine packages times a pool of ten is ninety, plus the
+    # the default number of connections: eleven packages times a pool of ten is 110, plus the
     # maintenance connections.
     command:
       - postgres

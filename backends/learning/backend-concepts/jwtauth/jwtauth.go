@@ -59,6 +59,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -122,6 +123,11 @@ type Issuer struct {
 	// it from the token.
 	Method jwt.SigningMethod
 
+	// mu guards signKey, verifyKeys and activeKID. Rotation happens in a running service, while
+	// request goroutines mint and verify, so without it Rotate is a data race on a map; the first
+	// version had no lock and TestRotationIsSafeDuringTraffic found the race.
+	mu sync.RWMutex
+
 	// signKey and verifyKeys are different types for HS256 and RS256, so they are `any` and the
 	// constructors below are what keep them consistent.
 	signKey any
@@ -133,6 +139,10 @@ type Issuer struct {
 	// activeKID names the key new tokens are signed with.
 	activeKID string
 
+	// Issuer and Audience go into minted tokens and are REQUIRED on verify, but only when set:
+	// leave one empty and that check is skipped entirely. The constructors leave both empty, so a
+	// service that shares a signing key with anything else must set them, or a token minted for
+	// another audience verifies here too.
 	Issuer   string
 	Audience string
 	TTL      time.Duration
@@ -180,6 +190,9 @@ func NewRS256(key *rsa.PrivateKey, kid string) *Issuer {
 // keys verify, new tokens are signed with the active one, and the old key is removed once every token signed
 // with it has expired. Which is why the removal can be scheduled: it is TTL after the switch, exactly.
 func (i *Issuer) AddVerifyKey(kid string, key any) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+
 	if i.verifyKeys == nil {
 		i.verifyKeys = map[string]any{}
 	}
@@ -210,6 +223,9 @@ func (i *Issuer) Rotate(kid string, signKey, verifyKey any) error {
 		return errors.New("jwtauth: rotation needs both a signing and a verification key")
 	}
 
+	i.mu.Lock()
+	defer i.mu.Unlock()
+
 	if i.verifyKeys == nil {
 		i.verifyKeys = map[string]any{}
 	}
@@ -226,6 +242,9 @@ func (i *Issuer) Rotate(kid string, signKey, verifyKey any) error {
 // Not "after the deploy" and not "next week": TTL, because that is the longest a token signed with the old key
 // can still be valid. The arithmetic is available, so the cleanup can be scheduled rather than remembered.
 func (i *Issuer) RemoveVerifyKey(kid string) error {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+
 	if kid == i.activeKID {
 		return fmt.Errorf("jwtauth: %q is the active key; rotate away from it first", kid)
 	}
@@ -240,13 +259,21 @@ func (i *Issuer) RemoveVerifyKey(kid string) error {
 }
 
 // ActiveKID reports which key new tokens are signed with.
-func (i *Issuer) ActiveKID() string { return i.activeKID }
+func (i *Issuer) ActiveKID() string {
+	i.mu.RLock()
+	defer i.mu.RUnlock()
+
+	return i.activeKID
+}
 
 // VerifyKIDs lists every key that will verify, for a log line at startup.
 //
 // Worth having: "which keys does this process accept" is the first question when a rolling deploy starts
 // rejecting tokens, and the answer is otherwise only in the code.
 func (i *Issuer) VerifyKIDs() []string {
+	i.mu.RLock()
+	defer i.mu.RUnlock()
+
 	kids := make([]string, 0, len(i.verifyKeys))
 	for kid := range i.verifyKeys {
 		kids = append(kids, kid)
@@ -293,9 +320,15 @@ func (i *Issuer) Mint(subject string, roles []string, email string) (string, err
 
 	// The kid goes in the header, which is the one thing a verifier reads from the token before
 	// verifying. It is a lookup key and nothing else.
-	token.Header["kid"] = i.activeKID
+	// Both read under one lock, so a token is never labelled with one key and signed with another
+	// by a Rotate landing between the two lines.
+	i.mu.RLock()
+	kid, signKey := i.activeKID, i.signKey
+	i.mu.RUnlock()
 
-	signed, err := token.SignedString(i.signKey)
+	token.Header["kid"] = kid
+
+	signed, err := token.SignedString(signKey)
 	if err != nil {
 		return "", fmt.Errorf("signing a token for %q: %w", subject, err)
 	}
@@ -362,6 +395,9 @@ func (i *Issuer) Verify(token string) (Claims, error) {
 // keyFunc that opens a file named by kid, or queries a database with it, is a path traversal or an injection,
 // and both have been found in the wild.
 func (i *Issuer) keyFunc(token *jwt.Token) (any, error) {
+	i.mu.RLock()
+	defer i.mu.RUnlock()
+
 	kid, ok := token.Header["kid"].(string)
 	if !ok {
 		// No kid. Fall back to the active key, because a token minted before kid was introduced

@@ -1,6 +1,7 @@
 package jwtauth
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/rsa"
@@ -11,7 +12,9 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -832,4 +835,43 @@ func TestHS256MatchesCryptoHMAC(t *testing.T) {
 	if parts[2] != want {
 		t.Errorf("signature is\n  %s\nwant\n  %s", parts[2], want)
 	}
+}
+
+// TestRotationIsSafeDuringTraffic rotates keys while other goroutines mint and verify, which is what a rotation
+// in a running service is. The key map and the active key were plain fields with no lock, so under -race this
+// reported a data race on the first rotation.
+func TestRotationIsSafeDuringTraffic(t *testing.T) {
+	i, err := NewHS256(bytes.Repeat([]byte("k"), 32), "k0")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var wg sync.WaitGroup
+
+	for range 4 {
+		wg.Go(func() {
+			for range 200 {
+				tok, err := i.Mint("user-1", nil, "")
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				// A verify can race a rotation that removes the key the token was signed with, so
+				// only a panic or a race report would be a failure here.
+				_, _ = i.Verify(tok)
+			}
+		})
+	}
+
+	wg.Go(func() {
+		for n := range 50 {
+			kid := "k" + strconv.Itoa(n+1)
+			if err := i.Rotate(kid, bytes.Repeat([]byte(kid[1:]), 32), bytes.Repeat([]byte(kid[1:]), 32)); err != nil {
+				t.Error(err)
+			}
+			_ = i.VerifyKIDs()
+		}
+	})
+
+	wg.Wait()
 }

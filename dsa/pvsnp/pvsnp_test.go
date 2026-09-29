@@ -186,7 +186,7 @@ func err(_ []int, e error) error { return e }
 
 func TestSubsetSumBruteRefusesHugeInput(t *testing.T) {
 	if _, e := SubsetSumBrute(make([]int, 63), 1); e == nil {
-		t.Error("expected an error for 63 elements, since the mask would not fit")
+		t.Error("expected an error for 63 elements, the package's cap for 2^n to fit an int")
 	}
 }
 

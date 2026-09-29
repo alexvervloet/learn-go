@@ -16,11 +16,13 @@ import (
 // The decision version ("is there a tour shorter than k") is NP-complete. The
 // optimisation version ("what is the shortest tour") is NP-hard, and the difference
 // matters: a certificate for the decision version is a tour, which is checkable in
-// O(n), while there is no short certificate for "this is the shortest", because
-// proving it requires ruling out the others.
+// O(n), while nobody knows a short certificate for "this is the shortest", because
+// every known proof amounts to ruling out the others.
 //
-// That is why the heuristics below have no Verify counterpart. You can verify a
-// tour. You cannot verify optimality without solving the problem again.
+// "Nobody knows", not "there is none". Proving no short certificate exists would
+// settle NP versus coNP, which is as open as P versus NP. What is true in practice
+// is why the heuristics below have no Verify counterpart: you can verify a tour,
+// and no known method verifies optimality without solving the problem again.
 
 // ErrTooLarge means the exact algorithms would not finish.
 var ErrTooLarge = errors.New("pvsnp: too many cities for an exact solution")
@@ -77,8 +79,9 @@ func (d Distances) TourLength(tour []int) int {
 // VerifyTour reports whether tour visits every city exactly once, and its length.
 //
 // O(n), and it is the definition of a valid answer. Note what it does NOT check:
-// whether the tour is the shortest. Nothing can check that in polynomial time,
-// which is the difference between NP-complete and NP-hard.
+// whether the tour is the shortest. No polynomial-time check for that is known, and
+// finding one would be a major result, which is the practical difference between
+// the NP-complete decision version and the NP-hard optimisation version.
 func (d Distances) VerifyTour(tour []int) (int, bool) {
 	if len(tour) != d.Len() {
 		return 0, false

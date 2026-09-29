@@ -8,9 +8,10 @@
 //	P    can you FIND an answer in polynomial time
 //	NP   can you CHECK a proposed answer in polynomial time
 //
-// Every problem here is in NP, and for all of them checking is trivial. Hand me a
-// subset and I will add it up in O(n). Hand me a tour and I will measure it in
-// O(n). What nobody knows how to do is find them without, in effect, trying
+// Every DECISION problem here is in NP, and for all of them checking is trivial.
+// Hand me a subset and I will add it up in O(n). Hand me a tour and I will measure
+// it in O(n). The optimisation version of TSP ("what is the shortest tour") is not
+// known to be in NP at all; tsp.go says why. What nobody knows how to do is find them without, in effect, trying
 // everything.
 //
 // That asymmetry is the whole subject, and it is why Verify functions sit next to
@@ -87,9 +88,12 @@ func VerifySubsetSum(numbers []int, indices []int, target int) bool {
 // n-bit number, so counting from 0 to 2^n-1 enumerates them all, and bit i of the
 // counter says whether element i is in.
 //
-// That correspondence is the reason this is the natural brute force, and the reason
-// n is limited to 62: beyond that the counter does not fit in a uint64. That limit
-// is not the real constraint. At n=40 this needs a trillion iterations.
+// That correspondence is the reason this is the natural brute force. n is capped at
+// 62 so that 2^n fits in an int, the type the rest of the package counts in. The
+// uint64 counter itself would reach 63: it is 1<<64 that wraps to 0 and would make
+// the loop run no times at all. (An earlier version of this comment said the counter
+// stops fitting beyond 62.) Neither limit is the real constraint. At n=40 this needs
+// a trillion iterations.
 func SubsetSumBrute(numbers []int, target int) ([]int, error) {
 	if len(numbers) > 62 {
 		return nil, errors.New("pvsnp: too many elements to enumerate")

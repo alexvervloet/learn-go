@@ -12,22 +12,29 @@ import (
 //
 //	go test -race -tags showrace -run TestShowMeARealRaceReport ./16-race-detector
 //
-// It sits behind a build tag so it never runs in CI or in a normal `go test`.
-// Without the tag this file is not compiled at all, which is lesson 14's point
-// about tagged code not being type checked: `make check` builds it via the
-// -tags step in the workflow, so it cannot quietly rot.
+// It sits behind a build tag so it never runs in a normal `go test`. Without
+// the tag this file is not compiled at all, which is lesson 14's point about
+// tagged code not being type checked. CI's build-tags step passes
+// `-tags debug,showrace` so the file is compiled and vetted on every run; the
+// test then skips, because that step does not use -race.
 //
-// What you should see:
+// What you see on Go 1.27, trimmed:
 //
 //	WARNING: DATA RACE
-//	Write at 0x... by goroutine N:
-//	  main.TestShowMeARealRaceReport.func1()
-//	Previous write at 0x... by goroutine M:
-//	  main.TestShowMeARealRaceReport.func1()
-//	Goroutine N (running) created at:
-//	  main.TestShowMeARealRaceReport()
+//	Read at 0x... by goroutine 10:
+//	  ...TestShowMeARealRaceReport.func1()
+//	      16-race-detector/showrace_test.go:41
+//	Previous write at 0x... by goroutine 8:
+//	  ...TestShowMeARealRaceReport.func1()
+//	      16-race-detector/showrace_test.go:41
+//	Goroutine 10 (running) created at:
+//	  sync.(*WaitGroup).Go()
+//	  testing.tRunner()
 //
-// Read the "created at" section first: that is where your go statement is.
+// Read the two access stacks first: they name your code and the line. The
+// "created at" section names the go statement, and with wg.Go that statement
+// is inside sync.WaitGroup.Go, so the frame that called wg.Go may not appear at
+// all. An earlier version of this comment promised the test function there.
 func TestShowMeARealRaceReport(t *testing.T) {
 	if !raceDetectorEnabled {
 		t.Skip("run with -race to see the report; without it this just loses updates")

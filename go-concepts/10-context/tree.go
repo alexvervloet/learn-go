@@ -51,9 +51,16 @@ func cancellingAParentCancelsEveryDescendant(depth int) (allCancelled bool, dept
 
 	cancel() // cancel the root only
 
-	// Cancellation propagates asynchronously, so give it a moment to settle
-	// through the whole chain before checking.
-	time.Sleep(10 * time.Millisecond)
+	// No sleep, and none needed. For the standard library's contexts, cancel
+	// walks the tree and closes every descendant's Done channel before it
+	// returns, so the check below sees the whole chain cancelled. An earlier
+	// version slept 10ms here "to let it propagate", which hid the fact that
+	// there is nothing to wait for.
+	//
+	// The exception is a parent that is YOUR type implementing Context. The
+	// runtime cannot register a child with it, so WithCancel starts a goroutine
+	// that waits on the parent's Done, and then propagation really is
+	// asynchronous.
 
 	allCancelled = true
 	for _, ctx := range contexts {

@@ -28,9 +28,10 @@ import (
 // It does not catch a cancel stored in a struct field, or passed to another
 // function, so the habit still matters.
 
-// leakingContexts creates n contexts and never cancels them. The goroutine
-// count is the visible symptom: each WithTimeout under a cancellable parent
-// spawns a propagation goroutine.
+// leakingContexts creates n contexts and never cancels them. Each one stays
+// registered in its parent's children and keeps a timer, for as long as the
+// parent lives. No goroutine is involved; retainedBytes below measures what
+// the leak really costs.
 //
 // GO VET CATCHES THE OBVIOUS FORM. Writing the body as:
 //

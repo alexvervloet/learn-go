@@ -66,7 +66,8 @@ func causePropagatesDownTheTree() (childErr, childCause error) {
 
 	cancel(ErrUpstreamFailed)
 
-	// Propagation is asynchronous; wait for it to arrive.
+	// Already closed: cancel propagated to the grandchild before it returned,
+	// so this receive does not block. It stays as the idiom a caller would use.
 	<-grandchild.Done()
 
 	return grandchild.Err(), context.Cause(grandchild)

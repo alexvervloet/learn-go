@@ -203,8 +203,9 @@ func newFlow(t *testing.T, p *fakeProvider) *Flow {
 	}
 }
 
-// walkTheFlow does what a browser would: follow the redirect, collect the callback.
-func walkTheFlow(t *testing.T, authURL string) *http.Request {
+// walkTheFlow does what a browser would: follow the redirect, collect the callback, and send back the
+// cookies Start set on the same browser.
+func walkTheFlow(t *testing.T, authURL string, browser *httptest.ResponseRecorder) *http.Request {
 	t.Helper()
 
 	client := &http.Client{
@@ -231,7 +232,12 @@ func walkTheFlow(t *testing.T, authURL string) *http.Request {
 		t.Fatal(err)
 	}
 
-	return httptest.NewRequest("GET", callback.String(), nil)
+	req := httptest.NewRequest("GET", callback.String(), nil)
+	for _, c := range browser.Result().Cookies() {
+		req.AddCookie(c)
+	}
+
+	return req
 }
 
 func TestTheWholeFlow(t *testing.T) {
@@ -240,7 +246,9 @@ func TestTheWholeFlow(t *testing.T) {
 
 	ctx := context.Background()
 
-	authURL, state, err := f.Start(ctx, "/dashboard")
+	browser := httptest.NewRecorder()
+
+	authURL, state, err := f.Start(ctx, browser, "/dashboard")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -275,7 +283,7 @@ func TestTheWholeFlow(t *testing.T) {
 		t.Error("the code verifier appears in the authorization URL")
 	}
 
-	callback := walkTheFlow(t, authURL)
+	callback := walkTheFlow(t, authURL, browser)
 
 	// What the provider actually received, which is the assertion that survives a refactor of how
 	// the URL is built. Asserting on the URL alone would pass if AuthCodeURL stopped sending a
@@ -290,7 +298,7 @@ func TestTheWholeFlow(t *testing.T) {
 		t.Errorf("the provider received client_id %q", received.Get("client_id"))
 	}
 
-	token, got, err := f.Callback(ctx, callback)
+	token, got, err := f.Callback(ctx, httptest.NewRecorder(), callback)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -322,7 +330,7 @@ func TestTheWholeFlow(t *testing.T) {
 		"useless without the verifier the app kept")
 
 	// The state was consumed, so the same callback cannot be replayed.
-	_, _, err = f.Callback(ctx, callback)
+	_, _, err = f.Callback(ctx, httptest.NewRecorder(), callback)
 
 	if !errors.Is(err, ErrStateMismatch) {
 		t.Errorf("replaying the callback gave %v, want ErrStateMismatch", err)
@@ -338,12 +346,14 @@ func TestPKCEStopsAStolenCode(t *testing.T) {
 
 	ctx := context.Background()
 
-	authURL, _, err := f.Start(ctx, "/")
+	browser := httptest.NewRecorder()
+
+	authURL, _, err := f.Start(ctx, browser, "/")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	callback := walkTheFlow(t, authURL)
+	callback := walkTheFlow(t, authURL, browser)
 
 	code := callback.URL.Query().Get("code")
 
@@ -392,12 +402,14 @@ func TestStateIsCheckedBeforeTheExchange(t *testing.T) {
 
 	ctx := context.Background()
 
-	authURL, _, err := f.Start(ctx, "/")
+	browser := httptest.NewRecorder()
+
+	authURL, _, err := f.Start(ctx, browser, "/")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	callback := walkTheFlow(t, authURL)
+	callback := walkTheFlow(t, authURL, browser)
 
 	// The attacker's version: a valid code with a state the app never issued. This is session
 	// fixation, where the victim ends up logged into the attacker's account.
@@ -410,7 +422,7 @@ func TestStateIsCheckedBeforeTheExchange(t *testing.T) {
 	before := len(p.tokenRequests)
 	p.mu.Unlock()
 
-	_, _, err = f.Callback(ctx, httptest.NewRequest("GET", tampered.String(), nil))
+	_, _, err = f.Callback(ctx, httptest.NewRecorder(), httptest.NewRequest("GET", tampered.String(), nil))
 
 	if !errors.Is(err, ErrStateMismatch) {
 		t.Errorf("got %v, want ErrStateMismatch", err)
@@ -434,10 +446,129 @@ func TestStateIsCheckedBeforeTheExchange(t *testing.T) {
 	q.Del("state")
 	noState.RawQuery = q.Encode()
 
-	_, _, err = f.Callback(ctx, httptest.NewRequest("GET", noState.String(), nil))
+	_, _, err = f.Callback(ctx, httptest.NewRecorder(), httptest.NewRequest("GET", noState.String(), nil))
 
 	if !errors.Is(err, ErrNoState) {
 		t.Errorf("got %v, want ErrNoState", err)
+	}
+}
+
+// TestStateIsBoundToTheBrowser is login CSRF, carried out with a state the app really did issue.
+//
+// TestStateIsCheckedBeforeTheExchange uses a state the app never issued, which any lookup rejects. The real
+// attack is subtler: the attacker starts a login of their OWN, so the app issues them a genuine state, and
+// authorizes as themselves. Then, instead of following their callback, they send it to the victim. If state is
+// only checked against a server-side store, it is valid, the victim's browser completes the attacker's login,
+// and the victim is now using the attacker's account (and saving their data into it).
+//
+// The first version of this package checked only the store, and this test did not exist. State has to be tied
+// to the browser that started the flow, which is what the cookie does.
+func TestStateIsBoundToTheBrowser(t *testing.T) {
+	p := newFakeProvider(t)
+	f := newFlow(t, p)
+
+	ctx := context.Background()
+
+	attacker := httptest.NewRecorder()
+
+	authURL, _, err := f.Start(ctx, attacker, "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	attackersCallback := walkTheFlow(t, authURL, attacker)
+
+	// The victim's browser has its own cookie from its own visit to the login page, or none at all.
+	victim := httptest.NewRecorder()
+
+	if _, _, err := f.Start(ctx, victim, "/"); err != nil {
+		t.Fatal(err)
+	}
+
+	for name, cookies := range map[string][]*http.Cookie{
+		"a victim with their own login in progress": victim.Result().Cookies(),
+		"a victim with no login in progress":        nil,
+	} {
+		t.Run(name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", attackersCallback.URL.String(), nil)
+			for _, c := range cookies {
+				req.AddCookie(c)
+			}
+
+			p.mu.Lock()
+			before := len(p.tokenRequests)
+			p.mu.Unlock()
+
+			_, _, err := f.Callback(ctx, httptest.NewRecorder(), req)
+
+			if !errors.Is(err, ErrStateMismatch) {
+				t.Fatalf("the victim's browser completed the attacker's login: err = %v", err)
+			}
+
+			p.mu.Lock()
+			after := len(p.tokenRequests)
+			p.mu.Unlock()
+
+			if after != before {
+				t.Error("the attacker's code was exchanged")
+			}
+
+			t.Logf("the attacker's genuine state in the victim's browser: %v", err)
+		})
+	}
+
+	// And the attacker's own state is still usable by the attacker's browser, because a refused
+	// callback must not consume a state it had no right to.
+	if _, _, err := f.Callback(ctx, httptest.NewRecorder(), attackersCallback); err != nil {
+		t.Errorf("the attacker's own browser could not finish their own login: %v", err)
+	}
+}
+
+// TestStateCookie checks the attributes that make the cookie do its job.
+func TestStateCookie(t *testing.T) {
+	p := newFakeProvider(t)
+	f := newFlow(t, p)
+
+	browser := httptest.NewRecorder()
+
+	if _, _, err := f.Start(context.Background(), browser, "/"); err != nil {
+		t.Fatal(err)
+	}
+
+	cookies := browser.Result().Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("Start set %d cookies, want 1", len(cookies))
+	}
+
+	c := cookies[0]
+
+	t.Logf("Set-Cookie: %s", browser.Header().Get("Set-Cookie"))
+
+	if !c.HttpOnly {
+		t.Error("not HttpOnly: page script could read the state")
+	}
+	if !c.Secure {
+		t.Error("not Secure, and the __Host- prefix requires it")
+	}
+	if c.SameSite != http.SameSiteLaxMode {
+		t.Errorf("SameSite = %v, want Lax: Strict drops the cookie on the provider's redirect back, "+
+			"which is a cross-site navigation", c.SameSite)
+	}
+	if c.Path != "/" || c.Domain != "" {
+		t.Errorf("Path=%q Domain=%q; the __Host- prefix requires / and no Domain", c.Path, c.Domain)
+	}
+
+	// Callback clears it, whatever the outcome. This one fails (no code), and still clears.
+	req := httptest.NewRequest("GET", "https://app.example/callback?state="+c.Value, nil)
+	req.AddCookie(c)
+
+	after := httptest.NewRecorder()
+
+	_, _, _ = f.Callback(context.Background(), after, req)
+
+	cleared := after.Result().Cookies()
+	if len(cleared) != 1 || cleared[0].MaxAge >= 0 {
+		t.Errorf("Callback did not clear the state cookie: %v", cleared)
 	}
 }
 
@@ -453,7 +584,7 @@ func TestProviderErrorsAreNotMissingCodes(t *testing.T) {
 		"https://app.example/callback?error=access_denied&error_description=The+user+denied+the+request",
 		nil)
 
-	_, _, err := f.Callback(ctx, callback)
+	_, _, err := f.Callback(ctx, httptest.NewRecorder(), callback)
 
 	if !errors.Is(err, ErrProviderDenied) {
 		t.Errorf("got %v, want ErrProviderDenied", err)
@@ -480,16 +611,18 @@ func TestStateExpires(t *testing.T) {
 
 	ctx := context.Background()
 
-	authURL, _, err := f.Start(ctx, "/")
+	browser := httptest.NewRecorder()
+
+	authURL, _, err := f.Start(ctx, browser, "/")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	callback := walkTheFlow(t, authURL)
+	callback := walkTheFlow(t, authURL, browser)
 
 	clock = clock.Add(11 * time.Minute)
 
-	_, _, err = f.Callback(ctx, callback)
+	_, _, err = f.Callback(ctx, httptest.NewRecorder(), callback)
 
 	if !errors.Is(err, ErrStateExpired) {
 		t.Errorf("got %v, want ErrStateExpired", err)
@@ -608,14 +741,16 @@ func TestCodeIsSingleUse(t *testing.T) {
 
 	ctx := context.Background()
 
-	authURL, state, err := f.Start(ctx, "/")
+	browser := httptest.NewRecorder()
+
+	authURL, state, err := f.Start(ctx, browser, "/")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	callback := walkTheFlow(t, authURL)
+	callback := walkTheFlow(t, authURL, browser)
 
-	if _, _, err := f.Callback(ctx, callback); err != nil {
+	if _, _, err := f.Callback(ctx, httptest.NewRecorder(), callback); err != nil {
 		t.Fatal(err)
 	}
 
@@ -629,7 +764,7 @@ func TestCodeIsSingleUse(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, _, err = f.Callback(ctx, callback)
+	_, _, err = f.Callback(ctx, httptest.NewRecorder(), callback)
 
 	if err == nil {
 		t.Fatal("the provider accepted a reused code")

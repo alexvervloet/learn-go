@@ -18,7 +18,9 @@
 //	state           CSRF protection for the callback. Without it, an attacker can complete their
 //	                own authorization and redirect the victim's browser to the callback with THEIR
 //	                code, linking the victim's session to the attacker's account. Must be random,
-//	                stored server-side or in a signed cookie, and compared on return.
+//	                tied to the browser that started the flow, and compared on return. "Stored
+//	                server-side" is not enough on its own: the attacker can get a genuine state by
+//	                starting a login themselves. See Callback.
 //	code_verifier   PKCE. A random secret the app keeps; the provider only ever sees its SHA-256
 //	                hash on the way out. An attacker who steals the code cannot use it.
 //	redirect_uri    matched EXACTLY by the provider, including the trailing slash and the port.
@@ -169,8 +171,16 @@ func (f *Flow) now() time.Time {
 	return f.Now()
 }
 
-// Start generates the state and PKCE, stores them, and returns the URL to send the user to.
-func (f *Flow) Start(ctx context.Context, returnTo string) (string, State, error) {
+// StateCookie is the cookie that ties a pending authorization to the browser that started it.
+//
+// The __Host- prefix is a browser-enforced promise: a cookie with this prefix is only accepted if it is Secure,
+// has Path=/ and has no Domain, so a sibling subdomain cannot set or overwrite it. For a value whose whole job
+// is "this browser, and no other", that is the right default.
+const StateCookie = "__Host-oauth_state"
+
+// Start generates the state and PKCE, stores them, sets the state cookie on w, and returns the URL to send the
+// user to.
+func (f *Flow) Start(ctx context.Context, w http.ResponseWriter, returnTo string) (string, State, error) {
 	pkce, err := NewPKCE()
 	if err != nil {
 		return "", State{}, err
@@ -192,6 +202,23 @@ func (f *Flow) Start(ctx context.Context, returnTo string) (string, State, error
 		return "", State{}, fmt.Errorf("storing state: %w", err)
 	}
 
+	// SameSite=Lax, not Strict. The provider's redirect back to the callback is a top-level navigation that
+	// starts on another site, and Strict withholds the cookie from exactly that request, so every login
+	// would fail. Lax sends it on top-level GET navigations and nothing else, which is the callback and only
+	// the callback.
+	//
+	// HttpOnly because no script needs it. MaxAge matches the TTL, so an abandoned login's cookie goes away
+	// on the same schedule as its stored state.
+	http.SetCookie(w, &http.Cookie{
+		Name:     StateCookie,
+		Value:    value,
+		Path:     "/",
+		MaxAge:   int(f.TTL.Seconds()),
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
 	// AuthCodeURL takes the state and any extra parameters. The PKCE ones have helpers in
 	// x/oauth2, and spelling them out shows what is on the wire.
 	authURL := f.Config.AuthCodeURL(value,
@@ -207,11 +234,33 @@ func (f *Flow) Start(ctx context.Context, returnTo string) (string, State, error
 	return authURL, s, nil
 }
 
-// Callback validates the callback and exchanges the code for tokens.
+// Callback validates the callback and exchanges the code for tokens. It clears the state cookie on w, whatever
+// the outcome.
 //
 // The order is the point: EVERY check happens before the exchange. An implementation that exchanges first and
 // validates state afterwards has already spent the code, and the CSRF protection is decoration.
-func (f *Flow) Callback(ctx context.Context, r *http.Request) (*oauth2.Token, State, error) {
+//
+// # Why the cookie, and not only the store
+//
+// A store lookup answers "did this app issue this state?", and for the attack that matters the answer is yes.
+// The attacker starts a login of their own, which gets them a genuine state, authorizes as themselves, and
+// sends the resulting callback URL to the victim. The state is in the store, so a store-only check passes and
+// the victim's browser finishes the attacker's login.
+//
+// The question that stops it is "did THIS BROWSER start this flow?", and the cookie Start set is the answer.
+// The victim's browser does not have the attacker's cookie. The first version of this package checked the
+// store only; TestStateIsBoundToTheBrowser is the attack.
+func (f *Flow) Callback(ctx context.Context, w http.ResponseWriter, r *http.Request) (*oauth2.Token, State, error) {
+	// One use, pass or fail. A failed callback leaving the cookie behind would let a retry reuse it.
+	http.SetCookie(w, &http.Cookie{
+		Name:     StateCookie,
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
 	q := r.URL.Query()
 
 	// The provider's own error comes back as a query parameter, not an HTTP error. An
@@ -227,6 +276,23 @@ func (f *Flow) Callback(ctx context.Context, r *http.Request) (*oauth2.Token, St
 		return nil, State{}, ErrNoState
 	}
 
+	// The browser check comes BEFORE the store. A callback that fails it must not consume the state,
+	// or anyone who can make a browser visit a URL could cancel other people's logins by replaying
+	// their callbacks.
+	//
+	// Constant time because the cookie is the secret here: a comparison that returns early would leak
+	// how many leading characters of a guess were right.
+	cookie, err := r.Cookie(StateCookie)
+	if err != nil {
+		return nil, State{}, fmt.Errorf("%w: this browser did not start the flow (no state cookie)",
+			ErrStateMismatch)
+	}
+
+	if subtle.ConstantTimeCompare([]byte(cookie.Value), []byte(value)) != 1 {
+		return nil, State{}, fmt.Errorf("%w: the state belongs to a flow another browser started",
+			ErrStateMismatch)
+	}
+
 	// Take removes it, so a code cannot be replayed with the same state. Get-then-delete would
 	// leave a window; the store's contract is that Take is atomic.
 	s, err := f.Store.Take(ctx, value)
@@ -237,13 +303,6 @@ func (f *Flow) Callback(ctx context.Context, r *http.Request) (*oauth2.Token, St
 	if f.TTL > 0 && f.now().Sub(s.CreatedAt) > f.TTL {
 		return nil, State{}, fmt.Errorf("%w: %v old, TTL is %v",
 			ErrStateExpired, f.now().Sub(s.CreatedAt).Round(time.Second), f.TTL)
-	}
-
-	// Constant-time, even though the state was just looked up BY this value. The comparison is
-	// cheap and the habit is what matters: a store that does a prefix match, or one that returns
-	// the nearest entry, would otherwise pass.
-	if subtle.ConstantTimeCompare([]byte(s.Value), []byte(value)) != 1 {
-		return nil, State{}, ErrStateMismatch
 	}
 
 	code := q.Get("code")

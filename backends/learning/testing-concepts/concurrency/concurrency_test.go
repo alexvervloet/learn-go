@@ -587,3 +587,31 @@ func TestSynctestDoesNotWaitForRealWork(t *testing.T) {
 			"advance it, because the goroutine is runnable rather than durably blocked.")
 	})
 }
+
+// TestSubmitRacingCloseNeverPanics: a Submit already waiting in its select when Close runs could pick the send on
+// the jobs channel after Close had closed it, and a send on a closed channel panics. The comment said the select on
+// p.closed prevented that; it cannot, because select chooses at random among ready cases. The first version
+// panicked about once in two thousand of these rounds.
+func TestSubmitRacingCloseNeverPanics(t *testing.T) {
+	for range 3000 {
+		p := NewPool(2)
+
+		go func() {
+			for range p.Results() {
+			}
+		}()
+
+		var wg sync.WaitGroup
+		for range 4 {
+			wg.Go(func() {
+				err := p.Submit(context.Background(), func() error { return nil })
+				if err != nil && !errors.Is(err, ErrPoolClosed) {
+					t.Errorf("Submit: %v", err)
+				}
+			})
+		}
+
+		p.Close()
+		wg.Wait()
+	}
+}

@@ -122,8 +122,13 @@ func NewPool(n int) *Pool {
 		// Go 1.25, and it removes the Add/Done mismatch that go vet's waitgroup check
 		// exists to catch.
 		p.wg.Go(func() {
-			for job := range p.jobs {
-				p.results <- job()
+			for {
+				select {
+				case job := <-p.jobs:
+					p.results <- job()
+				case <-p.closed:
+					return
+				}
 			}
 		})
 	}
@@ -133,9 +138,13 @@ func NewPool(n int) *Pool {
 
 // Submit queues a job, or reports that the pool is closed.
 //
-// The select on p.closed is what stops a send on a closed channel from panicking. Without it,
-// Submit after Close is a panic in a goroutine the caller does not own, which is the worst kind of
-// failure to diagnose.
+// The jobs channel is never closed, and that is what makes Submit safe to race with Close. The
+// first version closed it in Close and relied on the select on p.closed to keep Submit from
+// sending on it. That cannot work: a Submit already waiting in the second select, when Close
+// runs, has TWO ready cases, and select picks at random, so about once in two thousand it chose
+// the send and panicked. TestSubmitRacingCloseNeverPanics found it. Now the workers stop on
+// p.closed instead, a Submit that wins the race hands its job to a worker that runs it before
+// Close returns, and one that loses gets ErrPoolClosed.
 func (p *Pool) Submit(ctx context.Context, job func() error) error {
 	select {
 	case <-p.closed:
@@ -160,7 +169,6 @@ func (p *Pool) Submit(ctx context.Context, job func() error) error {
 func (p *Pool) Close() {
 	p.closeOnce.Do(func() {
 		close(p.closed)
-		close(p.jobs)
 		p.wg.Wait()
 		close(p.results)
 	})

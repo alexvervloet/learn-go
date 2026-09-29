@@ -96,14 +96,23 @@ logging middleware wraps the writer — and that wrapper hides `http.Flusher`, `
 `io.ReaderFrom`. Streaming stops flushing, WebSocket upgrades stop working, `sendfile` turns into
 a byte copy.
 
-Go 1.20's `http.ResponseController` is the fix, and it needs **one method** on the wrapper:
+Go 1.20's `http.ResponseController` is half the fix. It walks `Unwrap` until it finds a writer
+that can do the job, so this one method makes `http.NewResponseController(w).Flush()` work through
+the wrapper:
 
 ```go
 func (r *recorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
 ```
 
-`TestWrapperKeepsFlush` shows both halves: `http.NewResponseController(w).Flush()` works through
-the wrapper, and `w.(http.Flusher)` does not.
+That covers code you write. It doesn't cover the middleware you import. chi's `Compress` still does
+`w.(http.Flusher)` on the writer it wraps, and inside `Production` that writer is the recorder. The
+first version of this package had only `Unwrap`, and `/stream` delivered every line at the end while
+WebSocket upgrades failed with "http.Hijacker is unavailable".
+
+So the recorder has `Unwrap` and also `Flush` and `Hijack` methods, each delegating through
+`ResponseController` so they work when the writer underneath is a wrapper too.
+`TestProductionStreams` reads the first line of a stream before the handler sends the second, and
+`TestProductionCanHijack` takes over the connection, both through the full `Production` chain.
 
 ### chi: use the middleware, skip the router
 

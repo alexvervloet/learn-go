@@ -12,6 +12,13 @@ dist/
 # this repo produces are listed.
 /backends/learning/docker-concepts/api
 
+# `go build` inside a lesson folder writes a binary named after the folder, and
+# one (go-concepts/06-goroutines/06-goroutines, 2.6 MB) was committed before this
+# line existed. A file inside a numbered lesson folder with the folder's own
+# number-and-name shape is always that binary; no source file is named that way.
+/go-concepts/[0-9][0-9]-*/[0-9][0-9]-*
+!/go-concepts/[0-9][0-9]-*/[0-9][0-9]-*/
+
 # Go build and module caches live outside the repo, but `go work vendor`
 # and `go mod vendor` write here.
 vendor/

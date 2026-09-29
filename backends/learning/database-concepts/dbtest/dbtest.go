@@ -89,7 +89,13 @@ func URL() string {
 var (
 	poolOnce sync.Once
 	pool     *pgxpool.Pool
-	poolErr  error
+	// Two errors, not one. unreachable means there is no database to talk to, which is a SKIP: a
+	// developer without Postgres running gets a message, not a failure. broken means the database is
+	// there and setting it up failed, a bad migration most often, which is a FAILURE. The first
+	// version had one error and skipped on both, so a SQL mistake in migrations/ turned the whole
+	// suite into skips locally, the "red must mean red" rule this module's README states.
+	unreachable error
+	broken      error
 
 	// effectiveURL is the connection string the pool actually used, with the per-package database
 	// name substituted in.
@@ -116,26 +122,29 @@ var (
 func Pool(t testing.TB) *pgxpool.Pool {
 	t.Helper()
 
-	poolOnce.Do(func() { pool, poolErr = connectAndMigrate() })
+	poolOnce.Do(func() { pool, unreachable, broken = connectAndMigrate() })
 
-	if poolErr != nil {
+	if unreachable != nil {
 		t.Skipf("no database available (%v)\n"+
 			"  with Docker:  docker compose up -d && DATABASE_URL=%q go test ./...\n"+
 			"  with a local Postgres: createdb learn_go_db && go test ./...\n"+
 			"  or point it anywhere: DATABASE_URL=postgres:///mydb go test ./...",
-			poolErr, ComposeURL)
+			unreachable, ComposeURL)
+	}
+	if broken != nil {
+		t.Fatalf("the database is reachable and could not be set up: %v", broken)
 	}
 
 	return pool
 }
 
-func connectAndMigrate() (*pgxpool.Pool, error) {
+func connectAndMigrate() (_ *pgxpool.Pool, unreachable, broken error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	cfg, err := pgxpool.ParseConfig(URL())
 	if err != nil {
-		return nil, fmt.Errorf("parsing %s: %w", URL(), err)
+		return nil, nil, fmt.Errorf("parsing %s: %w", URL(), err)
 	}
 
 	// Point the pool at this package's own database, creating it if it is not there. On a
@@ -157,22 +166,22 @@ func connectAndMigrate() (*pgxpool.Pool, error) {
 
 	p, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
-		return nil, fmt.Errorf("creating pool: %w", err)
+		return nil, fmt.Errorf("creating pool: %w", err), nil
 	}
 
 	// NewWithConfig is lazy: it does not connect until the first query, so without an explicit
 	// Ping a missing database is discovered inside the first test rather than here.
 	if err := p.Ping(ctx); err != nil {
 		p.Close()
-		return nil, fmt.Errorf("connecting to %s: %w", URL(), err)
+		return nil, fmt.Errorf("connecting to %s: %w", URL(), err), nil
 	}
 
 	if err := migrate(ctx, p); err != nil {
 		p.Close()
-		return nil, fmt.Errorf("migrating: %w", err)
+		return nil, nil, fmt.Errorf("migrating: %w", err)
 	}
 
-	return p, nil
+	return p, nil, nil
 }
 
 // ensureOwnDatabase creates this test binary's database if it does not exist and returns its name.

@@ -29,8 +29,9 @@
 //	                         hashing, and it is what lets the table be shrunk to one
 //	                         or two rows.
 //
-// Both are here for Fibonacci so the difference is visible in one place, and the
-// benchmarks price all three approaches against each other.
+// Both are here for Fibonacci so the difference is visible in one place, alongside
+// the naive recursion and a rolling two-variable table, and the benchmarks price all
+// four against each other.
 package dynamicprogramming
 
 import (
@@ -196,8 +197,10 @@ func CoinChangePermutations(coins []int, amount int) int {
 //
 // The greedy approach, always taking the largest coin that fits, is wrong and it is worth
 // knowing why: for coins {1, 3, 4} and amount 6, greedy takes 4 then 1 then 1, for three
-// coins, where 3+3 is two. Greedy works for some coin systems, including every real
-// currency, and not in general.
+// coins, where 3+3 is two. Greedy works for "canonical" coin systems, which most modern
+// currencies are, and not in general. Real money has broken it: Britain's coins before
+// 1971 included 1, 3, 6, 12, 24 and 30 pence, and greedy makes 48 as 30+12+6 where 24+24
+// is two coins.
 func MinCoins(coins []int, amount int) (int, bool) {
 	if amount < 0 {
 		return 0, false

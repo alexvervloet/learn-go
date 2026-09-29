@@ -45,6 +45,7 @@ import (
 	"errors"
 	"math"
 	"math/bits"
+	"slices"
 )
 
 // ErrNoSolution means no answer exists, which is different from an answer existing
@@ -188,9 +189,7 @@ func SubsetSumDP(numbers []int, target int) ([]int, error) {
 
 	// Reverse so the indices come back ascending, which the verifier does not care
 	// about and a reader does.
-	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
-		out[i], out[j] = out[j], out[i]
-	}
+	slices.Reverse(out)
 
 	return out, nil
 }

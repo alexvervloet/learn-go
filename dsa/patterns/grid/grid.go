@@ -36,6 +36,8 @@
 //     [][]int with rows of different lengths, so bounds are per row.
 package grid
 
+import "slices"
+
 // Direction offsets. Four-way is the default: two cells are adjacent when they share an
 // EDGE. Eight-way adds the diagonals, and which one a problem means is usually stated
 // only by example, so it is worth checking against the given test case before writing
@@ -302,9 +304,7 @@ func PathTo[T any](g [][]T, start, goal Cell, passable func(T) bool, directions 
 				at = parent[at.Row][at.Col]
 				path = append(path, at)
 			}
-			for i, j := 0, len(path)-1; i < j; i, j = i+1, j-1 {
-				path[i], path[j] = path[j], path[i]
-			}
+			slices.Reverse(path)
 			return path, true
 		}
 

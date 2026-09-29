@@ -8,6 +8,7 @@ package stack
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -73,9 +74,7 @@ func (s *Stack[T]) Peek() (T, bool) {
 // mutate the stack through it, which is lesson 02's aliasing trap wearing a
 // container.
 func (s *Stack[T]) Slice() []T {
-	out := make([]T, len(s.items))
-	copy(out, s.items)
-	return out
+	return slices.Clone(s.items)
 }
 
 // String renders the stack bottom to top as "[10 20 30] <- top".

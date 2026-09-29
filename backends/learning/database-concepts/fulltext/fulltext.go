@@ -11,7 +11,7 @@
 // Running Dogs') is 'dog':3 'run':2. So a query for "runs" matches, "dogs" matches, and "the" matches
 // nothing because it is a stop word and was never stored.
 //
-// # Four query parsers, and only one is safe for user input
+// # Four query parsers, and one of them is unsafe for user input
 //
 //	to_tsquery          raw syntax. Raises 42601 on anything malformed, which for user input
 //	                    means a search box that returns a 500 when someone types "c++".
@@ -22,11 +22,16 @@
 //	                    raises on malformed input, and behaves like a search engine because that
 //	                    is what users expect.
 //
+// Three of the four never raise, so "only one is safe" (as an earlier version of this heading said)
+// overstates it: to_tsquery is the unsafe one, and websearch_to_tsquery is the best of the safe three.
+//
 // # The generated column
 //
 // The migration in this module declares the tsvector as a GENERATED ALWAYS AS ... STORED column, which
 // is the modern answer and removes a whole class of bug. The older patterns are a trigger (which can
-// be missed by a COPY, or disabled, and then the index quietly holds stale data) or computing
+// be disabled, most often by a bulk load run with session_replication_role = replica or ALTER TABLE
+// ... DISABLE TRIGGER, and then the index quietly holds stale data; COPY FROM on its own does fire
+// row triggers, whatever an earlier version of this comment said) or computing
 // to_tsvector in the query (which cannot use the index at all unless the index is on the same
 // expression).
 //

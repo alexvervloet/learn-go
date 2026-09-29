@@ -210,8 +210,9 @@ Stemming is what makes it search rather than `LIKE`:
 10,000 titles begin with "The" and a full-text search for `the` returns **zero**, because a stop word is
 never stored.
 
-Only one of the four query parsers is safe for user input. `to_tsquery('english', 'c++ &')` raises
-`42601`, which is a 500 from a search box; `websearch_to_tsquery` returns `'c'` and never raises.
+One of the four query parsers is unsafe for user input. `to_tsquery('english', 'c++ &')` raises
+`42601`, which is a 500 from a search box. The other three never raise, and `websearch_to_tsquery`, which
+returns `'c'` here, is the one that behaves like a search engine.
 
 **Reading the stored generated column is 18x faster than recomputing `to_tsvector(title)` per row**, 0.81ms
 against 14.68ms, and that gap has nothing to do with any index. The generated column also cannot go stale:

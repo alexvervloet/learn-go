@@ -71,7 +71,15 @@ func TestGoroutineStackCost(t *testing.T) {
 	// Up to twice the platform's start, because since Go 1.19 the runtime starts
 	// goroutines at the program's average stack use when that is larger, and
 	// other tests in this binary recurse deeply.
+	//
+	// Twice again under -race. A race build doubles StackGuardMultiplier, the
+	// guard area reserved at the bottom of every stack, so a goroutine outgrows
+	// its first 2KB stack at once and settles on 4KB. The CI race job found that
+	// with 4109 bytes against a 4096 bound.
 	start := startingStack()
+	if raceDetectorEnabled {
+		start *= 2
+	}
 
 	t.Logf("expected start on %s/%s: %d bytes", runtime.GOOS, runtime.GOARCH, start)
 

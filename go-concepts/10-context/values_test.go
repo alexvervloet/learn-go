@@ -73,7 +73,7 @@ func TestGettersReportAbsence(t *testing.T) {
 	}
 }
 
-// TestWrongTypeIsNotAPanic: the getters use the comma-ok assertion, so a value
+// TestWrongTypeReportsAbsent: the getters use the comma-ok assertion, so a value
 // of the wrong type reports absent rather than panicking. That matters, because
 // the key is only as private as the package.
 func TestWrongTypeReportsAbsent(t *testing.T) {

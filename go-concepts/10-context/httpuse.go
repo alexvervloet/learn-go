@@ -39,17 +39,17 @@ func slowWork(ctx context.Context, d time.Duration) error {
 	}
 }
 
-// handlerUsingRequestContext is the correct shape. r.Context() is cancelled
-// when the client goes away, so the handler stops doing work nobody will read.
-//
-// The counter lets the test prove the work actually stopped, rather than the
-// handler merely returning early while a goroutine carried on.
+// handlerStats counts what the handlers below did. The counters let the test
+// prove the work actually stopped, rather than the handler merely returning
+// early while a goroutine carried on.
 type handlerStats struct {
 	started   atomic.Int64
 	completed atomic.Int64
 	abandoned atomic.Int64
 }
 
+// handlerUsingRequestContext is the correct shape. r.Context() is cancelled
+// when the client goes away, so the handler stops doing work nobody will read.
 func handlerUsingRequestContext(stats *handlerStats, work time.Duration) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		stats.started.Add(1)

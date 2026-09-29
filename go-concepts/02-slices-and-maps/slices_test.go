@@ -159,7 +159,7 @@ func TestMutatesElementsButNotLength(t *testing.T) {
 	}
 }
 
-// BenchmarkAppend quantifies the claim that make with a known capacity is
+// BenchmarkAppendGrowing quantifies the claim that make with a known capacity is
 // cheaper. Run:  go test -bench . -benchmem ./02-slices-and-maps
 func BenchmarkAppendGrowing(b *testing.B) {
 	for b.Loop() {

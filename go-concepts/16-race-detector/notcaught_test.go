@@ -60,7 +60,7 @@ func TestLogicalRaceIsInvisibleToRace(t *testing.T) {
 	t.Skip("no lost updates observed this run; the logical race is still present")
 }
 
-// TestCheckThenActIsCorrectlySynchronised is the half that makes the point:
+// TestCheckThenActHasNoDataRace is the half that makes the point:
 // the broken version has no DATA race, only a logical one. It runs clean under
 // -race, which is exactly the problem.
 func TestCheckThenActHasNoDataRace(t *testing.T) {

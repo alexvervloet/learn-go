@@ -88,7 +88,7 @@ func BenchmarkGoroutineCreation(b *testing.B) {
 	}
 }
 
-// BenchmarkGoroutineCreationParallel is the more honest number: creating many
+// BenchmarkGoroutineCreationBatch is the more honest number: creating many
 // without joining each one, which is how they are actually used.
 func BenchmarkGoroutineCreationBatch(b *testing.B) {
 	for b.Loop() {

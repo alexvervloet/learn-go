@@ -26,7 +26,7 @@ func TestCurrentBuild(t *testing.T) {
 	}
 }
 
-// TestGOOSIsACompileTimeConstant is the property that makes runtime.GOOS a
+// TestGOOSIsStable is the property that makes runtime.GOOS a
 // reasonable alternative to a build tag for a one-line difference: the
 // compiler knows it, so the dead branch is removed rather than evaluated.
 //

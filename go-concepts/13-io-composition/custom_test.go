@@ -58,7 +58,7 @@ func TestUpperReaderWorksAcrossChunkBoundaries(t *testing.T) {
 	}
 }
 
-// TestUpperReaderDoesNotWrapEOF: wrapping io.EOF would break every caller that
+// TestUpperReaderPassesEOFThrough: wrapping io.EOF would break every caller that
 // checks for it.
 func TestUpperReaderPassesEOFThrough(t *testing.T) {
 	r := NewUpperReader(strings.NewReader(""))

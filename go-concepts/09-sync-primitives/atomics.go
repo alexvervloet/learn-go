@@ -102,7 +102,7 @@ func (c *channelCounter) Value() int {
 
 func (c *channelCounter) Close() { close(c.done); c.wg.Wait() }
 
-// compareAndSwap is the primitive everything lock-free is built on: "set this
+// compareAndSwapMax uses the primitive everything lock-free is built on: "set this
 // to new, but only if it is still old". It returns whether the swap happened.
 //
 // The retry loop is the standard shape. Another goroutine changing the value

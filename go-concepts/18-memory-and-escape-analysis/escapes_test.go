@@ -98,7 +98,7 @@ func TestBoxingAllocatesOnlyWhenTheBoxEscapes(t *testing.T) {
 	}
 }
 
-// TestBothPathsReturnTheSameAnswer is the guard that makes the pair above a
+// TestBoxingPairAgrees is the guard that makes the pair above a
 // fair comparison: they must do the same job.
 func TestBoxingPairAgrees(t *testing.T) {
 	for _, id := range []int64{0, 1, 42, -7} {

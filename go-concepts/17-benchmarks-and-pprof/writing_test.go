@@ -139,7 +139,7 @@ func BenchmarkJoinWithStdlib(b *testing.B) {
 	}
 }
 
-// BenchmarkJoinLikeForLike is the FAIR comparison, and the reason it exists is
+// BenchmarkJoinLikeForLikeStdlib is the FAIR comparison, and the reason it exists is
 // worth reading in writing.go.
 //
 // The four benchmarks above compare functions that do not handle a separator

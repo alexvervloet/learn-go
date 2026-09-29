@@ -48,7 +48,7 @@ func TestValidateAllReportsEveryFailure(t *testing.T) {
 	}
 }
 
-// TestJoinOfNilsIsNil is the property that lets validateAll skip a length
+// TestJoinSkipsNils is the property that lets validateAll skip a length
 // check on the happy path.
 func TestJoinSkipsNils(t *testing.T) {
 	count, allNil, someNil := joinSkipsNils()

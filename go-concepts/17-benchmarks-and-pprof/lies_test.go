@@ -19,7 +19,7 @@ func TestGrowthImplementationsAgree(t *testing.T) {
 	}
 }
 
-// TestExtraWorkVersionProducesTheSamePrimaryOutput is why the bug survives a
+// TestExtraWorkVersionIsNotComparable is why the bug survives a
 // casual check: the values match, and the work does not.
 func TestExtraWorkVersionIsNotComparable(t *testing.T) {
 	const n = 100

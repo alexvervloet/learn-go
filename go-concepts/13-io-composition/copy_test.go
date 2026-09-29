@@ -78,7 +78,7 @@ func TestCopyBufferOnNoSources(t *testing.T) {
 	}
 }
 
-// TestCopyNDistinguishesLimitFromEOF: hitting the limit and running out of
+// TestCopyN: hitting the limit and running out of
 // input are different outcomes, and CopyN reports them differently.
 func TestCopyN(t *testing.T) {
 	tests := []struct {

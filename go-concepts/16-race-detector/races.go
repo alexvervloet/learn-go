@@ -59,11 +59,9 @@ func countWithRacyCounter(n int) int {
 // has a corrupt internal structure and running any more code over it would
 // make things worse.
 
-// racyMapWrite would produce `fatal error: concurrent map writes`. It is NOT
-// called anywhere, because it would end the process rather than fail a test.
-//
-// The code is here to be read. Uncomment the call in the test to watch it
-// happen, on a branch you do not intend to merge.
+// racyMapWriteDescription describes a racy map write rather than performing
+// one, because the real thing ends the process with `fatal error: concurrent
+// map writes` instead of failing a test. The code is here to be read.
 func racyMapWriteDescription() []string {
 	return []string{
 		"m := map[int]int{}",

@@ -19,7 +19,7 @@ func TestSortingAndSearching(t *testing.T) {
 	}
 }
 
-// TestSortingStructsBreaksTiesDeterministically is the reason the comparator
+// TestSortingStructs is the reason the comparator
 // has a second clause. Without it, Ana and Cy (both 7) could come out in either
 // order, and the test would flake instead of failing.
 func TestSortingStructs(t *testing.T) {

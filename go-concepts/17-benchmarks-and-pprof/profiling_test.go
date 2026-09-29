@@ -56,7 +56,7 @@ func TestFlatVsCumIsDocumented(t *testing.T) {
 	}
 }
 
-// TestWriteCPUProfileProducesAFile: the from-code path must actually work,
+// TestWriteCPUProfile: the from-code path must actually work,
 // because a demo that silently writes nothing teaches the wrong thing.
 func TestWriteCPUProfile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "cpu.out")

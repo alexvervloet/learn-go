@@ -112,7 +112,7 @@ func TestRetryRejectsBadBudget(t *testing.T) {
 	}
 }
 
-// TestRetrySleepsForTheDurationTheErrorAsked kept the decision in the error,
+// TestRetryHonoursTheDelayFromTheError kept the decision in the error,
 // so check the loop actually honours it.
 func TestRetryHonoursTheDelayFromTheError(t *testing.T) {
 	var slept []time.Duration

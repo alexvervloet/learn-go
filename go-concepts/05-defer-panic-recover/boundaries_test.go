@@ -141,7 +141,7 @@ func TestEvalErrors(t *testing.T) {
 	}
 }
 
-// TestEvalErrorsAreUnwrappable: the parseError stays reachable, so a caller
+// TestEvalErrorsCarryPosition: the parseError stays reachable, so a caller
 // that wants the position can have it.
 func TestEvalErrorsCarryPosition(t *testing.T) {
 	_, err := Eval("1 + @")

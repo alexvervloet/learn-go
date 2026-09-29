@@ -174,7 +174,7 @@ func TestLimitReader(t *testing.T) {
 	}
 }
 
-// TestLimitReaderBoundary is the case the limit+1 trick exists for: an input
+// TestLimitReaderBoundaryIsExact is the case the limit+1 trick exists for: an input
 // of exactly the limit must not be reported as truncated.
 func TestLimitReaderBoundaryIsExact(t *testing.T) {
 	exact := strings.Repeat("x", 100)

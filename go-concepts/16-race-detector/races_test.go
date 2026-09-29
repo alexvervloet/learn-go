@@ -165,7 +165,7 @@ func TestPreSizedSlicePreservesOrder(t *testing.T) {
 	}
 }
 
-// TestAppendUnderLockDoesNotPreserveOrder is the contrast, asserted so the
+// TestAppendUnderLockHasEveryElement is the contrast, asserted so the
 // distinction is not folklore.
 func TestAppendUnderLockHasEveryElement(t *testing.T) {
 	got := appendUnderLock(1000)

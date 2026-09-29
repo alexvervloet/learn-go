@@ -104,7 +104,7 @@ func TestVersionCompare(t *testing.T) {
 	}
 }
 
-// TestSelectVersionsIsTheMaximumOfMinimums is the whole of MVS.
+// TestSelectVersions is the whole of MVS.
 func TestSelectVersions(t *testing.T) {
 	tests := []struct {
 		name         string

@@ -110,7 +110,7 @@ func valueReceiverGetsACopy() (afterBroken, afterWorking int) {
 	return a.count, b.count
 }
 
-// sliceOfValuesCannotSatisfy is the practical form the rule takes. A
+// sliceOfPointersSatisfies is the practical form the rule takes. A
 // []Tally cannot be converted to []Adder at all (Go never converts slice
 // element types), and even one element at a time each value would be rejected.
 // Store pointers when the elements need pointer-receiver methods.

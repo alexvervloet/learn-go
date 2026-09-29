@@ -47,7 +47,7 @@ func countWords(text string) map[string]int {
 	return counts
 }
 
-// deletingIsSafeEvenIfAbsent: delete on a missing key is a no-op, and delete
+// deletingIsSafe: delete on a missing key is a no-op, and delete
 // during a range is explicitly allowed by the spec. Entries deleted before they
 // are reached will not be produced; entries added during a range may or may not
 // be, which is why adding while ranging is a bug.

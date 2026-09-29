@@ -27,7 +27,7 @@ func TestModuleCommandsAreWellFormed(t *testing.T) {
 	}
 }
 
-// TestBuildDoesNotModifyGoMod is the distinction people get wrong, recorded in
+// TestBuildIsRecordedAsNonMutating is the distinction people get wrong, recorded in
 // the reference so it cannot drift.
 func TestBuildIsRecordedAsNonMutating(t *testing.T) {
 	for _, c := range moduleCommands() {

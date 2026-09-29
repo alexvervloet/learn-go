@@ -168,7 +168,7 @@ func TestBufferSizeGuidanceIsDocumented(t *testing.T) {
 	}
 }
 
-// BenchmarkChannelSendReceive compares the three options for moving one int
+// BenchmarkUnbufferedRoundTrip compares the three options for moving one int
 // between goroutines. Run:
 //
 //	go test -bench BenchmarkChannel -benchmem -run '^$' ./07-channels

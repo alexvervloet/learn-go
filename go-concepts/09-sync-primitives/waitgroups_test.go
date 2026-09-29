@@ -110,7 +110,7 @@ func TestReusingAWaitGroup(t *testing.T) {
 	}
 }
 
-// TestCollectingResultsNeedsNoLock: distinct slice indices are distinct memory,
+// TestCollectingResults: distinct slice indices are distinct memory,
 // and Wait provides the happens-before edge. -race confirms it.
 func TestCollectingResults(t *testing.T) {
 	inputs := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}

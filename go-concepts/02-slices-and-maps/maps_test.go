@@ -105,7 +105,7 @@ func joinKeys(keys []string) string {
 	return out
 }
 
-// TestDeterministicOrderIsStable is the counterpart: the sorted version must
+// TestDeterministicOrder is the counterpart: the sorted version must
 // produce the same answer every single time, which is why it is what goes into
 // logs, golden files and API responses.
 func TestDeterministicOrder(t *testing.T) {

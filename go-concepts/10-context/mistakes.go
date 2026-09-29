@@ -186,7 +186,7 @@ func nilContextPanics() (message string) {
 	return ""
 }
 
-// todoIsTheePlaceholder is the fix.
+// todoIsThePlaceholder is the fix.
 func todoIsThePlaceholder() (works bool) {
 	ctx, cancel := context.WithCancel(context.TODO())
 	defer cancel()

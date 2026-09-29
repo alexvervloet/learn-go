@@ -62,7 +62,7 @@ func TestSetOperations(t *testing.T) {
 	}
 }
 
-// TestIntersectionIteratesTheSmallerSet is a property worth pinning, because
+// TestIntersectionIsSymmetric is a property worth pinning, because
 // the optimisation is easy to lose in a refactor and the results must match
 // whichever way round the arguments go.
 func TestIntersectionIsSymmetric(t *testing.T) {

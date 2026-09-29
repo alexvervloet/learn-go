@@ -252,7 +252,7 @@ func TestZip(t *testing.T) {
 	})
 }
 
-// TestZipDoesNotLeakItsPullGoroutines: iter.Pull runs the producer on a
+// TestZipStopsCleanly: iter.Pull runs the producer on a
 // goroutine, and the stop function must be called. Zip defers both.
 func TestZipStopsCleanly(t *testing.T) {
 	if testing.Short() {

@@ -93,7 +93,7 @@ func TestForgettingResetLeaksData(t *testing.T) {
 	}
 }
 
-// TestForgettingResetReportsReuseHonestly: whatever the scheduling, the first
+// TestForgettingResetFirstCallerIsUnaffected: whatever the scheduling, the first
 // caller's own read must be correct.
 func TestForgettingResetFirstCallerIsUnaffected(t *testing.T) {
 	first, _, _ := forgettingResetLeaksData()

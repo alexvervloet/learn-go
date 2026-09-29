@@ -39,8 +39,11 @@
 //	  own branches produce a collision that only appears on merge. Timestamp-based versions
 //	  (goose create, which uses YYYYMMDDHHMMSS) avoid it.
 //	goose decides what to run from that table, not from the files, so deleting a migration file
-//	  from a repo does not un-apply it and adding one with a lower number than the current
-//	  version leaves it unapplied and silent unless you ask for it.
+//	  from a repo does not un-apply it. Adding one with a lower number than the current version,
+//	  the merge above, makes the Provider's Up REFUSE to run: "found 1 missing (out-of-order)
+//	  migration". It applies it only with goose.WithAllowOutofOrder(true). An earlier version of
+//	  this comment said the file is left unapplied and silent; that was the old package-level API,
+//	  not the Provider this package uses.
 package migrate
 
 import (
@@ -98,9 +101,8 @@ type Provider struct {
 // each test writes its own migrations, and sharing goose_db_version would make them disagree about what
 // is applied.
 func New(db *sql.DB, dir string, table string) (*Provider, error) {
-	// WithTableName rather than the default goose_db_version, and WithAllowMissing off by default.
-	// The dialect is the empty string because WithStore or the dialect argument must give it;
-	// goose.DialectPostgres is what a caller passes.
+	// WithTableName rather than the default goose_db_version. Out-of-order migrations stay refused,
+	// goose's default; WithAllowOutofOrder(true) is the option that would change that.
 	p, err := goose.NewProvider(goose.DialectPostgres, db, os.DirFS(dir),
 		goose.WithTableName(table))
 	if err != nil {

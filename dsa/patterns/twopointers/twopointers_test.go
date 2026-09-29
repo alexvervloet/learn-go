@@ -158,7 +158,7 @@ func TestThreeSum(t *testing.T) {
 	}
 }
 
-// TestThreeSumHasNoDuplicates is the property the whole duplicate-skipping exists for,
+// TestThreeSumMatchesBruteForce is the property the whole duplicate-skipping exists for,
 // and a randomised check is the only way to be sure all three skips are right.
 func TestThreeSumMatchesBruteForce(t *testing.T) {
 	r := rand.New(rand.NewPCG(3, 4))

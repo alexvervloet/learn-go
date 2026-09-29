@@ -181,7 +181,7 @@ func TestTailPointerSurvivesEmptying(t *testing.T) {
 	}
 }
 
-// TestRemovedNodeDoesNotRetainTheChain is the memory property: a removed node
+// TestRemoveDoesNotCorruptTheRest is the memory property: a removed node
 // must not keep the rest of the list reachable.
 //
 // It cannot be observed directly from Go, so this checks the consequence that
@@ -357,7 +357,7 @@ func BenchmarkSliceAppend(b *testing.B) {
 	}
 }
 
-// BenchmarkPrepend is the case the list wins: O(1) against a slice's O(n).
+// BenchmarkListPrepend is the case the list wins: O(1) against a slice's O(n).
 func BenchmarkListPrepend(b *testing.B) {
 	for b.Loop() {
 		var l LinkedList[int]

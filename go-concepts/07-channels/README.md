@@ -144,7 +144,7 @@ the harder case and the reason for `go test -timeout` and
 | `closing.go` | Who closes, comma-ok, `range`, double close, the panic cases |
 | `directions.go` | `chan<-` and `<-chan`, the generator pattern, compile-time safety |
 | `patterns.go` | Ping-pong, semaphore, done channel, request/response, ownership transfer |
-| `deadlocks.go` | The four ways to deadlock, and what the runtime does about each |
+| `deadlocks.go` | Six ways to deadlock, and what the runtime does about each |
 | `main.go` | Runs every demo in order |
 | `*_test.go` | Tests including timeouts on every blocking operation |
 

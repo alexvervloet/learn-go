@@ -217,12 +217,12 @@ func TestZeroValueOfType(t *testing.T) {
 
 func TestSortStrings(t *testing.T) {
 	got := []string{"c", "a", "b", "a"}
-	sortStrings(got)
+	slices.Sort(got)
 
 	if want := []string{"a", "a", "b", "c"}; !slices.Equal(got, want) {
 		t.Errorf("got %v, want %v", got, want)
 	}
 
 	var empty []string
-	sortStrings(empty) // must not panic
+	slices.Sort(empty) // must not panic
 }

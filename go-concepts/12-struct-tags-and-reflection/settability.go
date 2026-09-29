@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -160,7 +161,7 @@ func LoadFromMap(target any, values map[string]string) error {
 	for k := range values {
 		keys = append(keys, k)
 	}
-	sortStrings(keys)
+	slices.Sort(keys)
 
 	for _, k := range keys {
 		if err := setFieldByName(target, k, values[k]); err != nil {

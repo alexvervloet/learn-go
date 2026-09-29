@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"time"
 )
@@ -104,7 +105,7 @@ func describeReflectValue(rv reflect.Value, depth int) string {
 			parts = append(parts, fmt.Sprintf("%v: %s",
 				k.Interface(), describeReflectValue(rv.MapIndex(k), depth+1)))
 		}
-		sortStrings(parts)
+		slices.Sort(parts)
 		return "{" + strings.Join(parts, ", ") + "}"
 
 	case reflect.String:
@@ -112,15 +113,6 @@ func describeReflectValue(rv reflect.Value, depth int) string {
 
 	default:
 		return fmt.Sprintf("%v", rv.Interface())
-	}
-}
-
-// sortStrings sorts in place, avoiding a slices import in this file.
-func sortStrings(s []string) {
-	for i := 1; i < len(s); i++ {
-		for j := i; j > 0 && s[j] < s[j-1]; j-- {
-			s[j], s[j-1] = s[j-1], s[j]
-		}
 	}
 }
 

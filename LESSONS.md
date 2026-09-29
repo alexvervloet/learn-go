@@ -69,6 +69,7 @@ the index below groups them by topic.
 - [`pgxpool.Config.ConnString` returns the string it was parsed from, not the configuration](#pgxpoolconfigconnstring-returns-the-string-it-was-parsed-from-not-the-configuration)
 - ["Is the index used" has no answer without a row count](#is-the-index-used-has-no-answer-without-a-row-count)
 - [The ownership fix could not migrate a database the bug had already been used on](#the-ownership-fix-could-not-migrate-a-database-the-bug-had-already-been-used-on)
+- [A storage measurement taken on a bloated table was twice the truth](#a-storage-measurement-taken-on-a-bloated-table-was-twice-the-truth)
 
 **HTTP, auth, rate limiting and messaging.**
 
@@ -2522,3 +2523,16 @@ wrapping the mux directly, and real stacks almost never look like that.
 **Next time.** When a check contradicts a design decision, test it in the shape the code is actually used in,
 not a minimal reproduction. Before deleting a workaround, run the tests that exercise the full stack. Here the
 fix was one comment, and the workaround stayed.
+
+## A storage measurement taken on a bloated table was twice the truth
+
+**Expected.** The database README said 10,000 `vector(384)` rows take 31.7 MB, 11.1x the books table. An audit
+measured 16.9 MB and said the README was wrong. Re-measuring settles it.
+
+**What happened.** Both were right about the table they measured. Straight after a test run the local table
+was 32 MB, matching the README. After `VACUUM FULL` it was 16 MB, about 1,640 bytes a row for a 1,544-byte vector.
+Every test run rewrites those rows, and an `UPDATE` or a delete-and-reinsert leaves the old version behind as a
+dead tuple until vacuum reclaims it. Half the table was dead rows. With `books` compacted too, the ratio is 5.9x.
+
+**Next time.** A size measurement on a table that tests write to measures its history as much as its data. Run
+`VACUUM FULL`, or measure a freshly loaded copy, before writing a number down, and say which was done.

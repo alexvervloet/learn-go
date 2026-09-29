@@ -97,6 +97,11 @@ func isRed[K cmp.Ordered, V any](n *node[K, V]) bool {
 
 // Tree is a balanced binary search tree. The zero value is an empty tree ready
 // to use.
+//
+// Every key comparison goes through cmp.Compare, never < or ==, for the reason
+// in dsa/bst: they disagree on floating-point NaN. Here the mix was worse than
+// a missed lookup. Put stored a NaN with cmp.Compare, and Delete's descent,
+// using <, went right past it and dereferenced a nil child.
 type Tree[K cmp.Ordered, V any] struct {
 	root  *node[K, V]
 	count int
@@ -293,15 +298,15 @@ func (t *Tree[K, V]) Floor(key K) (K, V, bool) {
 	var best *node[K, V]
 
 	for current := t.root; current != nil; {
-		if current.key == key {
+		switch cmp.Compare(current.key, key) {
+		case 0:
 			return current.key, current.value, true
-		}
-		if current.key < key {
+		case -1:
 			best = current
 			current = current.right
-			continue
+		default:
+			current = current.left
 		}
-		current = current.left
 	}
 
 	if best == nil {
@@ -317,15 +322,15 @@ func (t *Tree[K, V]) Ceiling(key K) (K, V, bool) {
 	var best *node[K, V]
 
 	for current := t.root; current != nil; {
-		if current.key == key {
+		switch cmp.Compare(current.key, key) {
+		case 0:
 			return current.key, current.value, true
-		}
-		if current.key > key {
+		case 1:
 			best = current
 			current = current.left
-			continue
+		default:
+			current = current.right
 		}
-		current = current.right
 	}
 
 	if best == nil {
@@ -467,7 +472,7 @@ func (t *Tree[K, V]) Delete(key K) bool {
 }
 
 func del[K cmp.Ordered, V any](h *node[K, V], key K) *node[K, V] {
-	if key < h.key {
+	if cmp.Less(key, h.key) {
 		// h.left cannot be nil: Delete checked the key is present, so the left
 		// subtree has it. Every dereference below rests on that check, which is
 		// why Delete does the lookup first instead of letting del discover the
@@ -486,7 +491,7 @@ func del[K cmp.Ordered, V any](h *node[K, V], key K) *node[K, V] {
 
 	// The key is here and there is nothing to the right, so this node is the
 	// largest in its subtree and, by the invariant, red.
-	if key == h.key && h.right == nil {
+	if cmp.Compare(key, h.key) == 0 && h.right == nil {
 		return nil
 	}
 
@@ -494,7 +499,7 @@ func del[K cmp.Ordered, V any](h *node[K, V], key K) *node[K, V] {
 		h = moveRedRight(h)
 	}
 
-	if key == h.key {
+	if cmp.Compare(key, h.key) == 0 {
 		// Two children: take the in-order successor's payload and delete the
 		// successor, exactly as an unbalanced tree does. The rebalancing is what
 		// deleteMin adds on top.
@@ -550,13 +555,15 @@ func rangeWalk[K cmp.Ordered, V any](n *node[K, V], lo, hi K, yield func(K, V) b
 	if n == nil {
 		return true
 	}
-	if n.key > lo && !rangeWalk(n.left, lo, hi, yield) {
+	fromLo, toHi := cmp.Compare(n.key, lo), cmp.Compare(n.key, hi)
+
+	if fromLo > 0 && !rangeWalk(n.left, lo, hi, yield) {
 		return false
 	}
-	if n.key >= lo && n.key <= hi && !yield(n.key, n.value) {
+	if fromLo >= 0 && toHi <= 0 && !yield(n.key, n.value) {
 		return false
 	}
-	if n.key < hi && !rangeWalk(n.right, lo, hi, yield) {
+	if toHi < 0 && !rangeWalk(n.right, lo, hi, yield) {
 		return false
 	}
 	return true
@@ -605,10 +612,10 @@ func ordered[K cmp.Ordered, V any](n *node[K, V], lo, hi *K) bool {
 	if n == nil {
 		return true
 	}
-	if lo != nil && n.key <= *lo {
+	if lo != nil && cmp.Compare(n.key, *lo) <= 0 {
 		return false
 	}
-	if hi != nil && n.key >= *hi {
+	if hi != nil && cmp.Compare(n.key, *hi) >= 0 {
 		return false
 	}
 	return ordered(n.left, lo, &n.key) && ordered(n.right, &n.key, hi)

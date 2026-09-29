@@ -1,8 +1,122 @@
 # Lessons
 
-Things that did not go according to plan while building this repo, written down
-when they happened. The counterpart to `PLAN.md`, which is scratch and never
-committed. This file is committed and stays.
+Things that did not go according to plan while building this repo, written down when they happened. Each entry
+says what I expected, what actually happened, and what to do differently. They are in the order they happened;
+the index below groups them by topic.
+
+## Index
+
+**Go language and runtime.**
+
+- [Two pieces of escape-analysis folklore, both wrong](#2026-09-25--two-pieces-of-escape-analysis-folklore-both-wrong)
+- [Two build-tag files looked exhaustive and were not](#2026-09-25--two-build-tag-files-looked-exhaustive-and-were-not)
+- [encoding/json beat my hand-written encoder](#2026-09-25--encodingjson-beat-my-hand-written-encoder)
+- [The range-over-func contract is enforced, not just documented](#2026-09-25--the-range-over-func-contract-is-enforced-not-just-documented)
+- [Go's growable stacks make the recursion-depth worry misplaced](#2026-09-25--gos-growable-stacks-make-the-recursion-depth-worry-misplaced)
+- [The linter already knows about the typed-nil trap](#2026-09-25--the-linter-already-knows-about-the-typed-nil-trap)
+- [Go's map randomisation is a rotation, not a shuffle](#2026-09-25--gos-map-randomisation-is-a-rotation-not-a-shuffle)
+- [The famous slice-queue leak is not a leak](#the-famous-slice-queue-leak-is-not-a-leak)
+- [`time.Duration` runs out at 292 years](#timeduration-runs-out-at-292-years)
+- [`./...` matches nothing from a Go workspace root](#2026-09-25---matches-nothing-from-a-go-workspace-root)
+
+**Concurrency and the race detector.**
+
+- [sync.Pool.Get is not guaranteed to return what you just Put](#2026-09-25--syncpoolget-is-not-guaranteed-to-return-what-you-just-put)
+- [A buffered channel turned a counter benchmark into a queue benchmark](#2026-09-25--a-buffered-channel-turned-a-counter-benchmark-into-a-queue-benchmark)
+- [I wrote down the standard sync.Map advice, then measured it and it was wrong](#2026-09-25--i-wrote-down-the-standard-syncmap-advice-then-measured-it-and-it-was-wrong)
+- [A repo that teaches data races cannot run its own tests under -race](#2026-09-25--a-repo-that-teaches-data-races-cannot-run-its-own-tests-under--race)
+- [The race detector found a race in the lesson about races](#2026-09-25--the-race-detector-found-a-race-in-the-lesson-about-races)
+- [My own worker pool deadlocked, and the arithmetic was 2n not n](#my-own-worker-pool-deadlocked-and-the-arithmetic-was-2n-not-n)
+- [`t.Log` from a server goroutine is a data race, and it reproduces one run in three](#tlog-from-a-server-goroutine-is-a-data-race-and-it-reproduces-one-run-in-three)
+- [The race detector throws away one `sync.Pool.Put` in four, on purpose](#the-race-detector-throws-away-one-syncpoolput-in-four-on-purpose)
+- [A channel orders the channel operations, not the statements after them](#a-channel-orders-the-channel-operations-not-the-statements-after-them)
+- [`runtime.NumGoroutine` counts the whole process, so it cannot measure one leak](#runtimenumgoroutine-counts-the-whole-process-so-it-cannot-measure-one-leak)
+- [singleflight collapses the callers that are IN FLIGHT, which is not all of them](#singleflight-collapses-the-callers-that-are-in-flight-which-is-not-all-of-them)
+
+**Benchmarks and measurement.**
+
+- [The lesson about benchmarks lying contained a lying benchmark](#2026-09-25--the-lesson-about-benchmarks-lying-contained-a-lying-benchmark)
+- [A benchmark pair that measured two different workloads](#2026-09-25--a-benchmark-pair-that-measured-two-different-workloads)
+- [A measurement tool needs a known-answer test before you trust a number](#a-measurement-tool-needs-a-known-answer-test-before-you-trust-a-number)
+- [I optimised the wrong 4%](#i-optimised-the-wrong-4)
+- [Three wrong benchmarks before one right one](#three-wrong-benchmarks-before-one-right-one)
+- [A benchmark found an algorithmic bug three tests could not](#a-benchmark-found-an-algorithmic-bug-three-tests-could-not)
+- [Two hypotheses about performance, both wrong, both cheap to test](#two-hypotheses-about-performance-both-wrong-both-cheap-to-test)
+- [`-benchtime 200x` on a benchmark that does I/O measures nothing](#-benchtime-200x-on-a-benchmark-that-does-io-measures-nothing)
+- [A wall-clock comparison on a shared runner measures the runner](#a-wall-clock-comparison-on-a-shared-runner-measures-the-runner)
+
+**Algorithms.**
+
+- [The Go rebuttal to the binary-search overflow is wrong](#the-go-rebuttal-to-the-binary-search-overflow-is-wrong)
+- [A solver that only checks its own moves cannot reject an impossible input](#a-solver-that-only-checks-its-own-moves-cannot-reject-an-impossible-input)
+- [Fixing one overflow uncovered two more in the same function](#fixing-one-overflow-uncovered-two-more-in-the-same-function)
+- [The container API was the wrong shape, and it cost more than the algorithm saved](#the-container-api-was-the-wrong-shape-and-it-cost-more-than-the-algorithm-saved)
+- [I wrote the correct version of a bug thirty lines from where I imported the bug](#i-wrote-the-correct-version-of-a-bug-thirty-lines-from-where-i-imported-the-bug)
+
+**Postgres.**
+
+- [A test that mixes a DDL transaction with a pool query deadlocks against itself](#a-test-that-mixes-a-ddl-transaction-with-a-pool-query-deadlocks-against-itself)
+- [An index built during a bulk load is 43% slack](#an-index-built-during-a-bulk-load-is-43-slack)
+- [`go test ./...` runs packages concurrently, and one shared database is not enough](#go-test--runs-packages-concurrently-and-one-shared-database-is-not-enough)
+- [A cached prepared statement made the same query 6x slower, and it was Postgres, not Go](#a-cached-prepared-statement-made-the-same-query-6x-slower-and-it-was-postgres-not-go)
+- [Two things about transactions that only turned up by writing the test](#two-things-about-transactions-that-only-turned-up-by-writing-the-test)
+- ["Do it in the database" did not survive being measured](#do-it-in-the-database-did-not-survive-being-measured)
+- [A GIN index on 10,000 rows is never used, and the planner is right](#a-gin-index-on-10000-rows-is-never-used-and-the-planner-is-right)
+- [`pgxpool.Pool.Close` blocks until every connection is released](#pgxpoolpoolclose-blocks-until-every-connection-is-released)
+- [Four things pgvector does that nothing warns you about](#four-things-pgvector-does-that-nothing-warns-you-about)
+- [`pgxpool.Config.ConnString` returns the string it was parsed from, not the configuration](#pgxpoolconfigconnstring-returns-the-string-it-was-parsed-from-not-the-configuration)
+- ["Is the index used" has no answer without a row count](#is-the-index-used-has-no-answer-without-a-row-count)
+- [The ownership fix could not migrate a database the bug had already been used on](#the-ownership-fix-could-not-migrate-a-database-the-bug-had-already-been-used-on)
+
+**HTTP, auth, rate limiting and messaging.**
+
+- [Context deadlines do not cross an HTTP hop; only cancellation does](#2026-09-25--context-deadlines-do-not-cross-an-http-hop-only-cancellation-does)
+- [A header helper that calls `time.Now` cannot be tested](#a-header-helper-that-calls-timenow-cannot-be-tested)
+- [`rate.Limiter` refuses before the deadline arrives, so joining `ctx.Err()` joins nothing](#ratelimiter-refuses-before-the-deadline-arrives-so-joining-ctxerr-joins-nothing)
+- [The sliding log is the fastest limiter, not the slowest](#the-sliding-log-is-the-fastest-limiter-not-the-slowest)
+- [An API that means different things per algorithm signed tokens with the wrong key](#an-api-that-means-different-things-per-algorithm-signed-tokens-with-the-wrong-key)
+- [RS256 verification costs more than the Redis lookup it was supposed to replace](#rs256-verification-costs-more-than-the-redis-lookup-it-was-supposed-to-replace)
+- [Four findings from building the observability package](#four-findings-from-building-the-observability-package)
+- [A WebSocket client only answers pings while it is reading](#a-websocket-client-only-answers-pings-while-it-is-reading)
+- [Committing a Kafka offset with the loop's context loses it on every graceful shutdown](#committing-a-kafka-offset-with-the-loops-context-loses-it-on-every-graceful-shutdown)
+- [Three smaller findings from finishing backend-concepts](#three-smaller-findings-from-finishing-backend-concepts)
+- [An HTTP middleware that reads a request body breaks every retry above it](#an-http-middleware-that-reads-a-request-body-breaks-every-retry-above-it)
+- [Two variables named the same topic, because CreateTopic is idempotent](#two-variables-named-the-same-topic-because-createtopic-is-idempotent)
+- [chi's RealIP is deprecated, and the reason is worth reading](#chis-realip-is-deprecated-and-the-reason-is-worth-reading)
+- [A JWT cannot express a sub-second TTL, and nothing tells you](#a-jwt-cannot-express-a-sub-second-ttl-and-nothing-tells-you)
+- [One rate-limit bucket per path is two limits that together allow twice the traffic](#one-rate-limit-bucket-per-path-is-two-limits-that-together-allow-twice-the-traffic)
+- [A 300ms JWT TTL is zero about 70% of the time and one second the rest](#a-300ms-jwt-ttl-is-zero-about-70-of-the-time-and-one-second-the-rest)
+
+**gRPC, GraphQL, jobs, email and Docker.**
+
+- [Four things gRPC does that I had to measure rather than assume](#four-things-grpc-does-that-i-had-to-measure-rather-than-assume)
+- [The GraphQL N+1 benchmark said the opposite of what it was meant to, and it was right](#the-graphql-n1-benchmark-said-the-opposite-of-what-it-was-meant-to-and-it-was-right)
+- [Three smaller things from gqlgen](#three-smaller-things-from-gqlgen)
+- [gqlgen rewrites the resolver file, so a helper at the bottom of it disappears](#gqlgen-rewrites-the-resolver-file-so-a-helper-at-the-bottom-of-it-disappears)
+- [asynq stores every time value in whole seconds, and three tests found it separately](#asynq-stores-every-time-value-in-whole-seconds-and-three-tests-found-it-separately)
+- [Two of my own mistakes from the same module](#two-of-my-own-mistakes-from-the-same-module)
+- [Four email findings, three of them about the tools rather than the code](#four-email-findings-three-of-them-about-the-tools-rather-than-the-code)
+- [The Docker measurements, and two things I had backwards](#the-docker-measurements-and-two-things-i-had-backwards)
+- ["Is Docker available" is not the question; "can it build a Linux image" is](#is-docker-available-is-not-the-question-can-it-build-a-linux-image-is)
+- [A reported GraphQL complexity bypass was already closed by gqlgen](#a-reported-graphql-complexity-bypass-was-already-closed-by-gqlgen)
+
+**Tooling, tests and CI.**
+
+- [I wrote "nothing catches this", and the linter caught it in the same file](#2026-09-25--i-wrote-nothing-catches-this-and-the-linter-caught-it-in-the-same-file)
+- [Two of my tests were flaky, and only CI could tell me](#2026-09-25--two-of-my-tests-were-flaky-and-only-ci-could-tell-me)
+- [CI found three things a green local run could not](#2026-09-25--ci-found-three-things-a-green-local-run-could-not)
+- [staticcheck flags the teaching examples, and it is right](#2026-09-25--staticcheck-flags-the-teaching-examples-and-it-is-right)
+- [A test that searched a file for the instruction its own comments discussed](#a-test-that-searched-a-file-for-the-instruction-its-own-comments-discussed)
+- [`--output-sync` groups make's parallel output and does not order it](#--output-sync-groups-makes-parallel-output-and-does-not-order-it)
+- [The generated-code question, decided](#the-generated-code-question-decided)
+- [Generated code records the version of the generator, so CI has to pin it](#generated-code-records-the-version-of-the-generator-so-ci-has-to-pin-it)
+- [Three Windows CI failures, one cause each, none of them about Windows](#three-windows-ci-failures-one-cause-each-none-of-them-about-windows)
+- [`s.replace("", x)` inserts x between every character, and a slice from two searches can be empty](#sreplace-x-inserts-x-between-every-character-and-a-slice-from-two-searches-can-be-empty)
+- [A test helper that returns `*http.Response` hands every caller an obligation](#a-test-helper-that-returns-httpresponse-hands-every-caller-an-obligation)
+- [`go work sync` and per-module `go mod tidy` pull in opposite directions](#go-work-sync-and-per-module-go-mod-tidy-pull-in-opposite-directions)
+- [Three compose files wanted the same host port, and only one could have it](#three-compose-files-wanted-the-same-host-port-and-only-one-could-have-it)
+- [`MAKELEVEL` leaks into a child make, and two tests failed only under `make test`](#makelevel-leaks-into-a-child-make-and-two-tests-failed-only-under-make-test)
+- [The Redis harnesses flushed the developer's own Redis](#the-redis-harnesses-flushed-the-developers-own-redis)
 
 ## 2026-09-25 — Two pieces of escape-analysis folklore, both wrong
 
@@ -669,6 +783,12 @@ roughly thirty of them. The alternative, hardcoding `./go-concepts/... ./dsa/...
 
 Worth teaching directly in lesson 15 rather than only fixing in the Makefile:
 anyone adopting workspaces for a multi-module repo hits this within an hour.
+
+**It happened again, later.** The first draft of WALKTHROUGH.md opened with `go test ./...`, written without
+running it, in a document whose first paragraph says every command was run. `go test ./go-concepts/...` works,
+because that directory is inside a module, which is why the mistake survived: the specific forms are fine and
+only the root one isn't. `TestWorkspaceModuleExpansion` asserts the failure and explains the workaround, and I
+still wrote the broken command. The walkthrough now says `make test`.
 
 ## 2026-09-25 — The linter already knows about the typed-nil trap
 
@@ -2259,21 +2379,6 @@ words in those lines as module paths and reported 26 modules instead of 18.
 `--no-print-directory` makes it explicit. The broader point is that a test which passes standalone and fails
 under the project's own runner is the worst shape a failure can have, and the only way to find it is to run the
 command the README tells people to run.
-
-## `go test ./...` does not work at the root of a workspace
-
-**Expected.** The walkthrough's opening command is `go test ./...`, because that is what it is everywhere else.
-
-**What happened.** `pattern ./...: directory prefix . does not contain modules listed in go.work or their
-selected dependencies`. The repository root is not itself a module, so `./...` matches nothing at all.
-
-I had written the line without running it, in a document whose first paragraph says every command was run.
-
-**Next time.** `make test`, which expands `go list -m -f '{{.Dir}}/...'` the way every target in the Makefile
-already did. `go test ./go-concepts/...` works because that directory IS inside a module, which is why the
-mistake survived: the specific forms are fine and only the root one is not. This repository has a test for it,
-`TestWorkspaceModuleExpansion`, which asserts the failure and explains the workaround, and I still wrote the
-broken command.
 
 ## The ownership fix could not migrate a database the bug had already been used on
 

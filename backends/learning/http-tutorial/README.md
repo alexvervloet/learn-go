@@ -139,7 +139,10 @@ wrong:
   its load balancer, has no reason to believe any of them.
 
 This module ships replacements for both. `RealIP(trustProxyHeaders bool)` takes the rightmost
-entry and makes the trust decision an argument.
+entry and makes the trust decision an argument, and `Production` passes that decision through
+rather than making it. The first version of `Production` called `RealIP(true)`, so even
+`cmd/server`, run directly on a laptop, let any client choose the address it logged.
+`cmd/server` trusts the headers only when `TRUST_PROXY_HEADERS=true`.
 
 ### What it all costs
 

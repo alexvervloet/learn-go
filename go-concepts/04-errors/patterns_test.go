@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/iotest"
 	"time"
 )
 
@@ -172,6 +173,22 @@ func TestReadConfigHandlesLongFiles(t *testing.T) {
 	}
 	if string(got) != string(content) {
 		t.Error("content mismatch")
+	}
+}
+
+// TestReadAllKeepsDataReturnedWithEOF is the test the rule needs. A file never returns data together with io.EOF,
+// so TestReadConfigHandlesLongFiles would pass with the error checked first. iotest.DataErrReader makes the last
+// Read return the final bytes AND io.EOF, which is what gzip.Reader and others do, and 4001 bytes is not a
+// multiple of the 32-byte buffer, so the last chunk is short.
+func TestReadAllKeepsDataReturnedWithEOF(t *testing.T) {
+	content := strings.Repeat("abcdefgh", 500) + "!"
+
+	got, err := readAll(iotest.DataErrReader(strings.NewReader(content)), "test")
+	if err != nil {
+		t.Fatalf("readAll: %v", err)
+	}
+	if string(got) != content {
+		t.Errorf("read %d bytes, want %d: the bytes returned with io.EOF were dropped", len(got), len(content))
 	}
 }
 

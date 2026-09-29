@@ -110,25 +110,33 @@ func readConfig(path string) ([]byte, error) {
 	// Reading only: Close cannot report a data-loss condition here.
 	defer func() { _ = f.Close() }()
 
-	// The loop is written out rather than using io.ReadAll, because the EOF
-	// handling is the part worth seeing. Two rules:
-	//
-	//  1. io.EOF is NOT a failure. It is how a reader reports that it finished.
-	//     Wrapping it in "read failed" context is a classic beginner bug.
-	//  2. Process the n bytes BEFORE checking the error. Read is allowed to
-	//     return n > 0 together with io.EOF, and code that checks the error
-	//     first silently drops the last chunk of every file.
+	return readAll(f, path)
+}
+
+// readAll is readConfig's read loop, taking any reader so a test can hand it a
+// reader that behaves differently from *os.File.
+//
+// The loop is written out rather than using io.ReadAll, because the EOF
+// handling is the part worth seeing. Two rules:
+//
+//  1. io.EOF is NOT a failure. It is how a reader reports that it finished.
+//     Wrapping it in "read failed" context is a classic beginner bug.
+//  2. Process the n bytes BEFORE checking the error. Read is allowed to
+//     return n > 0 together with io.EOF, and code that checks the error
+//     first silently drops that last chunk. *os.File never does this, which
+//     is why the bug survives every test against a file; gzip.Reader does.
+func readAll(r io.Reader, name string) ([]byte, error) {
 	data := make([]byte, 0, 64)
 	buf := make([]byte, 32)
 	for {
-		n, rerr := f.Read(buf)
+		n, rerr := r.Read(buf)
 		data = append(data, buf[:n]...) // rule 2: consume n first
 
 		if rerr != nil {
 			if errors.Is(rerr, io.EOF) { // rule 1: errors.Is, never == or string comparison
 				break
 			}
-			return nil, fmt.Errorf("read %s: %w", path, rerr)
+			return nil, fmt.Errorf("read %s: %w", name, rerr)
 		}
 	}
 	return data, nil

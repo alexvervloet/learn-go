@@ -1,6 +1,7 @@
 package main
 
 import (
+	"runtime/debug"
 	"slices"
 	"testing"
 )
@@ -101,13 +102,27 @@ func TestRaceDocsArePresent(t *testing.T) {
 // TestRaceFlagMatchesTheBuild: the constant must agree with how the binary was
 // compiled, or every skip above is wrong.
 func TestRaceFlagMatchesTheBuild(t *testing.T) {
-	// There is no runtime API for this, so the check is indirect: under -race
-	// the deliberate races must not have been run, and the flag says so.
-	t.Logf("raceDetectorEnabled = %t", raceDetectorEnabled)
+	// The binary's build info records the flags it was built with, test
+	// binaries included, so the build tag can be checked against what the go
+	// command actually did. The first version of this test compared the
+	// constant with its own negation, which cannot fail.
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		t.Skip("no build info in this binary")
+	}
 
-	// A sanity check that the constant is at least usable in a condition.
-	if raceDetectorEnabled == !raceDetectorEnabled {
-		t.Error("impossible")
+	built := false
+
+	for _, s := range info.Settings {
+		if s.Key == "-race" && s.Value == "true" {
+			built = true
+		}
+	}
+
+	t.Logf("raceDetectorEnabled = %t, built with -race = %t", raceDetectorEnabled, built)
+
+	if raceDetectorEnabled != built {
+		t.Errorf("the race build tag says %t but the binary was built with -race=%t", raceDetectorEnabled, built)
 	}
 }
 

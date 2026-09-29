@@ -377,8 +377,15 @@ func Batched(ctx context.Context, q Querier, limit int) ([]Author, error) {
 //
 // Without LATERAL the options are to fetch every book and slice in Go, which reads 10,000 rows to
 // return 60, or a window function with an outer filter, which also reads every row and then discards.
-// LATERAL runs the inner query once per outer row with its own LIMIT, so the index gives it the top N
-// and stops.
+// LATERAL runs the inner query once per outer row with its own LIMIT, so each author's result is cut to
+// N before anything crosses the wire.
+//
+// What the index buys depends on which index. This schema has idx_books_author on (author_id) alone, so
+// each inner query finds that author's books through it, reads all of them and sorts to take the top N.
+// An index on (author_id, price_cents DESC) would let Postgres read exactly N rows per author and stop,
+// with no sort at all. An earlier version of this comment claimed that early stop without the index that
+// gives it. TestLateralBeatsFetchingEverything counts rows RETURNED, which LATERAL wins either way; the
+// rows READ are what the second index changes, and EXPLAIN ANALYZE is how to see them.
 //
 // The keyword worth remembering is that the inner query may reference a.id, which a plain subquery in
 // FROM may not. That is the whole difference.

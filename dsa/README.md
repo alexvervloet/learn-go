@@ -15,7 +15,7 @@ of strings you would otherwise copy-paste per type.
 ## How this differs from the Python version
 
 **Generics throughout.** `Stack[T any]`, `HashMap[K comparable, V any]`,
-`BST[T cmp.Ordered]`. Before Go 1.18 this material would have been a choice
+`bst.Tree[K cmp.Ordered, V any]`. Before Go 1.18 this material would have been a choice
 between `any` with type assertions everywhere or one copy per type; see
 [go-concepts/11-generics](../go-concepts/11-generics/) for what that costs.
 

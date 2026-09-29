@@ -19,6 +19,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"io"
@@ -99,7 +100,11 @@ func check() (bool, error) {
 	return true, nil
 }
 
-// Flush empties this binary's database.
+// Flush empties this binary's database, if the database is this harness's to empty.
+//
+// The first version flushed unconditionally. The default address is the developer's own Redis, and staying
+// off database 0 protects someone poking at Redis by hand and nobody else: a local app can use any of the 16
+// databases, and `go test ./...` emptied whichever one the hash picked. See flushOwned.
 func Flush(t testing.TB) {
 	t.Helper()
 
@@ -108,9 +113,47 @@ func Flush(t testing.TB) {
 	c := redis.NewClient(&redis.Options{Addr: Addr(), DB: database()})
 	defer func() { _ = c.Close() }()
 
-	if err := c.FlushDB(context.Background()).Err(); err != nil {
-		t.Fatalf("flushing: %v", err)
+	if err := flushOwned(context.Background(), c); err != nil {
+		t.Fatalf("%v\n"+
+			"  point REDIS_ADDR at a Redis you don't mind emptying (docker compose up -d serves one on\n"+
+			"  localhost:6381), or empty that database yourself if its contents don't matter", err)
 	}
+}
+
+// ErrForeignDatabase means the database holds keys this harness did not write, so it will not flush it.
+var ErrForeignDatabase = errors.New("refusing to FLUSHDB a database this test harness does not own")
+
+// MarkerKey is written after every flush. A database that holds keys but not this one was filled by
+// something else.
+const MarkerKey = "learn-go:test-harness"
+
+// flushOwned empties the database if it is empty already or carries MarkerKey, and refuses otherwise.
+//
+// An empty database is safe to claim: nothing is lost. A database with the marker was last flushed by this
+// harness, so whatever is in it was written by tests. Anything else might be someone's data.
+func flushOwned(ctx context.Context, c *redis.Client) error {
+	n, err := c.DBSize(ctx).Result()
+	if err != nil {
+		return fmt.Errorf("sizing the test database: %w", err)
+	}
+
+	if n > 0 {
+		owned, err := c.Exists(ctx, MarkerKey).Result()
+		if err != nil {
+			return fmt.Errorf("checking the test database: %w", err)
+		}
+
+		if owned == 0 {
+			return fmt.Errorf("%w: database %d at %s holds %d key(s) and no %q marker",
+				ErrForeignDatabase, c.Options().DB, c.Options().Addr, n, MarkerKey)
+		}
+	}
+
+	if err := c.FlushDB(ctx).Err(); err != nil {
+		return fmt.Errorf("flushing the test database: %w", err)
+	}
+
+	return c.Set(ctx, MarkerKey, "emptied by this repository's test harness; safe to delete", 0).Err()
 }
 
 // QueueName returns a queue name unique to this test.

@@ -380,3 +380,52 @@ func TestDeepTreeWorks(t *testing.T) {
 		t.Errorf("All() visited %d of %d keys", count, n)
 	}
 }
+
+// TestNaNKeysUseOneOrdering puts NaN in a float64 tree and uses every operation on it.
+//
+// NaN is the one cmp.Ordered value where cmp.Compare and the < and == operators disagree: cmp.Compare treats
+// NaN as equal to itself and less than every other number, while NaN < x, NaN > x and NaN == NaN are all false.
+// The first version mixed them. Put and Get used cmp.Compare, and Delete, Floor, Ceiling, Range and the validity
+// check used the operators, so a NaN that Put stored could not be found by Delete (and in the red-black tree,
+// Delete walked off the end of the tree and panicked). A tree has to use one ordering everywhere.
+func TestNaNKeysUseOneOrdering(t *testing.T) {
+	nan := math.NaN()
+	tree := New[float64, string]()
+
+	for _, k := range []float64{2, nan, -1, 5, 0} {
+		tree.Put(k, fmt.Sprint(k))
+	}
+
+	if tree.Put(nan, "again") {
+		t.Error("a second NaN was stored as a new key; cmp.Compare says NaN equals NaN")
+	}
+	if !tree.Contains(nan) {
+		t.Error("the NaN just stored is not found")
+	}
+	if !tree.IsValid() {
+		t.Error("the tree is not valid with a NaN key")
+	}
+
+	// NaN sorts first, so it is the floor of anything below every real number.
+	if k, _, ok := tree.Floor(math.Inf(-1)); !ok || !math.IsNaN(k) {
+		t.Errorf("Floor(-Inf) = %v, %t; want NaN, which cmp.Compare orders below every number", k, ok)
+	}
+	if k, _, ok := tree.Ceiling(-0.5); !ok || k != 0 {
+		t.Errorf("Ceiling(-0.5) = %v, %t; want 0", k, ok)
+	}
+
+	var inRange []float64
+	for k := range tree.Range(math.Inf(-1), 1) {
+		inRange = append(inRange, k)
+	}
+	if len(inRange) != 2 || inRange[0] != -1 || inRange[1] != 0 {
+		t.Errorf("Range(-Inf, 1) = %v, want [-1 0]", inRange)
+	}
+
+	if !tree.Delete(nan) {
+		t.Fatal("Delete(NaN) did not find the NaN that Put stored")
+	}
+	if tree.Contains(nan) || tree.Len() != 4 || !tree.IsValid() {
+		t.Errorf("after Delete(NaN): contains=%t len=%d valid=%t", tree.Contains(nan), tree.Len(), tree.IsValid())
+	}
+}

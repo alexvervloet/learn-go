@@ -36,6 +36,13 @@ type node[K cmp.Ordered, V any] struct {
 }
 
 // Tree is a binary search tree. The zero value is an empty tree ready to use.
+//
+// Every key comparison goes through cmp.Compare, never < or ==. For every
+// cmp.Ordered type but one they agree. The exception is floating-point NaN:
+// cmp.Compare treats NaN as equal to itself and smaller than every number,
+// while every operator comparison involving NaN is false. The first version
+// used cmp.Compare in Put and Get and the operators everywhere else, so Delete
+// could not find a NaN that Put had stored. TestNaNKeysUseOneOrdering checks it.
 type Tree[K cmp.Ordered, V any] struct {
 	root  *node[K, V]
 	count int
@@ -147,17 +154,16 @@ func (t *Tree[K, V]) Floor(key K) (K, V, bool) {
 
 	current := t.root
 	for current != nil {
-		if current.key == key {
+		switch cmp.Compare(current.key, key) {
+		case 0:
 			return current.key, current.value, true
-		}
-
-		if current.key < key {
+		case -1:
 			// A candidate, but there may be a closer one on the right.
 			best = current
 			current = current.right
-			continue
+		default:
+			current = current.left
 		}
-		current = current.left
 	}
 
 	if best == nil {
@@ -174,16 +180,15 @@ func (t *Tree[K, V]) Ceiling(key K) (K, V, bool) {
 
 	current := t.root
 	for current != nil {
-		if current.key == key {
+		switch cmp.Compare(current.key, key) {
+		case 0:
 			return current.key, current.value, true
-		}
-
-		if current.key > key {
+		case 1:
 			best = current
 			current = current.left
-			continue
+		default:
+			current = current.right
 		}
-		current = current.right
 	}
 
 	if best == nil {
@@ -214,8 +219,12 @@ func (t *Tree[K, V]) Delete(key K) bool {
 	link := &t.root
 
 	// Find the link pointing at the node to remove.
-	for *link != nil && (*link).key != key {
-		if key < (*link).key {
+	for *link != nil {
+		c := cmp.Compare(key, (*link).key)
+		if c == 0 {
+			break
+		}
+		if c < 0 {
 			link = &(*link).left
 			continue
 		}
@@ -335,16 +344,18 @@ func rangeWalk[K cmp.Ordered, V any](n *node[K, V], lo, hi K, yield func(K, V) b
 		return true
 	}
 
+	fromLo, toHi := cmp.Compare(n.key, lo), cmp.Compare(n.key, hi)
+
 	// Only descend left if something down there can be in range.
-	if n.key > lo && !rangeWalk(n.left, lo, hi, yield) {
+	if fromLo > 0 && !rangeWalk(n.left, lo, hi, yield) {
 		return false
 	}
 
-	if n.key >= lo && n.key <= hi && !yield(n.key, n.value) {
+	if fromLo >= 0 && toHi <= 0 && !yield(n.key, n.value) {
 		return false
 	}
 
-	if n.key < hi && !rangeWalk(n.right, lo, hi, yield) {
+	if toHi < 0 && !rangeWalk(n.right, lo, hi, yield) {
 		return false
 	}
 
@@ -395,10 +406,10 @@ func valid[K cmp.Ordered, V any](n *node[K, V], lo, hi *K) bool {
 	if n == nil {
 		return true
 	}
-	if lo != nil && n.key <= *lo {
+	if lo != nil && cmp.Compare(n.key, *lo) <= 0 {
 		return false
 	}
-	if hi != nil && n.key >= *hi {
+	if hi != nil && cmp.Compare(n.key, *hi) >= 0 {
 		return false
 	}
 	return valid(n.left, lo, &n.key) && valid(n.right, &n.key, hi)

@@ -19,6 +19,11 @@ concurrency:
 permissions:
   contents: read
 
+# Every job has timeout-minutes, about three times its slowest observed run.
+# Without it a hung step (a service that never becomes healthy, a test waiting
+# on a channel nothing closes) holds a runner for GitHub's default of six hours.
+# backends/learning/github-actions checks this file with its own rules and
+# fails if any job is missing one.
 jobs:
   # ---------------------------------------------------------------------------
   # Lint — formatting, vet, and golangci-lint. Kept as its own job so a
@@ -27,6 +32,7 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4
@@ -124,6 +130,7 @@ jobs:
   test:
     name: Test / Go ${{ matrix.go }} / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
 
     strategy:
       fail-fast: false
@@ -180,6 +187,7 @@ jobs:
   database:
     name: Database (Postgres 17 + pgvector)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     services:
       postgres:
@@ -255,6 +263,7 @@ jobs:
   backend:
     name: Services (Postgres + Redis + Kafka + Mailpit)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     services:
       postgres:
@@ -430,6 +439,7 @@ jobs:
   capstones:
     name: Capstones (Postgres + Redis)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     services:
       postgres:
@@ -570,6 +580,7 @@ jobs:
   aws:
     name: AWS (LocalStack)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     services:
       localstack:
@@ -643,6 +654,7 @@ jobs:
   generated:
     name: Generated code is current
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@v4
@@ -731,6 +743,7 @@ jobs:
   images:
     name: Docker images
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4
@@ -781,6 +794,7 @@ jobs:
   race:
     name: Race detector
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v4
@@ -811,6 +825,7 @@ jobs:
   cross-compile:
     name: Cross-compile
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     strategy:
       fail-fast: false
@@ -895,6 +910,7 @@ jobs:
   coverage:
     name: Coverage
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4

@@ -165,8 +165,15 @@ The vector GraphQL has and REST does not: one endpoint whose cost is decided by 
 ```
 
 Unlimited, that query made **1,301 store queries and read 6,550 rows**. With a complexity limit of 1,000 it is
-rejected before anything runs, with `operation has complexity 1250000, which exceeds the limit of 1000`, and the
+rejected before anything runs, with `operation has complexity 200000, which exceeds the limit of 1000`, and the
 same server still serves a cheap query.
+
+Every list argument goes through one function, `resolvers.Limit`: absent means the default, negative is an error,
+and anything above the cap is the cap. The complexity functions use the same caps through `resolvers.Cost`, which
+is why `similar(limit: 50)` costs 20 there. The first version validated `books(first:)` by hand and nothing else,
+so `authors(limit: -1)` returned the whole table, `similar(limit: -1)` panicked, and `similar(limit: 0)` returned
+one book. A negative argument can't lower the query's cost, but not because of anything here: gqlgen discards a
+custom cost below 1. `TestANegativeArgumentCannotBuyComplexity` pins that.
 
 The cost is computed from the QUERY, which is the only way: a limit applied afterwards has already paid for the
 work. And the cost function is a second place to keep in sync with the schema, because **nothing in the schema

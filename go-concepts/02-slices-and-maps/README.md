@@ -71,8 +71,10 @@ you do not control.
 
 `append` returning a value is not a style choice. When it reallocates, the new
 pointer has to get back to you somehow, and Go has no reference parameters. This
-is why ignoring append's return value is always a bug, and why `go vet` has a
-check for it.
+is why ignoring append's return value is always a bug, and why the compiler
+refuses a bare `append(xs, 1)` statement outright: "append(xs, 1) (value of
+type []int) is not used". (`_ = append(xs, 1)` gets past it, and is still the
+same bug.)
 
 Growth is amortised: Go roughly doubles capacity for small slices and grows by a
 smaller factor once a slice is large. The exact numbers are an implementation

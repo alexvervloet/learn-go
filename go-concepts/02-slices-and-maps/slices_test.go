@@ -194,8 +194,8 @@ func TestDescribe(t *testing.T) {
 }
 
 // TestAppendMustBeAssigned covers the correctly-written form. The broken form
-// lives in the README rather than here, because `go vet` rejects a discarded
-// append and the package would not build.
+// lives in the README rather than here, because the compiler rejects a bare
+// append statement and the package would not build.
 func TestAppendMustBeAssigned(t *testing.T) {
 	got := appendMustBeAssigned()
 

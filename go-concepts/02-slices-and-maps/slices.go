@@ -102,12 +102,12 @@ func preallocated(n int) []int {
 	return xs
 }
 
-// ignoringAppendResult shows why `go vet` treats a discarded append as an
-// error. When append reallocates, the new pointer exists only in the returned
-// header. Dropping it drops the appended data.
+// appendMustBeAssigned shows why a discarded append is an error. When append
+// reallocates, the new pointer exists only in the returned header. Dropping it
+// drops the appended data.
 //
 // This function is written the correct way; the broken form is in the README
-// rather than here, because it would not survive `go vet`.
+// rather than here, because a bare `append(xs, 1)` statement does not compile.
 func appendMustBeAssigned() []int {
 	xs := make([]int, 0, 1)
 	xs = append(xs, 1)

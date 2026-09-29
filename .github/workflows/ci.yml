@@ -59,12 +59,10 @@ jobs:
 
       # gofmt is not a style preference in Go, it is the format. There is one
       # correct output per file, so this is a hard failure rather than advice.
+      #
       # Every step below runs the same Makefile target you would run locally,
       # so a green `make check` on your machine means something. Spelling the
       # commands out twice is how CI and local drift apart.
-      #
-      # gofmt is not a style preference in Go, it is the format: one correct
-      # output per file. So this is a hard failure rather than advice.
       - name: Check formatting
         run: make fmt-check
 
@@ -371,6 +369,7 @@ jobs:
       - name: Fail if the jobs tests skipped
         run: |
           if grep -q "no Redis at" "$RUNNER_TEMP/jobs-tests.log"; then
+            grep -n "no Redis at" "$RUNNER_TEMP/jobs-tests.log" | head -3
             echo "::error::jobs tests skipped for want of a Redis"
             exit 1
           fi
@@ -387,6 +386,7 @@ jobs:
       - name: Fail if the email tests skipped
         run: |
           if grep -q "no Mailpit at" "$RUNNER_TEMP/email-tests.log"; then
+            grep -n "no Mailpit at" "$RUNNER_TEMP/email-tests.log" | head -3
             echo "::error::email tests skipped for want of a Mailpit"
             exit 1
           fi
@@ -524,6 +524,7 @@ jobs:
 
           for pattern in "no database available" "no Redis at"; do
             if grep -q "$pattern" "$RUNNER_TEMP/bookmark-manager.log"; then
+              grep -n "$pattern" "$RUNNER_TEMP/bookmark-manager.log" | head -3
               echo "::error::bookmark-manager tests skipped: $pattern"
               missing=1
             fi
@@ -778,6 +779,7 @@ jobs:
       - name: Fail if the image tests skipped
         run: |
           if grep -q "Docker is not available" "$RUNNER_TEMP/image-tests.log"; then
+            grep -n "Docker is not available" "$RUNNER_TEMP/image-tests.log" | head -3
             echo "::error::image tests skipped for want of a Docker daemon"
             exit 1
           fi

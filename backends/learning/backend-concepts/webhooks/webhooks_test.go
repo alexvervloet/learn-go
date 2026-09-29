@@ -535,9 +535,10 @@ func TestHandlerStatusCodes(t *testing.T) {
 		t.Errorf("got %d, want 500", rec.Code)
 	}
 
-	// And the retry of the failed event is now treated as a duplicate, so the work never happens.
-	// That is the bug the in-memory deduper cannot fix and the reason the real one records the id
-	// inside the same transaction as the work.
+	// And the retry of the failed event is processed, not swallowed as a duplicate. The handler
+	// records the id before the work (so two concurrent deliveries cannot both run it) and forgets
+	// it when the work fails. The first version did not forget, and this test asserted the loss as
+	// if it were unavoidable.
 	failNext = false
 
 	rec = httptest.NewRecorder()
@@ -545,14 +546,13 @@ func TestHandlerStatusCodes(t *testing.T) {
 
 	t.Logf("its retry:          %d %s", rec.Code, rec.Body.String())
 
-	if rec.Code == http.StatusOK && !bytes.Contains(rec.Body.Bytes(), []byte("duplicate")) {
-		t.Error("the retry of a failed event was processed, which would be the correct " +
-			"behaviour and is not what this implementation does")
+	if rec.Code != http.StatusOK || bytes.Contains(rec.Body.Bytes(), []byte("duplicate")) {
+		t.Errorf("the retry of a failed event got %d %s; it must be processed, or the event is lost",
+			rec.Code, rec.Body.String())
 	}
-
-	t.Log("the retry of a FAILED event is swallowed as a duplicate. The id was recorded before " +
-		"the work, so the work is lost. Recording the id in the same transaction as the " +
-		"work is the only fix, and it needs a database rather than a map.")
+	if processed[len(processed)-1] != "evt_fails" {
+		t.Errorf("processed %v; the retried event never ran", processed)
+	}
 }
 
 // TestBodyIsReturnedEvenOnFailure, so a handler can log what it rejected.

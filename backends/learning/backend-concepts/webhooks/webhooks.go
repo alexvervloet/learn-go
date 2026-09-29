@@ -300,8 +300,8 @@ func ParseStripeStyle(header string) (timestamp time.Time, signatures []string, 
 // This one is a map with a TTL, which is correct for one process and wrong for every real deployment: five
 // replicas each have their own map, so a duplicate delivered to a different replica is not caught. The real
 // version is a unique constraint on the event ID in the database, inside the same transaction as the work,
-// which makes the deduplication and the work atomic. Redis SET NX is the middle option and has the
-// crash-between-mark-and-work problem.
+// which makes the deduplication and the work atomic. Redis SET NX is the middle option: Forget covers a
+// handler that returns an error, and nothing covers a process that dies between the SET and the work.
 //
 // The interface here is what matters; swapping the implementation for a table is 20 lines.
 type Deduper struct {
@@ -364,6 +364,19 @@ func (d *Deduper) maybeSweep(now time.Time) {
 	}
 }
 
+// Forget removes an event ID, so a retry of work that failed is processed rather than skipped.
+//
+// Seen records the ID BEFORE the work, which is what stops two concurrent deliveries of one event from both
+// running it. The cost is that a failure leaves the ID recorded, and without Forget the provider's retry of a
+// failed event is answered "duplicate" and the event is lost. The first version of Handler had exactly that bug
+// and documented it as unfixable.
+func (d *Deduper) Forget(id string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	delete(d.seen, id)
+}
+
 // Len reports how many IDs are held, so a test can measure the growth.
 func (d *Deduper) Len() int {
 	d.mu.Lock()
@@ -412,8 +425,10 @@ func (v *Verifier) Handler(d *Deduper, eventID func([]byte) string, process func
 			return
 		}
 
+		var id string
+
 		if d != nil && eventID != nil {
-			if id := eventID(body); id != "" && d.Seen(id) {
+			if id = eventID(body); id != "" && d.Seen(id) {
 				// 200, and a body saying why, so a human reading the provider's
 				// delivery log can tell a duplicate from a fresh success.
 				w.WriteHeader(http.StatusOK)
@@ -423,13 +438,13 @@ func (v *Verifier) Handler(d *Deduper, eventID func([]byte) string, process func
 		}
 
 		if err := process(body); err != nil {
-			// 500, so the provider retries. The deduper has already recorded the ID, which
-			// means the retry will be treated as a duplicate and the work will never happen.
-			//
-			// That is the crash-between-mark-and-work problem, and it is why the real
-			// implementation records the ID in the same transaction as the work rather than
-			// before it. Stated here rather than hidden, because the in-memory Deduper cannot
-			// fix it.
+			// 500, so the provider retries, and Forget so the retry is processed. Seen
+			// recorded the ID before the work; leaving it there would answer the retry
+			// "duplicate" and lose the event.
+			if id != "" {
+				d.Forget(id)
+			}
+
 			http.Error(w, "processing failed", http.StatusInternalServerError)
 			return
 		}

@@ -356,7 +356,7 @@ func TestInterceptorOrdering(t *testing.T) {
 		"above it, and logging wants to be outside recovery so it records the Internal.")
 }
 
-// TestClientInterceptorsAddMetadataAndRetry.
+// TestClientInterceptors.
 func TestClientInterceptors(t *testing.T) {
 	rec := &interceptors.Recorder{}
 

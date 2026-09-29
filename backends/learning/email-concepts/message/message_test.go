@@ -224,7 +224,7 @@ func TestEverythingIsCRLF(t *testing.T) {
 		"mangled by a strict one, and the dot-stuffing rule can truncate the body.")
 }
 
-// TestPlainTextComesFirstInAnAlternative is the ordering rule.
+// TestPlainTextComesFirst is the ordering rule.
 func TestPlainTextComesFirst(t *testing.T) {
 	m := plainMessage()
 	m.HTML = "<p>Hello Ada,</p>"
@@ -338,7 +338,7 @@ func TestNestingWithAttachments(t *testing.T) {
 		"client that prefers HTML")
 }
 
-// TestAttachmentFilenameEncoding, and the line wrapping.
+// TestAttachmentEncoding, and the line wrapping.
 func TestAttachmentEncoding(t *testing.T) {
 	// A long body, so the base64 has to wrap.
 	content := bytes.Repeat([]byte("binary data "), 200)

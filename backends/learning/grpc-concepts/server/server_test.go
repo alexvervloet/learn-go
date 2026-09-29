@@ -522,7 +522,7 @@ func TestClientStreaming(t *testing.T) {
 		"and every byte", summary.GetChunks(), chunkSize)
 }
 
-// TestUploadRejectsAMissingFirstMessage and the size limit.
+// TestUploadValidation and the size limit.
 func TestUploadValidation(t *testing.T) {
 	srv := grpctest.Start(t, grpctest.Options{
 		Register: func(s *grpc.Server) {

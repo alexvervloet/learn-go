@@ -33,7 +33,7 @@ func TestPoolConnectsAndMigrates(t *testing.T) {
 	}
 }
 
-// TestRollbackIsolation is the property the whole harness rests on: a row written in one test is
+// TestRollbackIsolationWrites is the property the whole harness rests on: a row written in one test is
 // invisible to the next.
 //
 // Two tests in source order, because that is the only way to observe it from inside the suite.

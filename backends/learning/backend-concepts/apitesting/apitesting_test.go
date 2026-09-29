@@ -307,7 +307,7 @@ func TestNormaliseIsRecursive(t *testing.T) {
 	}
 }
 
-// TestShapeSurvivesAddedFieldsAndCatchesRemovedOnes is the argument for the middle assertion.
+// TestShapeSurvivesAddedFields is the argument for the middle assertion.
 func TestShapeSurvivesAddedFields(t *testing.T) {
 	shape := Shape{
 		"id":             "string",

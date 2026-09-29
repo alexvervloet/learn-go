@@ -338,7 +338,7 @@ func TestCollectDoesNotDeadlock(t *testing.T) {
 	}
 }
 
-// TestCollectWithNoJobs and with a silly worker count, because both are things a caller passes.
+// TestCollectDegenerate and with a silly worker count, because both are things a caller passes.
 func TestCollectDegenerate(t *testing.T) {
 	checkNoLeaks(t)
 

@@ -471,7 +471,7 @@ func TestErrorfVersusFatalf(t *testing.T) {
 	}
 }
 
-// TestSkipAndSkipNow: three ways a test can decline to run, and they mean different things.
+// TestSkipVariants: three ways a test can decline to run, and they mean different things.
 func TestSkipVariants(t *testing.T) {
 	t.Run("t.Skip with a reason", func(t *testing.T) {
 		if !testing.Short() {

@@ -125,7 +125,7 @@ func TestATaskRuns(t *testing.T) {
 	}
 }
 
-// TestRetriesUseExponentialBackoff, and the thing to notice is that the retry count is visible to the handler.
+// TestRetriesBackOff, and the thing to notice is that the retry count is visible to the handler.
 func TestRetriesBackOff(t *testing.T) {
 	client, inspector, rec, queue := setup(t, worker.DefaultServerConfig())
 
@@ -555,7 +555,7 @@ func TestTaskIDMakesItIdempotent(t *testing.T) {
 		"idempotency key is.")
 }
 
-// TestQueueWeightingIsNotStrictPriority, which is the thing that stops the low queue starving.
+// TestQueueWeighting, which is the thing that stops the low queue starving.
 func TestQueueWeighting(t *testing.T) {
 	jobtest.Require(t)
 	jobtest.Flush(t)

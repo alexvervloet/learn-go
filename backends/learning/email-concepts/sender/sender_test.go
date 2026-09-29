@@ -387,7 +387,7 @@ func TestErrorClassification(t *testing.T) {
 		"the whole rule and net/smtp gives it to you in a *textproto.Error.")
 }
 
-// TestValidationHappensBeforeTheConnection, so a malformed message costs nothing.
+// TestValidationHappensFirst, so a malformed message costs nothing.
 func TestValidationHappensFirst(t *testing.T) {
 	// A sender pointed at nothing, so a connection attempt would take the full timeout.
 	cfg := sender.DefaultConfig("127.0.0.1", 1)

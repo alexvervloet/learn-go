@@ -67,11 +67,14 @@ go build -gcflags='-m -m' ./...   # why, in more depth
 ```
 
 ```
-./escapes.go:12:6: can inline newUser
-./escapes.go:18:9: &User{...} escapes to heap
-./escapes.go:24:16: make([]int, n) escapes to heap
-./escapes.go:30:7: moved to heap: u
+./escapes.go:35:6: can inline newUserPointer
+./escapes.go:36:9: &User{...} escapes to heap
+./escapes.go:67:2: moved to heap: u
+./escapes.go:105:19: u does not escape
 ```
+
+Those four lines are real output from this lesson's `escapes.go` on Go 1.27, so
+the line numbers match the file.
 
 Two lines that read alike and mean different things:
 

@@ -7,8 +7,12 @@
 #
 # Needs:
 #   protoc                  brew install protobuf   (the version in .protoc-version)
-#   protoc-gen-go           go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-#   protoc-gen-go-grpc      go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+#   protoc-gen-go           go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12
+#   protoc-gen-go-grpc      go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.2
+#
+# The plugins are pinned for the same reason as protoc below: each generated file's header records the plugin
+# version, so @latest makes the regenerate-and-diff check fail the day a plugin is released. The pins are the
+# versions in the committed headers, and CI installs the same ones.
 #
 # The two plugins are separate binaries and separate modules, which is a 2020 split people still trip over:
 # protoc-gen-go stopped generating gRPC service code, so a project using only it gets messages and no client.

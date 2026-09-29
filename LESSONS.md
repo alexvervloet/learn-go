@@ -2291,3 +2291,26 @@ hole was already used on, and the migration that assumes clean data fails at dep
 **Next time.** A migration that tightens a constraint starts with the query that finds rows violating it, and
 decides what to do with them (here, unfile the bookmark and keep it) before the `ALTER`. Running the failing
 test before the fix is still right, and it's what exposed this.
+
+## The Redis harnesses flushed the developer's own Redis
+
+**Expected.** Every Redis test harness defaults to `localhost:6379` and runs `FLUSHDB` on a database picked by
+hashing the test binary's name into 1 to 15. The comment said that was safe because it stayed off database 0.
+
+**What happened.** Database 0 is only where a person typing into `redis-cli` lands. A local app can use any of the
+16, and the default address is the developer's own Redis, so `go test ./...` emptied whichever database the hash
+picked without asking. The audit that found it ran the suite against my local Redis first, so it flushed those
+databases too before anyone read the code.
+
+The hash had a second problem. Both capstones have a package called `api`, so both hashed to database 14, and
+`make test` runs them at the same time.
+
+The fix added a marker key that the harness writes after every flush. It refuses to flush a database that holds
+keys but no marker. That broke one test, `TestInvalidateIsOneRoundTrip`, which asserted `DBSIZE == 0` after
+invalidating its 50 keys and now saw the marker. A test that assumes it owns every key in a database is making
+the same assumption as the flush.
+
+**Next time.** A test harness must never delete what it didn't create. When the target is shared, prove
+ownership (the marker) before destroying anything, and assign namespaces explicitly (a table of database numbers)
+rather than trusting a hash with more users than slots. Tests should assert on their own keys, or on the
+difference they made, and not on the state of the whole database.

@@ -117,7 +117,7 @@ func TestSampledFlagIsABit(t *testing.T) {
 // TestTracePropagation is the two rules: inherit the trace id, generate a new span id.
 func TestTracePropagation(t *testing.T) {
 	recorder := &Recorder{}
-	tracer := &Tracer{Recorder: recorder}
+	tracer := &Tracer{Recorder: recorder, SampleRate: 1}
 
 	// Service A, at the edge with no incoming header.
 	ctxA, endA := tracer.Start(context.Background(), "A")
@@ -333,5 +333,63 @@ func TestIDsAreUnique(t *testing.T) {
 			t.Fatalf("invalid trace id %q", id)
 		}
 		break
+	}
+}
+
+// TestSamplingIsADecision: the edge used to mark every new trace sampled, so every request logged at debug level
+// and "sampling" sampled nothing. SampleRate is the fraction of new traces kept.
+func TestSamplingIsADecision(t *testing.T) {
+	sampledOf := func(rate float64, n int) int {
+		tracer := &Tracer{SampleRate: rate}
+		count := 0
+		for range n {
+			ctx, end := tracer.Start(context.Background(), "edge")
+			if SpanContextFrom(ctx).Sampled {
+				count++
+			}
+			end(nil)
+		}
+		return count
+	}
+
+	if got := sampledOf(0, 1_000); got != 0 {
+		t.Errorf("SampleRate 0 sampled %d of 1000", got)
+	}
+	if got := sampledOf(1, 1_000); got != 1_000 {
+		t.Errorf("SampleRate 1 sampled %d of 1000", got)
+	}
+	if got := sampledOf(0.1, 10_000); got < 700 || got > 1_300 {
+		t.Errorf("SampleRate 0.1 sampled %d of 10000, want about 1000", got)
+	}
+}
+
+// TestAClientCannotTurnOnDebugLogging: an incoming traceparent ending -01 says "sampled". Honoured from anyone,
+// that lets any client switch on debug logging for its own requests, which is a cheap way to flood the logs.
+// The trace id is kept so traces still join up; the sampling decision is only inherited when the tracer is told
+// its callers are trusted.
+func TestAClientCannotTurnOnDebugLogging(t *testing.T) {
+	const incoming = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+
+	seen := func(tracer *Tracer) SpanContext {
+		var sc SpanContext
+		h := tracer.Middleware(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+			sc = SpanContextFrom(r.Context())
+		}))
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Header.Set("traceparent", incoming)
+		h.ServeHTTP(httptest.NewRecorder(), req)
+		return sc
+	}
+
+	untrusted := seen(&Tracer{SampleRate: 0})
+	if untrusted.Sampled {
+		t.Error("an untrusted caller's sampled flag was honoured")
+	}
+	if untrusted.TraceID != "4bf92f3577b34da6a3ce929d0e0e4736" {
+		t.Errorf("trace id %q; the incoming trace should still be continued", untrusted.TraceID)
+	}
+
+	if trusted := seen(&Tracer{SampleRate: 0, TrustIncomingSampling: true}); !trusted.Sampled {
+		t.Error("a trusted caller's sampled flag was ignored")
 	}
 }

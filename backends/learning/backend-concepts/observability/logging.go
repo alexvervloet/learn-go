@@ -198,8 +198,10 @@ func (h ContextHandler) WithGroup(name string) slog.Handler {
 // # The problem it solves
 //
 // Debug logging in production is off because it is too expensive, which means it is unavailable exactly when it
-// is needed. Sampling is the middle ground: keep every warning and error, keep one in N info lines, drop debug
-// unless a request is explicitly marked.
+// is needed. Sampling is the middle ground: keep every line at or above Always, and below it keep a request's
+// lines only if that request was sampled. Which requests are sampled is Tracer.SampleRate's decision. (An
+// earlier version of this comment promised "one in N info lines", which nothing implemented, and the tracer
+// sampled every request, so every debug line was written.)
 //
 // The sampling decision has to be per REQUEST rather than per line, or a sampled trace has holes in it and the
 // remaining lines cannot be assembled into a story. That is why the decision is stored in the context by
@@ -290,12 +292,14 @@ func NewLogger(inner slog.Handler, always slog.Level) *slog.Logger {
 // who can set their username to "alice\nlevel=INFO msg=\"admin granted\"" has written whatever they like into
 // the log, and anything parsing those logs believes it.
 //
-// slog's JSON handler escapes this correctly, which is the first reason to prefer structured logging over a
-// text format. The text handler quotes values containing spaces and does NOT escape newlines in all cases, and
-// anything hand-formatted with Printf escapes nothing.
+// Both slog handlers escape this: JSON escapes newlines inside strings, and the text handler quotes any message,
+// key or value containing a newline and writes it as \n. (An earlier version of this comment said the text
+// handler does not, in all cases; checked on Go 1.27 with a newline in the message, a key and a value, it does.)
+// What escapes nothing is the log line built without slog: fmt.Printf, log.Printf, a string concatenated into a
+// file, a value handed to a system that splits on newlines.
 //
-// So: structured JSON logging removes the problem, and this function exists for the values that reach a
-// non-JSON sink anyway, which in practice means anything going into a message string rather than an attribute.
+// So: slog removes the problem, and this function exists for the values that reach a sink slog does not
+// format.
 func Sanitize(s string) string {
 	if !strings.ContainsFunc(s, isControl) {
 		return s

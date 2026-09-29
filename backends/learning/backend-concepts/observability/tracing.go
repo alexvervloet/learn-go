@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	mathrand "math/rand/v2"
 	"net/http"
 	"strconv"
 	"strings"
@@ -224,9 +225,8 @@ func StartSpan(ctx context.Context) (context.Context, SpanContext) {
 		sc.Sampled = parent.Sampled
 	} else {
 		sc.TraceID = NewTraceID()
-		// A new trace at the edge: the sampling decision is made once, here, and every service
-		// downstream honours it. That is what makes a sampled trace complete rather than a
-		// collection of fragments.
+		// A new trace. Sampled here, for callers using StartSpan directly; Tracer.Start replaces
+		// this with its SampleRate decision.
 		sc.Sampled = true
 	}
 
@@ -283,6 +283,29 @@ func (r *Recorder) Reset() {
 // Tracer starts and finishes spans.
 type Tracer struct {
 	Recorder *Recorder
+
+	// SampleRate is the fraction of NEW traces, those starting at this service, that are sampled:
+	// 0.01 keeps one in a hundred. Zero samples none. The first version sampled every new trace,
+	// which turned debug logging on for every request and made "sampling" a no-op.
+	SampleRate float64
+
+	// TrustIncomingSampling honours the sampled flag of an incoming traceparent. Off by default,
+	// because at the edge the header comes from clients, and honouring it lets any client switch on
+	// debug logging for its own requests. Turn it on for a service only reachable from services
+	// that made the decision themselves. The incoming TRACE ID is continued either way.
+	TrustIncomingSampling bool
+}
+
+// sample makes one sampling decision at SampleRate.
+func (t *Tracer) sample() bool {
+	switch {
+	case t.SampleRate >= 1:
+		return true
+	case t.SampleRate <= 0:
+		return false
+	default:
+		return mathrand.Float64() < t.SampleRate
+	}
 }
 
 // Start begins a span and returns a function to end it.
@@ -297,6 +320,14 @@ type Tracer struct {
 // parameter makes the closure necessary and visible.
 func (t *Tracer) Start(ctx context.Context, name string) (context.Context, func(error)) {
 	ctx, sc := StartSpan(ctx)
+
+	// A new trace at the edge: the sampling decision is made once, here, and every service
+	// downstream honours it. That is what makes a sampled trace complete rather than a collection
+	// of fragments.
+	if sc.ParentSpanID == "" {
+		sc.Sampled = t.sample()
+		ctx = WithSpanContext(ctx, sc)
+	}
 
 	start := time.Now()
 	attrs := map[string]string{}
@@ -331,6 +362,10 @@ func (t *Tracer) Middleware(next http.Handler) http.Handler {
 		// Returning 400 for a bad traceparent would let a broken client take an endpoint down, and
 		// tracing is not worth failing a request over.
 		if sc, err := ParseTraceparent(r.Header.Get("traceparent")); err == nil {
+			// Keep the trace id; decide sampling locally unless the caller is trusted.
+			if !t.TrustIncomingSampling {
+				sc.Sampled = t.sample()
+			}
 			ctx = WithSpanContext(ctx, sc)
 		}
 

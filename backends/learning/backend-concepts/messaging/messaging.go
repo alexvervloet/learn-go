@@ -452,6 +452,8 @@ func (i *Idempotent) Wrap(id func(kafka.Message) string, handle func(context.Con
 			return handle(ctx, m)
 		}
 
+		// Reserve the key before the work, so a duplicate delivered while this one is still running
+		// is skipped rather than processed twice at once.
 		i.mu.Lock()
 		_, already := i.seen[key]
 		if !already {
@@ -464,7 +466,25 @@ func (i *Idempotent) Wrap(id func(kafka.Message) string, handle func(context.Con
 			return nil
 		}
 
-		return handle(ctx, m)
+		// And release it if the work fails. Without this, the first failure marks the message as done,
+		// Kafka redelivers it as promised, and the redelivery is skipped as a duplicate of work that
+		// never happened: at-most-once with an at-least-once label. The first version of Wrap had
+		// exactly that bug, and TestIdempotentRetriesAFailedMessage is the regression test.
+		//
+		// A duplicate skipped while the first attempt was in flight is not lost when that attempt
+		// fails, because the failed attempt is itself redelivered.
+		//
+		// The durable version has no window at all: the id goes in with a unique constraint in the
+		// SAME transaction as the work, so both commit or neither does.
+		if err := handle(ctx, m); err != nil {
+			i.mu.Lock()
+			delete(i.seen, key)
+			i.mu.Unlock()
+
+			return err
+		}
+
+		return nil
 	}
 }
 

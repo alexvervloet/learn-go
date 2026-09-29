@@ -711,3 +711,50 @@ func TestRequiredAcksDefaultIsFireAndForget(t *testing.T) {
 		t.Error("this package's default is not RequireAll")
 	}
 }
+
+// TestIdempotentRetriesAFailedMessage needs no broker, which is why it is not skipped with the others.
+//
+// A deduper that records the id BEFORE the work turns a failure into a loss: the first delivery fails, Kafka
+// redelivers as promised, and the redelivery is skipped as a duplicate of work that never happened. That is
+// at-most-once wearing an at-least-once label. The first version of Wrap did exactly this.
+func TestIdempotentRetriesAFailedMessage(t *testing.T) {
+	idempotent := NewIdempotent()
+
+	var attempts int
+
+	handle := idempotent.Wrap(
+		func(m kafka.Message) string { return string(m.Key) },
+		func(context.Context, kafka.Message) error {
+			attempts++
+			if attempts == 1 {
+				return errors.New("the database was briefly unavailable")
+			}
+			return nil
+		},
+	)
+
+	msg := kafka.Message{Key: []byte("order-42")}
+
+	if err := handle(context.Background(), msg); err == nil {
+		t.Fatal("the first attempt should have failed")
+	}
+
+	// The redelivery.
+	if err := handle(context.Background(), msg); err != nil {
+		t.Fatalf("the redelivery failed: %v", err)
+	}
+
+	if attempts != 2 {
+		t.Errorf("the handler ran %d time(s), want 2: the redelivery was skipped as a duplicate of a "+
+			"failure", attempts)
+	}
+
+	// And once it has succeeded, a third delivery IS a duplicate.
+	if err := handle(context.Background(), msg); err != nil {
+		t.Fatal(err)
+	}
+
+	if attempts != 2 || idempotent.Duplicates() != 1 {
+		t.Errorf("attempts=%d duplicates=%d after a success, want 2 and 1", attempts, idempotent.Duplicates())
+	}
+}

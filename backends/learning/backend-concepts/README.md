@@ -166,6 +166,15 @@ A callback carrying a valid code and an unknown `state` is rejected **before** t
 saw zero requests. An implementation that exchanges first has already spent the code, and its CSRF protection is
 decoration.
 
+**A state the app really did issue is the harder case, and the first version got it wrong.** The attacker starts a
+login of their own, which gets them a genuine state, authorizes as themselves, and sends that callback URL to the
+victim. A state checked only against a server-side store is valid, so the victim's browser finishes the attacker's
+login and ends up in the attacker's account. State has to be bound to the browser that started the flow: `Start`
+sets it in a `__Host-` cookie with `SameSite=Lax`, and `Callback` requires the cookie and the query parameter to
+match before it touches the store. `Lax` and not `Strict`, because the provider's redirect back is a cross-site
+navigation and `Strict` withholds the cookie from exactly that request. `TestStateIsBoundToTheBrowser` carries
+out the attack.
+
 The verifier is 43 base64url characters, which is 32 bytes of entropy and the RFC's minimum. The challenge is
 SHA-256 of the **ASCII** of the verifier, not of its decoded bytes, and getting that wrong fails at the token
 endpoint with only `invalid_grant` to go on.

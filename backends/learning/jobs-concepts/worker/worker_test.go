@@ -3,6 +3,7 @@ package worker_test
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -15,6 +16,13 @@ import (
 
 // setup starts a worker on a queue of this test's own, and returns the pieces a test needs.
 func setup(t *testing.T, cfg worker.ServerConfig) (*asynq.Client, *asynq.Inspector, *worker.Recorder, string) {
+	t.Helper()
+
+	return setupWith(t, cfg, &worker.Handlers{})
+}
+
+// setupWith is setup for a test that supplies its own Handlers, for example to make the work fail.
+func setupWith(t *testing.T, cfg worker.ServerConfig, h *worker.Handlers) (*asynq.Client, *asynq.Inspector, *worker.Recorder, string) {
 	t.Helper()
 
 	jobtest.Require(t)
@@ -47,7 +55,8 @@ func setup(t *testing.T, cfg worker.ServerConfig) (*asynq.Client, *asynq.Inspect
 
 	rec := &worker.Recorder{}
 
-	h := &worker.Handlers{Log: jobtest.DiscardLogger(), Recorder: rec}
+	h.Log = jobtest.DiscardLogger()
+	h.Recorder = rec
 
 	srv := worker.NewServer(jobtest.RedisOpt(), cfg, jobtest.DiscardLogger(), nil)
 
@@ -846,4 +855,41 @@ func TestTimeoutHasSecondGranularity(t *testing.T) {
 	t.Log("asynq.Deadline takes an absolute time.Time and is stored as a unix timestamp, which " +
 		"has the same granularity for a different reason. Sub-second task timeouts are not " +
 		"available; enforce them inside the handler.")
+}
+
+// TestIdempotencyIsRecordedAfterTheWork: the first send fails, and the retry must send again.
+//
+// A handler that records the task id before doing the work finds the id on the retry, returns nil, and the
+// email is never sent. asynq reports the task completed, so nothing looks wrong.
+func TestIdempotencyIsRecordedAfterTheWork(t *testing.T) {
+	var sends atomic.Int32
+
+	h := &worker.Handlers{
+		SendWelcome: func(context.Context, string) error {
+			if sends.Add(1) == 1 {
+				return errors.New("smtp: 421 try again later")
+			}
+			return nil
+		},
+	}
+
+	client, _, rec, queue := setupWith(t, worker.DefaultServerConfig(), h)
+
+	task, err := tasks.NewEmailWelcome(tasks.EmailWelcomePayload{UserID: "u", Email: "a@b.test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := client.Enqueue(task, asynq.Queue(queue), asynq.MaxRetry(3)); err != nil {
+		t.Fatal(err)
+	}
+
+	jobtest.WaitFor(t, 10*time.Second, "the task to succeed", func() bool {
+		succeeded, _, _ := rec.Counts()
+		return succeeded == 1
+	})
+
+	if got := sends.Load(); got != 2 {
+		t.Errorf("sent %d time(s), want 2: the retry after a failed send did not send", got)
+	}
 }

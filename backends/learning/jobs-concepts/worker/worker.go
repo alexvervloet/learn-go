@@ -100,6 +100,10 @@ type Handlers struct {
 	Log      *slog.Logger
 	Recorder *Recorder
 
+	// SendWelcome is the work EmailWelcome does. Nil means "pretend it was sent", which is what the
+	// demo needs; a test sets it to make the work fail.
+	SendWelcome func(ctx context.Context, email string) error
+
 	// Idempotent records which task ids have already succeeded, which is the consumer-side half of
 	// at-least-once. Same caveat as everywhere else in this repo: a map is wrong for more than one
 	// worker process, and the real one is a unique constraint in the same transaction as the work.
@@ -234,15 +238,31 @@ func (h *Handlers) EmailWelcome(ctx context.Context, t *asynq.Task) error {
 	}
 
 	// The idempotency check, keyed on the TASK id rather than on the payload. asynq's task id is
-	// stable across retries, so a handler that ran and then crashed before returning sees its own id
-	// on the retry.
+	// stable across retries, so a retry of work that already succeeded finds its own id here.
 	id := tasks.TaskID(ctx)
 
-	if _, already := h.idempotent.LoadOrStore(id, true); already {
+	if _, done := h.idempotent.Load(id); done {
 		// Not an error: the work is done and the queue is asking again, which is what
 		// at-least-once means.
 		return nil
 	}
+
+	if h.SendWelcome != nil {
+		if err := h.SendWelcome(ctx, p.Email); err != nil {
+			return err
+		}
+	}
+
+	// Recorded AFTER the work, never before. Marking first turns a failure into a loss: the retry
+	// finds the id, returns nil, and the email is never sent. The first version of this handler
+	// did that, with LoadOrStore before the work; TestIdempotencyIsRecordedAfterTheWork is the
+	// regression test.
+	//
+	// Check-then-record is not racy here, because asynq runs one task id at a time. What remains
+	// is a crash between the send and the Store, and then the retry sends twice. The only fix for
+	// that is making the record and the work one transaction, or giving the email provider an
+	// idempotency key so the second send is a no-op on their side.
+	h.idempotent.Store(id, true)
 
 	return nil
 }

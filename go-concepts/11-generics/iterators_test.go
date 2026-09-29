@@ -195,6 +195,13 @@ func TestSortedByValue(t *testing.T) {
 	if len(names) != 4 {
 		t.Errorf("got %d entries, want 4", len(names))
 	}
+
+	// bo and di tie on 78, and the order between them must not depend on map iteration, which changes
+	// from run to run. The first version compared values only and returned 0 on a tie, while its comment
+	// said ties were broken by key.
+	if want := []string{"cy", "ana", "bo", "di"}; !slices.Equal(names, want) {
+		t.Errorf("order = %v, want %v (ties broken by key)", names, want)
+	}
 }
 
 func TestSortedByValueOnAnEmptyMap(t *testing.T) {

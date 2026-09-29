@@ -144,18 +144,22 @@ func Enumerate[T any](seq iter.Seq[T]) iter.Seq2[int, T] {
 	}
 }
 
-// SortedByValue is a Seq2 over a map, in descending value order. Iterating a
-// map in a useful order is the everyday case this makes pleasant.
-func SortedByValue[K comparable, V cmp.Ordered](m map[K]V) iter.Seq2[K, V] {
+// SortedByValue is a Seq2 over a map, in descending value order, with ties in
+// ascending key order. Iterating a map in a useful order is the everyday case
+// this makes pleasant.
+//
+// K is cmp.Ordered rather than comparable because of the tie-break. The first
+// version took any comparable key, compared values only and returned 0 on a
+// tie, so two equal values came out in whatever order the map produced, which
+// changes between runs. Its comment said ties were broken by key. A tie-break
+// needs an order on the keys, and the constraint is where that requirement
+// shows up.
+func SortedByValue[K cmp.Ordered, V cmp.Ordered](m map[K]V) iter.Seq2[K, V] {
 	return func(yield func(K, V) bool) {
 		keys := slices.Collect(maps.Keys(m))
 
 		slices.SortFunc(keys, func(a, b K) int {
-			// Descending by value, then by key so ties are deterministic.
-			if c := cmp.Compare(m[b], m[a]); c != 0 {
-				return c
-			}
-			return 0
+			return cmp.Or(cmp.Compare(m[b], m[a]), cmp.Compare(a, b))
 		})
 
 		for _, k := range keys {

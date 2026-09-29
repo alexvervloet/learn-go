@@ -184,9 +184,16 @@ func (r *recorder) WriteHeader(status int) {
 		return
 	}
 
-	r.status = status
-	r.wroteHeader = true
 	r.ResponseWriter.WriteHeader(status)
+
+	// A 1xx is informational (103 Early Hints is the one handlers send) and is followed by
+	// the real status, which net/http accepts. Only a final status ends the header phase.
+	// The first version marked any status as final, so after a 103 the real 200 or 404 was
+	// swallowed here and never reached the client.
+	if status >= 200 {
+		r.status = status
+		r.wroteHeader = true
+	}
 }
 
 // Write records the byte count, and supplies the implicit 200 that a handler writing a body

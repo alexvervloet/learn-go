@@ -877,3 +877,23 @@ func TestProductionTrustsProxyHeadersOnlyWhenTold(t *testing.T) {
 		t.Errorf("trusted: RemoteAddr = %q, want the rightmost entry, the one the proxy added", seen)
 	}
 }
+
+// TestRecorderPassesTheStatusAfterEarlyHints: 103 Early Hints comes before the real status.
+func TestRecorderPassesTheStatusAfterEarlyHints(t *testing.T) {
+	srv := httptest.NewServer(Logger(discardLogger())(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Link", "</style.css>; rel=preload; as=style")
+		w.WriteHeader(http.StatusEarlyHints)
+		w.WriteHeader(http.StatusCreated)
+	})))
+	t.Cleanup(srv.Close)
+
+	resp, err := http.Get(srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		t.Errorf("status %d after a 103, want 201: the recorder swallowed the real status", resp.StatusCode)
+	}
+}

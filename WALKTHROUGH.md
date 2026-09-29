@@ -117,6 +117,19 @@ container sits there.
 | `capstones/bookmark-manager` | 5434 | 6383 | |
 | `capstones/url-shortener` | 5435 | 6382 | |
 
+Redis has a second layer. `make test` runs every package at once against one Redis, so each test binary that
+uses it also gets a database number of its own, and a harness only runs `FLUSHDB` on a database that is empty or
+carries its `learn-go:test-harness` marker key. A database holding anything else fails the test with instructions
+rather than being emptied.
+
+| Redis DB | Test binary |
+|---|---|
+| 1, 2, 3 | `backend-concepts`: caching, ratelimit, redistest |
+| 4, 5 | `jobs-concepts`: worker, jobtest |
+| 6, 7 | `url-shortener`: api, cache |
+| 8, 9 | `bookmark-manager`: api, ratelimit |
+| 10 to 15 | a package not in the table, by hash |
+
 Three files bound 5433 until the day this walkthrough was written. Checking is one line:
 
 ```sh

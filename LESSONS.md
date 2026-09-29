@@ -118,6 +118,7 @@ the index below groups them by topic.
 - [Three compose files wanted the same host port, and only one could have it](#three-compose-files-wanted-the-same-host-port-and-only-one-could-have-it)
 - [`MAKELEVEL` leaks into a child make, and two tests failed only under `make test`](#makelevel-leaks-into-a-child-make-and-two-tests-failed-only-under-make-test)
 - [The Redis harnesses flushed the developer's own Redis](#the-redis-harnesses-flushed-the-developers-own-redis)
+- [The modernize analyzer rewrote a loop into one that stops a step short](#the-modernize-analyzer-rewrote-a-loop-into-one-that-stops-a-step-short)
 
 ## 2026-09-25 — Two pieces of escape-analysis folklore, both wrong
 
@@ -2449,3 +2450,20 @@ until the runtime finishes killing the process.
 **Next time.** "The process dies" and "nothing else runs" are different claims, and a test should assert the one
 the code guarantees. The test now checks for a line one second after `Wait`, which never prints. The README says
 code after a `Wait` is not proof that the goroutines behind it finished cleanly.
+
+## The modernize analyzer rewrote a loop into one that stops a step short
+
+**Expected.** The `modernize` analyzer's rangeint pass turns `for i := 0; i < n; i++` into `for i := range n`,
+which is purely mechanical for a loop that declares its own variable. Running it over go-concepts rewrote 180
+loops.
+
+**What happened.** One of them was `for shared = 0; shared < n; shared++`, where `shared` is an outer variable
+that goroutines read after the loop ends. The tool turned it into `for shared = range n`. A classic loop leaves
+the variable at n, because the final `i++` runs before the condition fails. A range loop leaves it at n-1. That
+loop simulates the pre-1.22 bug, and its whole point is that every goroutine reads n. The rewrite would have
+silently brought back the n-1 bug I had fixed in the same file an hour earlier.
+
+**Next time.** Read the diff of an automated rewrite before trusting a green run. Look hardest at any rewrite
+that assigns to an existing variable (`=`) rather than declaring one (`:=`), because that variable outlives the
+loop and its final value can change. Here the test would have caught it, but only because that test had just
+been corrected.

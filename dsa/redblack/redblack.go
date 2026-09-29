@@ -21,10 +21,10 @@
 //	2-3 tree node        red-black representation
 //
 //	   (30 50)                  50
-//	   /  |  \                 /
-//	  a   b   c              30            <- joined to 50 by a red link
+//	   /  |  \                 /  \
+//	  a   b   c              30    c       30 is joined to 50 by a red link
 //	                        /  \
-//	                       a    b     c
+//	                       a    b
 //
 // So every node is the same shape, and "red" means "this node is really part of
 // its parent". Left-leaning means a red link always goes to the left child,

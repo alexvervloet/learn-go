@@ -126,7 +126,7 @@ func TestPoolRetainsNothing(t *testing.T) {
 
 	dropped := raceDetectorDropsSomePuts(n)
 
-	if !raceEnabled {
+	if !raceDetectorEnabled {
 		if dropped != 0 {
 			t.Errorf("without -race every Put should come back, got %d/%d dropped", dropped, n)
 		}

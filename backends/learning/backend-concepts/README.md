@@ -269,7 +269,7 @@ because each service offers a different unit:
   remembers its offsets in Kafka, so reusing one means the second run starts where the first left off and reads
   nothing, which looks like a broken producer.
 
-The 90 lines of `pgtest` duplicate `dbtest` deliberately. Importing it would mean this module depends on that
+The two hundred or so lines of `pgtest` duplicate `dbtest` deliberately. Importing it would mean this module depends on that
 one, which works inside the workspace and breaks the moment someone clones one directory: a module path under
 github.com needs a tag, and this repo does not tag sub-modules.
 

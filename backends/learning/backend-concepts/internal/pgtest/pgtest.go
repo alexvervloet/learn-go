@@ -7,7 +7,7 @@
 // and builds it, because a Go module path under github.com needs a tag to be resolvable and this repo does
 // not tag sub-modules.
 //
-// So: 90 lines duplicated, deliberately, to keep every module in this repo independently buildable. The
+// So: about two hundred lines duplicated, deliberately, to keep every module in this repo independently buildable. The
 // alternative is a shared internal module and a `replace` directive in nine go.mod files, which is worse.
 //
 // The decisions are the same ones dbtest makes and the reasons are in its package doc: skip when there is

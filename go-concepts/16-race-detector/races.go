@@ -100,11 +100,19 @@ func racyAppend(n int) []int {
 // Shape 4: unsynchronised struct fields
 // -------------------------------------
 //
-// Two goroutines writing DIFFERENT fields of one struct is still a race if the
-// fields share a machine word, and is reported as one regardless. The detector
-// works at byte granularity but Go's memory model is about variables, and the
-// honest rule is simply: a struct accessed from several goroutines needs
-// synchronisation, field by field reasoning does not save you.
+// Here one goroutine writes Timeout, Retries and Name while another reads them,
+// and every one of those fields is a race.
+//
+// What is NOT a race is two goroutines writing DIFFERENT fields. The memory
+// model treats each field as its own memory location, even when two fields
+// share a machine word (two int32s, or two bytes), and the compiler never
+// widens a write to touch its neighbour. The detector agrees: it tracks memory
+// at byte granularity and stays silent. An earlier version of this comment said
+// different fields in one word race; it was checked with -race and they don't.
+//
+// The practical rule still holds: a struct shared between goroutines needs a
+// lock or a clear owner per field, because "different fields" survives only
+// until someone adds a method that reads both.
 
 // racyConfig is mutated and read concurrently.
 type racyConfig struct {

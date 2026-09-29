@@ -346,6 +346,18 @@ func TestOwnCIParses(t *testing.T) {
 	t.Logf("%d jobs, triggered by %v", len(w.Jobs), triggers)
 }
 
+// TestOwnCIIsClean runs every rule against the file that actually runs, and requires no findings at all.
+//
+// The TestOwnCI* tests below each check one hand-picked rule, and for a while that was all there was. ci.yml
+// failed the `timeout` rule on every one of its eleven jobs, the README said this module's tests would catch
+// exactly that, and nothing did, because no test asked for the whole list to be empty. A checker that its own
+// repository fails is advice rather than a check.
+func TestOwnCIIsClean(t *testing.T) {
+	for _, f := range Check(ownCI(t)) {
+		t.Errorf("%v", f)
+	}
+}
+
 // TestOwnCIHasNoScriptInjection is the rule that matters most, applied to the file that actually runs.
 func TestOwnCIHasNoScriptInjection(t *testing.T) {
 	for _, f := range Check(ownCI(t)) {

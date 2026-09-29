@@ -348,8 +348,10 @@ func (r *Recorder) Reset() {
 
 // Transport is what a service depends on, so a test can substitute the Recorder.
 //
-// An interface declared HERE, at the consumer, rather than in the sender: the same decision as every other
-// interface in this repo, and the reason is that a service needs one method and Sender has five.
+// It is narrow on purpose: a service needs one method and Sender has five. Go's convention is to declare an
+// interface where it is CONSUMED, in the service's own package, and a real service should copy these three
+// lines there rather than import them. It lives in package sender here only because this module has no
+// service package to put it in. (An earlier version of this comment said it was declared at the consumer.)
 type Transport interface {
 	Send(ctx context.Context, m *message.Message) error
 }

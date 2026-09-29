@@ -644,7 +644,13 @@ func TestQueueWeighting(t *testing.T) {
 
 // TestInspectorSeesTheQueue, which is what a dashboard and an alert are built on.
 func TestInspectorSeesTheQueue(t *testing.T) {
-	client, inspector, rec, queue := setup(t, worker.DefaultServerConfig())
+	// A long retry delay, so the task STAYS in the retry set while the test looks at it. With the
+	// harness's 50ms delay it was promoted back to pending between the wait seeing retry=1 and the
+	// snapshot below, and the test failed about one run in four under -race.
+	cfg := worker.DefaultServerConfig()
+	cfg.RetryDelay = func(int, error, *asynq.Task) time.Duration { return time.Minute }
+
+	client, inspector, rec, queue := setup(t, cfg)
 
 	// A task that will sit in the retry set.
 	task, err := tasks.NewFlaky(tasks.FlakyPayload{ID: "insp", FailuresWanted: 5})

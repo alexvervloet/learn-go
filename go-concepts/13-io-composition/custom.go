@@ -19,7 +19,8 @@ import (
 //	       report io.EOF when finished, not a custom "done" error
 //
 //	Write  write ALL of p, or return an error saying why
-//	       return len(p) on success, not the count you forwarded
+//	       return the bytes of p you consumed (len(p) on success), which for a
+//	       transforming writer is not the count it wrote downstream
 //	       never retain p: the caller may reuse it immediately
 
 // upperReader is a transforming Reader: it uppercases as it reads, with no
@@ -226,7 +227,7 @@ func implementationRules() []string {
 		"Read: never return (0, nil) in a loop; callers will spin",
 		"Read: report io.EOF when finished, and do not wrap it",
 		"Write: write ALL of p or return an error",
-		"Write: return len(p) on success, not the count you forwarded on",
+		"Write: return the bytes of p consumed (len(p) on success), not the bytes written downstream",
 		"Write: never retain p; the caller reuses it on the next call",
 	}
 }

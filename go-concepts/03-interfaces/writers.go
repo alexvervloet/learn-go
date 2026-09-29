@@ -62,10 +62,12 @@ type countingWriter struct {
 	lines int
 }
 
-// Write implements io.Writer. It must return the number of bytes it was given
-// on success, not the number it forwarded, or callers computing progress will
-// be wrong. Returning n < len(p) with a nil error violates the interface's
-// contract and io.Copy will treat it as io.ErrShortWrite.
+// Write implements io.Writer. It reports how many bytes of p it consumed. It
+// forwards p unchanged, so that is whatever the next writer reported, and a
+// short write comes back with the next writer's error. A writer that
+// TRANSFORMS its input (gzip.Writer) must still count in the caller's bytes,
+// returning len(p), not what it wrote downstream. Returning n < len(p) with a
+// nil error violates the contract and io.Copy reports io.ErrShortWrite.
 func (c *countingWriter) Write(p []byte) (int, error) {
 	n, err := c.next.Write(p)
 	c.bytes += n

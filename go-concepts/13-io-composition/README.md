@@ -68,8 +68,12 @@ bug that makes logs lie.
 
 `Write` must write all of `p` or return an error. A short write with a nil error
 breaks the contract, and `io.Copy` reports `io.ErrShortWrite` when it sees one.
-That is why `countingWriter` in lesson 03 returns the byte count it was given
-rather than the count it forwarded.
+
+The number to return is how many bytes of `p` you consumed, which is not always
+how many you wrote downstream. `gzip.Writer` consumes all of `p` and writes far
+fewer compressed bytes, and it returns `len(p)`, because the caller counts in its
+own bytes. `countingWriter` in lesson 03 passes `p` through unchanged, so the two
+numbers are the same and it returns what the next writer reported, error and all.
 
 ## `io.Copy` and its fast paths
 

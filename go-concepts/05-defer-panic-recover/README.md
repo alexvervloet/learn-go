@@ -118,6 +118,18 @@ Every goroutine that could panic needs its own deferred recover. This is the
 most common way a Go service dies in production, and it comes up again in
 [06-goroutines](../06-goroutines/).
 
+`TestPanicInGoroutineIsUnrecoverable` proves it by running itself in a child
+process and checking that the child died. It also found something worth
+knowing: the panicking goroutine's deferred calls run while it unwinds, so a
+deferred `wg.Done()` releases a parent blocked in `wg.Wait()`, and the parent
+often runs a few more lines before the process exits. In 16 of 20 runs here
+the parent printed its next line. It never got much further. Code after a
+`Wait` is not proof that the goroutines behind it finished cleanly.
+
+A recover that decides a panic isn't its business can re-panic with the same
+value. The crash trace still includes the frame that first panicked, and the
+header says `panic: boom [recovered, repanicked]`.
+
 ### Recursion depth is not the limit you expect
 
 A recursive parser is the classic place to worry about blowing the stack.

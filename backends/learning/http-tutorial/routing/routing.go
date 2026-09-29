@@ -171,6 +171,11 @@ func NewMux(store *Store) *http.ServeMux {
 			Name string `json:"name"`
 		}
 
+		// Capped, because an unbounded Decode is the pattern request.DecodeJSON warns
+		// about: a client can make the server allocate whatever it sends. The routing
+		// lesson keeps the handler short, but not at that price.
+		r.Body = http.MaxBytesReader(w, r.Body, 1<<10)
+
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			http.Error(w, "invalid JSON", http.StatusBadRequest)
 			return

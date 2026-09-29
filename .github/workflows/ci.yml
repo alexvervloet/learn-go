@@ -35,9 +35,9 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.27"
           # cache-dependency-path is not optional in a workspace. Without it
@@ -112,12 +112,13 @@ jobs:
   # supports.
   #
   # One version, not two. Every go.mod says go 1.27, and since Go 1.21 that
-  # line is a minimum toolchain: an older go command downloads 1.27 and
-  # re-executes itself (GOTOOLCHAIN=auto, setup-go@v5's default). This matrix
-  # used to have a "Go 1.26" leg, and its log said "go: downloading go1.27.1"
-  # on every run. It tested 1.27 twice under two names. Testing an older Go for
-  # real would mean lowering every go line and setting GOTOOLCHAIN=local, and
-  # the lessons use 1.27 features, so the repo supports 1.27 and says so.
+  # line is a minimum toolchain. This matrix used to have a "Go 1.26" leg on
+  # setup-go@v5, which left GOTOOLCHAIN=auto, so the 1.26 go command downloaded
+  # 1.27 and re-executed itself: its log said "go: downloading go1.27.1" on
+  # every run, and it tested 1.27 twice under two names. setup-go@v6 and later
+  # export GOTOOLCHAIN=local, under which that leg would fail outright. Testing
+  # an older Go for real would mean lowering every go line, and the lessons use
+  # 1.27 features, so the repo supports 1.27 and says so.
   #
   # The version stays a matrix axis so the job names keep their shape.
   #
@@ -137,9 +138,9 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: ${{ matrix.go }}
           cache: true
@@ -213,9 +214,9 @@ jobs:
           --health-retries 30
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.27"
           cache: true
@@ -314,9 +315,9 @@ jobs:
           --health-retries 30
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.27"
           cache: true
@@ -472,9 +473,9 @@ jobs:
           --health-retries 30
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.27"
           cache: true
@@ -608,9 +609,9 @@ jobs:
           --health-retries 40
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.27"
           cache: true
@@ -658,9 +659,9 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.27"
           cache: true
@@ -747,9 +748,9 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.27"
           cache: true
@@ -761,14 +762,15 @@ jobs:
       # 23 and the runner has a newer one, so this is belt and braces and it
       # documents the requirement.
       - name: Set up Buildx
-        # Pinned to a commit sha, not to @v3. This is the only third-party
+        # Pinned to a commit sha, not to @v4. This is the only third-party
         # action in the file, and a tag is mutable: whoever controls the repo
-        # can repoint v3 at anything and every workflow using it picks that up
+        # can repoint v4 at anything and every workflow using it picks that up
         # on the next run. A sha cannot be repointed.
         #
-        # The cost is that nothing bumps it for you, so the tag it corresponds
-        # to goes in the comment. This one is v3.
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+        # A sha says nothing about which release it is, so the trailing comment
+        # does. Dependabot (.github/dependabot.yml) reads that comment, opens a
+        # PR moving the sha, and rewrites the comment to match.
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Build and run every image
         working-directory: backends/learning/docker-concepts
@@ -799,9 +801,9 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.27"
           cache: true
@@ -873,9 +875,9 @@ jobs:
             scope: portable
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.27"
           cache: true
@@ -915,9 +917,9 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.27"
           cache: true
@@ -932,7 +934,7 @@ jobs:
         run: go tool cover -func=coverage.out | tail -1
 
       - name: Upload the profile
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage
           path: coverage.out

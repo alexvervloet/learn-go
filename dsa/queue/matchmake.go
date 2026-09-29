@@ -59,23 +59,15 @@ func Matchmake(q *Queue[Player]) (Match, bool) {
 	}
 
 	// Look for anyone compatible among those still waiting.
-	for _, candidate := range q.Slice() {
+	for i, candidate := range q.Slice() {
 		if !compatible(front, candidate) {
 			continue
 		}
 
-		// Found one. Remove them from wherever they were.
-		partner, removed := q.SearchAndRemove(candidate, func(a, b Player) bool {
-			return a.Name == b.Name
-		})
-		if !removed {
-			// Cannot happen: the candidate came from Slice() and nothing has
-			// mutated the queue since. Checked because a silent mismatch here
-			// would drop a player.
-			continue
-		}
-
-		return Match{A: front, B: partner}, true
+		// Found one. Remove them by POSITION, the one thing known to identify
+		// them. The first version searched again by name, and two players called
+		// Bo with different ranks meant removing (and matching) the wrong one.
+		return Match{A: front, B: q.removeAt(i)}, true
 	}
 
 	// Nobody compatible. Put them back at the FRONT so they keep their place.

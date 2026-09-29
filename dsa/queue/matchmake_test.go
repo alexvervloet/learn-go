@@ -159,3 +159,24 @@ func TestMatchAllTerminates(t *testing.T) {
 		t.Errorf("waiting = %d, want 3", len(waiting))
 	}
 }
+
+// TestMatchmakeRemovesThePlayerItMatched: two waiting players share a name and differ in rank. The first
+// version found the compatible one, then removed the first player with that NAME, so the front player was
+// matched against the incompatible one and the compatible one was left waiting.
+func TestMatchmakeRemovesThePlayerItMatched(t *testing.T) {
+	q := New[Player](4)
+	q.Push(Player{Name: "Ana", Rank: "gold"})
+	q.Push(Player{Name: "Bo", Rank: "silver"})
+	q.Push(Player{Name: "Bo", Rank: "gold"})
+
+	m, ok := Matchmake(q)
+	if !ok {
+		t.Fatal("no match made")
+	}
+	if m.B.Rank != "gold" {
+		t.Errorf("matched %v; the gold Bo was the compatible one", m)
+	}
+	if left := q.Slice(); len(left) != 1 || left[0].Rank != "silver" {
+		t.Errorf("left waiting: %v, want the silver Bo", left)
+	}
+}

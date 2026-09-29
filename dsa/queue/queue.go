@@ -132,34 +132,37 @@ func (q *Queue[T]) String() string {
 // player at the front with no compatible partner must be able to wait while a
 // later pair is matched around them.
 func (q *Queue[T]) SearchAndRemove(v T, equal func(a, b T) bool) (T, bool) {
-	for i := 0; i < q.count; i++ {
-		idx := (q.head + i) % len(q.items)
-
-		if !equal(q.items[idx], v) {
-			continue
+	for i := range q.count {
+		if equal(q.items[(q.head+i)%len(q.items)], v) {
+			return q.removeAt(i), true
 		}
-		found := q.items[idx]
-
-		// Shift the elements after it forward by one, in logical order.
-		for j := i; j < q.count-1; j++ {
-			from := (q.head + j + 1) % len(q.items)
-			to := (q.head + j) % len(q.items)
-			q.items[to] = q.items[from]
-		}
-
-		// Zero the now-unused last slot and retreat the tail.
-		last := (q.head + q.count - 1) % len(q.items)
-		var zero T
-		q.items[last] = zero
-
-		q.tail = last
-		q.count--
-
-		return found, true
 	}
 
 	var zero T
 	return zero, false
+}
+
+// removeAt removes and returns the element i places behind the front, shifting the rest
+// forward to close the gap. i must be less than Len. O(n).
+func (q *Queue[T]) removeAt(i int) T {
+	found := q.items[(q.head+i)%len(q.items)]
+
+	// Shift the elements after it forward by one, in logical order.
+	for j := i; j < q.count-1; j++ {
+		from := (q.head + j + 1) % len(q.items)
+		to := (q.head + j) % len(q.items)
+		q.items[to] = q.items[from]
+	}
+
+	// Zero the now-unused last slot and retreat the tail.
+	last := (q.head + q.count - 1) % len(q.items)
+	var zero T
+	q.items[last] = zero
+
+	q.tail = last
+	q.count--
+
+	return found
 }
 
 // Comparable is a Queue for comparable element types, so callers do not have to

@@ -185,19 +185,23 @@ func MaxWaterContainer(heights []int) int {
 // Two pointers from the ends, each skipping what it should ignore. The alternative,
 // building a cleaned copy and comparing it with its reverse, is clearer and allocates
 // twice; this is the O(1)-space version.
+//
+// It walks BYTES, which is what makes it O(1) space. The first version converted to
+// []rune first, an O(n) allocation in the function that claimed not to allocate. Bytes
+// are enough because only ASCII letters and digits count: every byte of a multi-byte
+// UTF-8 character is 0x80 or above, so it is skipped exactly as the whole rune was.
 func IsPalindrome(s string) bool {
-	runes := []rune(s)
-	left, right := 0, len(runes)-1
+	left, right := 0, len(s)-1
 
 	for left < right {
-		for left < right && !isAlphanumeric(runes[left]) {
+		for left < right && !isAlphanumeric(rune(s[left])) {
 			left++
 		}
-		for left < right && !isAlphanumeric(runes[right]) {
+		for left < right && !isAlphanumeric(rune(s[right])) {
 			right--
 		}
 
-		if lower(runes[left]) != lower(runes[right]) {
+		if lower(rune(s[left])) != lower(rune(s[right])) {
 			return false
 		}
 
@@ -281,8 +285,13 @@ func DedupeAllowing[T comparable](s []T, limit int) int {
 // MoveZerosToEnd moves every zero to the end in place, keeping the order of the rest.
 //
 // The same read/write shape. The final loop fills the tail rather than swapping as it
-// goes, because swapping does more writes for the same result: a slice of a million
-// zeros followed by one non-zero costs one write here and a million swaps there.
+// goes. Filling writes every slot exactly once, n writes whatever the input. Swapping
+// writes twice for each non-zero that has a zero somewhere before it: nothing when there
+// are no zeros, up to 2n when they all come first. So a million zeros followed by one
+// non-zero costs a million writes here and one swap the other way, and a slice with no
+// zeros costs n writes here and none the other way. Filling wins on the worst case and on
+// simplicity, not on every input. An earlier version of this comment had the million-zeros
+// example backwards.
 func MoveZerosToEnd(nums []int) {
 	write := 0
 	for _, v := range nums {

@@ -3,6 +3,7 @@ package twopointers
 import (
 	"math/rand/v2"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -497,5 +498,21 @@ func TestSquaresOfSortedMatchesSquareThenSort(t *testing.T) {
 		if !slices.Equal(got, want) {
 			t.Fatalf("SquaresOfSorted(%v) = %v, want %v", s, got, want)
 		}
+	}
+}
+
+// palindromeSink keeps the measured call from being optimised away.
+var palindromeSink bool
+
+// TestIsPalindromeDoesNotAllocate holds the function to its O(1)-space claim. The first version converted the
+// string to []rune before walking it.
+func TestIsPalindromeDoesNotAllocate(t *testing.T) {
+	s := strings.Repeat("Ab, café! ", 50) + strings.Repeat(" !éfac ,bA", 50)
+
+	if !IsPalindrome(s) {
+		t.Fatal("not recognised as a palindrome")
+	}
+	if allocs := testing.AllocsPerRun(100, func() { palindromeSink = IsPalindrome(s) }); allocs != 0 {
+		t.Errorf("IsPalindrome allocated %.0f times per call", allocs)
 	}
 }

@@ -66,5 +66,6 @@ mem.pprof
 .idea/
 .history/
 
-# Scratch plan — see the global convention; this file is never committed.
+# A working plan kept at the root while a multi-step change is in progress.
+# It is scratch, never committed; LESSONS.md is the part that stays.
 PLAN.md

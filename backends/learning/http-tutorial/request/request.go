@@ -40,6 +40,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"mime/multipart"
 	"net/http"
 	"strconv"
@@ -65,6 +66,13 @@ var (
 
 	// ErrTrailingData means there was more than one JSON value in the body.
 	ErrTrailingData = errors.New("request: unexpected data after the JSON value")
+
+	// ErrBadForm means a form body could not be parsed, and ErrBadQuery that query
+	// parameters were missing or malformed. Separate from ErrBadJSON, which both used to
+	// wrap: a log line saying "malformed JSON" about a form or a query string sends
+	// whoever reads it to the wrong place.
+	ErrBadForm  = errors.New("request: malformed form")
+	ErrBadQuery = errors.New("request: invalid query parameters")
 )
 
 // DecodeJSON reads exactly one JSON value from the body into v.
@@ -161,7 +169,8 @@ func StatusFor(err error) int {
 	case errors.Is(err, ErrTooLarge):
 		return http.StatusRequestEntityTooLarge
 	case errors.Is(err, ErrUnknownField), errors.Is(err, ErrBadJSON),
-		errors.Is(err, ErrEmptyBody), errors.Is(err, ErrTrailingData):
+		errors.Is(err, ErrEmptyBody), errors.Is(err, ErrTrailingData),
+		errors.Is(err, ErrBadForm), errors.Is(err, ErrBadQuery):
 		return http.StatusBadRequest
 	default:
 		return http.StatusInternalServerError
@@ -195,7 +204,7 @@ func (q *Query) Err() error {
 	if len(q.errs) == 0 {
 		return nil
 	}
-	return fmt.Errorf("%w: %s", ErrBadJSON, strings.Join(q.errs, "; "))
+	return fmt.Errorf("%w: %s", ErrBadQuery, strings.Join(q.errs, "; "))
 }
 
 // Errors returns the accumulated problems individually, for a structured error response.
@@ -358,19 +367,37 @@ func (q *Query) OneOf(key, fallback string, allowed ...string) string {
 // r.FormValue("id") returns a query parameter when the body has no such field, so a handler
 // expecting a POST field silently accepts ?id=. r.PostFormValue reads the body only, and is
 // almost always what you want.
+//
+// maxBytes caps the whole body, which ParseMultipartForm on its own does not do. Its
+// argument is only how much to hold in MEMORY: a multipart body larger than that spills to
+// temporary files with no limit at all. The first version passed maxBytes straight through,
+// so a form "limited" to 1KB accepted 64KB on disk. http.MaxBytesReader is the cap, the same
+// as for JSON.
 func ParseForm(r *http.Request, maxBytes int64) error {
-	if err := r.ParseMultipartForm(maxBytes); err != nil {
-		if errors.Is(err, http.ErrNotMultipart) {
-			// Not multipart, so the plain parser is the right one.
-			if err := r.ParseForm(); err != nil {
-				return fmt.Errorf("%w: %w", ErrBadJSON, err)
-			}
-			return nil
-		}
-		return fmt.Errorf("%w: %w", ErrBadJSON, err)
+	r.Body = http.MaxBytesReader(nil, r.Body, maxBytes)
+
+	// Pick the parser from the Content-Type rather than trying multipart and falling
+	// back. ParseMultipartForm calls ParseForm internally, THROWS AWAY its error, and
+	// reports ErrNotMultipart; a second ParseForm then sees the form already parsed and
+	// returns nil. The first version did exactly that, so a malformed urlencoded body
+	// ("a=%zz") parsed without complaint.
+	var err error
+
+	if mediaType, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); mediaType == "multipart/form-data" {
+		err = r.ParseMultipartForm(maxBytes)
+	} else {
+		err = r.ParseForm()
 	}
 
-	return nil
+	var tooLarge *http.MaxBytesError
+	switch {
+	case err == nil:
+		return nil
+	case errors.As(err, &tooLarge):
+		return fmt.Errorf("%w: over %d bytes", ErrTooLarge, maxBytes)
+	default:
+		return fmt.Errorf("%w: %w", ErrBadForm, err)
+	}
 }
 
 // Upload describes one uploaded file, with the parts a handler must not trust separated from

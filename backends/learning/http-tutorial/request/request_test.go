@@ -277,8 +277,8 @@ func TestQueryAccumulatesErrors(t *testing.T) {
 		t.Logf("  %s", e)
 	}
 
-	if err := q.Err(); !errors.Is(err, ErrBadJSON) {
-		t.Errorf("Err() = %v, want it to wrap ErrBadJSON", err)
+	if err := q.Err(); !errors.Is(err, ErrBadQuery) {
+		t.Errorf("Err() = %v, want it to wrap ErrBadQuery", err)
 	}
 	if StatusFor(q.Err()) != http.StatusBadRequest {
 		t.Error("the accumulated error should map to 400")
@@ -686,5 +686,37 @@ func TestClientIPWithoutAPort(t *testing.T) {
 
 	if got := ClientIP(r, false); got != "10.0.0.1" {
 		t.Errorf("ClientIP = %q", got)
+	}
+}
+
+// TestParseFormCapsTheWholeBody: ParseMultipartForm's argument is how much to keep in MEMORY, and a multipart
+// body larger than that spills to temporary files with no limit at all. The first version passed maxBytes
+// straight through, so a "1KB" form accepted 64KB on disk without an error.
+func TestParseFormCapsTheWholeBody(t *testing.T) {
+	var body bytes.Buffer
+
+	w := multipart.NewWriter(&body)
+	part, _ := w.CreateFormFile("upload", "big.bin")
+	_, _ = part.Write(bytes.Repeat([]byte("x"), 64<<10))
+	_ = w.Close()
+
+	r := httptest.NewRequest(http.MethodPost, "/", &body)
+	r.Header.Set("Content-Type", w.FormDataContentType())
+
+	err := ParseForm(r, 1<<10)
+	if !errors.Is(err, ErrTooLarge) {
+		t.Fatalf("a 64KB multipart body against a 1KB limit: err = %v, want ErrTooLarge", err)
+	}
+	if StatusFor(err) != http.StatusRequestEntityTooLarge {
+		t.Errorf("status = %d, want 413", StatusFor(err))
+	}
+
+	// And a malformed form is a form error, not a JSON one.
+	bad := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("a=%zz"))
+	bad.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	err = ParseForm(bad, 1<<10)
+	if !errors.Is(err, ErrBadForm) || errors.Is(err, ErrBadJSON) {
+		t.Errorf("malformed form: err = %v, want ErrBadForm and not ErrBadJSON", err)
 	}
 }

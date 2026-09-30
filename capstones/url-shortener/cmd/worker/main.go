@@ -46,7 +46,20 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	// Concurrency is goroutines, and the ceiling that matters is the DATABASE pool rather than the CPU: every
+	// task holds a connection for its transaction. More workers than connections means workers waiting on the
+	// pool, which looks like a slow queue. pgxpool's default is max(4, NumCPU), fewer than 10 on most
+	// machines, so the pool is raised to match unless the URL's pool_max_conns already allows more.
+	const concurrency = 10
+
+	poolCfg, err := pgxpool.ParseConfig(cfg.DatabaseURL)
+	if err != nil {
+		return err
+	}
+
+	poolCfg.MaxConns = max(poolCfg.MaxConns, concurrency)
+
+	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
 	if err != nil {
 		return err
 	}
@@ -62,10 +75,8 @@ func run() error {
 	server := asynq.NewServer(
 		asynq.RedisClientOpt{Addr: cfg.RedisAddr},
 		asynq.Config{
-			// Concurrency is goroutines, and the ceiling that matters is the DATABASE pool rather than the
-			// CPU: every click task does two writes. More workers than connections means workers waiting on
-			// the pool, which looks like a slow queue and is a misconfiguration.
-			Concurrency: 10,
+			// Sized with the pool above.
+			Concurrency: concurrency,
 			Queues:      tasks.Queues,
 
 			// ShutdownTimeout bounds how long a graceful stop waits for in-flight tasks. Anything still
@@ -115,7 +126,7 @@ func run() error {
 		return err
 	}
 
-	log.Info("worker started", "queues", tasks.Queues, "concurrency", 10)
+	log.Info("worker started", "queues", tasks.Queues, "concurrency", concurrency, "pool", poolCfg.MaxConns)
 
 	<-ctx.Done()
 	log.Info("shutting down")

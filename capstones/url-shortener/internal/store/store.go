@@ -124,15 +124,19 @@ func (s *Store) UserByEmail(ctx context.Context, email string) (*User, error) {
 
 // CreateURL inserts a URL, generating a slug from the row's own id when none is given.
 //
-// # Why this needs a transaction
+// # How a generated slug gets its id first
 //
-// A generated slug is derived from the id, and the id does not exist until the row does. So: insert with a
-// placeholder, read the id back, compute the slug, update. Two statements that must both happen, which is the
-// definition of a transaction.
+// A generated slug is derived from the id, and the id normally does not exist until the row does. nextval
+// reserves one before the insert, so the slug can be computed and the row written in one INSERT.
 //
-// The placeholder is the id itself as text, which is unique for the same reason the final slug is, so the
-// UNIQUE constraint holds between the two statements. A constant placeholder would make two concurrent inserts
-// collide.
+// # The collision the id scheme does not prevent
+//
+// Generated slugs never collide with each other, because ids don't. They can collide with a CUSTOM slug: a
+// person can choose, today, the exact string that id 90,000 will encode to next month. When that id comes up
+// the insert fails on urls_slug_key, and without handling it the user who did not choose a slug at all gets a
+// 409. So a generated slug that is taken is skipped: the next id is reserved and tried, inside a savepoint,
+// because a failed INSERT aborts the whole transaction in Postgres. Skipping costs one id. A person would have
+// to have taken every candidate for this to give up.
 func (s *Store) CreateURL(ctx context.Context, userID int64, target, customSlug string, expiresAt *time.Time, slugFor func(int64) (string, error)) (*URL, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -156,10 +160,40 @@ func (s *Store) CreateURL(ctx context.Context, userID int64, target, customSlug 
 		return url, nil
 	}
 
-	// A placeholder unique to this row: currval is not available before the insert, so the nextval is taken
-	// first and used for both the slug and the id.
+	const attempts = 5
+
+	for range attempts {
+		url, err := insertGenerated(ctx, tx, userID, target, expiresAt, slugFor)
+		if errors.Is(err, ErrSlugTaken) {
+			continue
+		}
+
+		if err != nil {
+			return nil, err
+		}
+
+		if err := tx.Commit(ctx); err != nil {
+			return nil, err
+		}
+
+		return url, nil
+	}
+
+	return nil, fmt.Errorf("%w: %d generated slugs in a row were already taken", ErrSlugTaken, attempts)
+}
+
+// insertGenerated reserves an id, derives the slug and inserts, all inside a savepoint, so a slug that is
+// already taken rolls back this attempt and leaves the transaction usable for the next.
+func insertGenerated(ctx context.Context, tx pgx.Tx, userID int64, target string, expiresAt *time.Time, slugFor func(int64) (string, error)) (*URL, error) {
+	sp, err := tx.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	defer func() { _ = sp.Rollback(ctx) }()
+
 	var id int64
-	if err := tx.QueryRow(ctx, `SELECT nextval('urls_id_seq')`).Scan(&id); err != nil {
+	if err := sp.QueryRow(ctx, `SELECT nextval('urls_id_seq')`).Scan(&id); err != nil {
 		return nil, fmt.Errorf("store: reserve an id: %w", err)
 	}
 
@@ -173,7 +207,7 @@ func (s *Store) CreateURL(ctx context.Context, userID int64, target, customSlug 
 		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id, slug, target, user_id, created_at, expires_at, click_count`
 
-	rows, err := tx.Query(ctx, q, id, slug, target, userID, expiresAt)
+	rows, err := sp.Query(ctx, q, id, slug, target, userID, expiresAt)
 	if err != nil {
 		return nil, wrapUnique(err, map[string]error{"urls_slug_key": ErrSlugTaken})
 	}
@@ -183,7 +217,8 @@ func (s *Store) CreateURL(ctx context.Context, userID int64, target, customSlug 
 		return nil, wrapUnique(err, map[string]error{"urls_slug_key": ErrSlugTaken})
 	}
 
-	if err := tx.Commit(ctx); err != nil {
+	// Commit on a savepoint is RELEASE SAVEPOINT: the row becomes part of the outer transaction.
+	if err := sp.Commit(ctx); err != nil {
 		return nil, err
 	}
 

@@ -351,3 +351,31 @@ func TestExpiredIsCheckedInGoNotInTheQuery(t *testing.T) {
 	require.NoError(t, err, "the row comes back, so the handler can tell expired from absent")
 	require.True(t, found.Expired())
 }
+
+// TestAGeneratedSlugSkipsOneAPersonTook is the collision between the two kinds of slug. Someone chose, as a
+// custom slug, the string the next id encodes to. The next user, who chose no slug at all, must still get a URL
+// rather than a 409 for a slug they never asked for.
+func TestAGeneratedSlugSkipsOneAPersonTook(t *testing.T) {
+	s, ctx := newStore(t)
+
+	u := user(t, s, ctx, "alex@example.com")
+
+	_, err := s.CreateURL(ctx, u.ID, "https://example.com/mine", "squatted", nil, shortener.Obfuscate)
+	require.NoError(t, err)
+
+	// The slug function lands on the squatted slug first, the way id 90,000 would next month.
+	calls := 0
+	slugFor := func(id int64) (string, error) {
+		calls++
+		if calls == 1 {
+			return "squatted", nil
+		}
+
+		return shortener.Obfuscate(id)
+	}
+
+	url, err := s.CreateURL(ctx, u.ID, "https://example.com/theirs", "", nil, slugFor)
+	require.NoError(t, err)
+	require.NotEqual(t, "squatted", url.Slug)
+	require.Equal(t, 2, calls, "one taken slug costs one extra id, not the request")
+}

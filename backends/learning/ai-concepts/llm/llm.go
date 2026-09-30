@@ -53,8 +53,12 @@ type Config struct {
 	// terminal, which is right, and an overloaded_error arrives as a 529 and is.
 	MaxRetries int
 
-	// Timeout bounds one REQUEST including its retries. A generation of several thousand tokens takes tens of
-	// seconds, so a 10 second timeout on a long completion is a timeout that fires on success.
+	// Timeout bounds one ATTEMPT, not the call. The SDK starts a fresh timer for each try and retries an attempt
+	// that timed out, so with the default two retries a 10 second Timeout can take over 30 seconds to fail. To
+	// bound the whole call, retries and backoff included, put a deadline on the ctx you pass in.
+	//
+	// A generation of several thousand tokens takes tens of seconds, so a 10 second timeout on a long completion
+	// is a timeout that fires on success, and then again on each retry.
 	Timeout time.Duration
 
 	// HTTPClient replaces the transport, which is how a test counts requests.

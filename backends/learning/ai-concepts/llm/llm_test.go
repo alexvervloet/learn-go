@@ -3,7 +3,10 @@ package llm
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -224,4 +227,43 @@ func TestLiveRoundTrip(t *testing.T) {
 	require.NotEmpty(t, TextOf(msg))
 
 	t.Logf("model said %q using %d in / %d out", TextOf(msg), msg.Usage.InputTokens, msg.Usage.OutputTokens)
+}
+
+// TestTimeoutIsPerAttempt pins down what Timeout bounds. The first attempt hangs past it and the retry
+// answers, so the call succeeds after taking longer than Timeout. A per-call timeout would have failed.
+func TestTimeoutIsPerAttempt(t *testing.T) {
+	var attempts atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if attempts.Add(1) == 1 {
+			// Reading the body lets the server notice the client hanging up, which cancels r.Context().
+			// Without it this handler sleeps the full five seconds and srv.Close waits for it.
+			_, _ = io.Copy(io.Discard, r.Body)
+
+			select {
+			case <-r.Context().Done():
+			case <-time.After(5 * time.Second):
+			}
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(fake.TextMessage("late but fine", 5, 3).Body))
+	}))
+	t.Cleanup(srv.Close)
+
+	const timeout = 200 * time.Millisecond
+
+	c, err := New(Config{APIKey: "k", BaseURL: srv.URL, Timeout: timeout, MaxRetries: 1})
+	require.NoError(t, err)
+
+	start := time.Now()
+	text, _, err := Ask(context.Background(), c, "", "hi", 16)
+	took := time.Since(start)
+
+	require.NoError(t, err)
+	require.Equal(t, "late but fine", text)
+	require.Equal(t, int32(2), attempts.Load(), "the timed-out attempt was retried")
+	require.Greater(t, took, timeout, "the call outlived Timeout, because Timeout is per attempt")
 }

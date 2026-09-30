@@ -58,6 +58,9 @@ import (
 // instead ties the caller to a string this package is free to reword.
 var ErrNoResult = errors.New("dataloader: no result for key")
 
+// ErrBatchPanicked is the error every key in a batch gets when the batch function panics.
+var ErrBatchPanicked = errors.New("dataloader: batch function panicked")
+
 // BatchFunc fetches many keys at once.
 //
 // Returning a map rather than a slice: the caller asked for a set and some may be missing, so a slice would have
@@ -212,7 +215,7 @@ func (l *Loader[K, V]) run(ctx context.Context, batch map[K]*result[V]) {
 		keys = append(keys, k)
 	}
 
-	values, err := l.batch(ctx, keys)
+	values, err := l.call(ctx, keys)
 
 	for k, r := range batch {
 		if err != nil {
@@ -230,6 +233,23 @@ func (l *Loader[K, V]) run(ctx context.Context, batch map[K]*result[V]) {
 		// result. The map guarantees that: a key appears once.
 		close(r.done)
 	}
+}
+
+// call runs the batch function and turns a panic into an error.
+//
+// A panic here is worse than one in a resolver. On the timer path it happens on a goroutine of its own, where
+// nothing recovers it and the whole process exits. On the full-batch path gqlgen recovers it for the one caller
+// that ran the batch, and every other key's future is never completed, so those resolvers wait until their
+// request times out. Recovering here gives every waiter the same error, the way gqlgen treats a panicking
+// resolver.
+func (l *Loader[K, V]) call(ctx context.Context, keys []K) (values map[K]V, err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			values, err = nil, fmt.Errorf("%w: %v", ErrBatchPanicked, p)
+		}
+	}()
+
+	return l.batch(ctx, keys)
 }
 
 // LoadMany fetches several keys, which is one call rather than N to Load.

@@ -3,6 +3,7 @@ package dataloader
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -192,5 +193,45 @@ func TestOneCallerCancellingDoesNotFailTheBatch(t *testing.T) {
 	got := <-a
 	if got.err != nil || got.v != 1 {
 		t.Fatalf("A got %d, %v: B's cancellation failed a batch A was waiting on", got.v, got.err)
+	}
+}
+
+// TestAPanickingBatchFailsEveryWaiter covers both paths. On the timer path the panic used to kill the process;
+// on the full-batch path it reached only the caller that filled the batch, and the others waited forever.
+func TestAPanickingBatchFailsEveryWaiter(t *testing.T) {
+	for name, maxBatch := range map[string]int{"timer": 100, "full batch": 3} {
+		t.Run(name, func(t *testing.T) {
+			l := New(func(context.Context, []int) (map[int]int, error) {
+				panic("the store's driver had a bad day")
+			}, 5*time.Millisecond, maxBatch)
+
+			errs := make(chan error, 3)
+
+			for k := range 3 {
+				go func() {
+					// A panic that escapes Load would kill the test binary, so a recovered one is
+					// reported as a failure rather than a crash.
+					defer func() {
+						if p := recover(); p != nil {
+							errs <- fmt.Errorf("Load panicked: %v", p)
+						}
+					}()
+
+					_, err := l.Load(context.Background(), k)
+					errs <- err
+				}()
+			}
+
+			for range 3 {
+				select {
+				case err := <-errs:
+					if !errors.Is(err, ErrBatchPanicked) {
+						t.Errorf("got %v, want ErrBatchPanicked", err)
+					}
+				case <-time.After(2 * time.Second):
+					t.Fatal("a waiter never heard back: the batch panicked and its future was never completed")
+				}
+			}
+		})
 	}
 }

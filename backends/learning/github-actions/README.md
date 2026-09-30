@@ -136,7 +136,9 @@ which is why half this package is about who can make it run.
 
 ### Triggers worth knowing apart
 
-`pull_request` runs with a read-only token and no secrets, because the code being tested came from a stranger.
+`pull_request` from a FORK runs with a read-only token and no secrets, because the code being tested came from a
+stranger. From a branch in the same repository it gets the workflow's normal token permissions and its secrets,
+because anyone who can push a branch is already trusted with them.
 
 `pull_request_target` runs the workflow from the **base** branch with a full token and the secrets, which is what
 makes labelling and commenting on a PR possible. Checking out the PR's head inside one combines attacker-supplied
@@ -151,5 +153,7 @@ compromises, and it is the `pull_request_target` rule above.
 | `@v4.1.7` | The same, with a smaller blast radius. |
 | `@<40 hex>` | Nothing. A sha cannot be repointed. |
 
-The cost of a sha is that nothing bumps it for you, so the tag it corresponds to goes in a comment next to it.
-That is what `.github/workflows/ci.yml` does.
+A sha says nothing about which release it is, so the tag it corresponds to goes in a comment next to it. That is
+what `.github/workflows/ci.yml` does, and it is also what lets Dependabot or Renovate bump it: both read the
+comment, open a PR moving the sha to a newer release, and rewrite the comment to match. This repository's
+`.github/dependabot.yml` does it monthly.

@@ -35,7 +35,7 @@ ARG TARGETARCH=amd64
 # small privacy one: without it, every panic prints /home/whoever/go/src/...
 #
 # -ldflags="-s -w" strips the symbol table and the DWARF debug info. It makes the binary about 25% smaller and
-# makes a core dump or a delve session useless, which is the trade. The README measures it.
+# makes a core dump or a delve session useless, which is the trade. (Not measured in this module.)
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -trimpath -ldflags="-s -w" -o /out/server ./cmd/api
 
@@ -47,8 +47,9 @@ FROM alpine:3.21
 # ca-certificates, because a scratch or minimal image has none and every outbound HTTPS request fails with
 # "x509: certificate signed by unknown authority", which reads like the remote server's problem.
 #
-# tzdata, because without it every time zone resolves to UTC silently. A service formatting a user's local time
-# is wrong and nothing errors.
+# tzdata, because without it time.LoadLocation("Europe/London") returns "unknown time zone", so a service that
+# formats a user's local time errors on every request. (An earlier version of this comment said zones silently
+# become UTC; the scratch test in this module showed LoadLocation returns an error.)
 RUN apk add --no-cache ca-certificates tzdata
 
 # A non-root user, created in the image rather than set with --user at runtime. A container that only runs

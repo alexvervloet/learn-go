@@ -20,7 +20,7 @@ func set(t *testing.T, kv map[string]string) {
 
 	for _, key := range []string{
 		"ADDR", "DATABASE_URL", "REDIS_ADDR", "JWT_SECRET",
-		"ACCESS_TTL", "REFRESH_TTL", "LOGIN_LIMIT", "LOGIN_WINDOW",
+		"ACCESS_TTL", "REFRESH_TTL", "LOGIN_LIMIT", "LOGIN_WINDOW", "ACCOUNT_LIMIT", "ACCOUNT_WINDOW",
 	} {
 		t.Setenv(key, "")
 	}
@@ -85,8 +85,10 @@ func TestDefaultsApplyWhereTheyAreSafe(t *testing.T) {
 	require.Equal(t, "localhost:6379", cfg.RedisAddr)
 	require.Equal(t, 15*time.Minute, cfg.AccessTTL)
 	require.Equal(t, 30*24*time.Hour, cfg.RefreshTTL)
-	require.Equal(t, 20, cfg.LoginLimit)
+	require.Equal(t, 120, cfg.LoginLimit)
 	require.Equal(t, time.Minute, cfg.LoginWindow)
+	require.Equal(t, 10, cfg.AccountLimit)
+	require.Equal(t, 15*time.Minute, cfg.AccountWindow)
 
 	// The relationship the service depends on.
 	require.Greater(t, cfg.RefreshTTL, cfg.AccessTTL)

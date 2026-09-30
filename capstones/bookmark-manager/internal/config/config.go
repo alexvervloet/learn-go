@@ -29,8 +29,15 @@ type Config struct {
 	// RefreshTTL is long because the refresh token IS revocable, so a long life costs nothing.
 	RefreshTTL time.Duration
 
+	// LoginLimit and LoginWindow cap the credential endpoints as a whole. Every user shares this bucket, so it
+	// is sized to what bcrypt can afford, not to what one person needs.
 	LoginLimit  int
 	LoginWindow time.Duration
+
+	// AccountLimit and AccountWindow cap attempts on one email address. This is the limit that stops password
+	// guessing against an account, and it touches nobody else.
+	AccountLimit  int
+	AccountWindow time.Duration
 }
 
 // ErrMissing is returned when required configuration is absent or wrong.
@@ -75,7 +82,18 @@ func Load() (*Config, error) {
 		problems = append(problems, err.Error())
 	}
 
-	if cfg.LoginLimit, err = intOr("LOGIN_LIMIT", 20); err != nil {
+	// 120 a minute is two bcrypt hashes a second. At auth.Cost (12) one hash took 225ms on the laptop this was
+	// written on, so a full bucket keeps about half a core busy. Size it to the CPU you can give to logins. The
+	// default used to be 20, and at 20 a single client logging in on a loop locked every user out.
+	if cfg.LoginLimit, err = intOr("LOGIN_LIMIT", 120); err != nil {
+		problems = append(problems, err.Error())
+	}
+
+	if cfg.AccountWindow, err = durationOr("ACCOUNT_WINDOW", 15*time.Minute); err != nil {
+		problems = append(problems, err.Error())
+	}
+
+	if cfg.AccountLimit, err = intOr("ACCOUNT_LIMIT", 10); err != nil {
 		problems = append(problems, err.Error())
 	}
 

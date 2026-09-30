@@ -47,8 +47,11 @@ handle the retry has to exist, be correct and be tested, and it is the code nobo
 needs the same check because a truncated hash collides, and it makes two users share a row when they wanted
 separate analytics.
 
-**Encoding the id** needs nothing: the database already guarantees it is unique. The slug is the shortest
-possible for the number of URLs that exist, and 62^5 is 916 million of them in five characters.
+**Encoding the id** needs no check between generated slugs: the database already guarantees the id is unique.
+The slug is the shortest possible for the number of URLs that exist, and 62^5 is 916 million of them in five
+characters. Custom slugs share the column, though, so someone can take today the slug a future id will encode
+to. `CreateURL` skips a taken generated slug and tries the next id; `TestAGeneratedSlugSkipsOneAPersonTook`
+covers it.
 
 The cost is that /1, /2, /3 are the first three and anyone can walk the whole service. `Obfuscate` multiplies by
 a large coprime before encoding, so consecutive ids give unrelated slugs. That defeats casual enumeration and is

@@ -73,9 +73,9 @@ func TestPutGetRoundTrip(t *testing.T) {
 	require.Equal(t, want.Kind, got.Kind)
 	require.InDelta(t, want.Reading, got.Reading, 1e-9)
 
-	// time.Time round-trips through RFC3339Nano in a string attribute. DynamoDB has no date type at all:
-	// everything is S, N, B, BOOL, NULL, L, M or a set. Storing a time means choosing an encoding, and the
-	// choice has to sort correctly because it is the sort key.
+	// time.Time round-trips through a string attribute. DynamoDB has no date type at all: everything is S, N, B,
+	// BOOL, NULL, L, M or a set. Storing a time means choosing an encoding, and the choice has to sort correctly
+	// because it is the sort key. SortKey is that choice; TestSortKeyOrdersSubSecondTimes is why.
 	require.True(t, want.At.Equal(got.At), "want %v, got %v", want.At, got.At)
 }
 
@@ -114,7 +114,7 @@ func TestPutReplacesTheWholeItem(t *testing.T) {
 		TableName: aws.String(name),
 		Item: map[string]types.AttributeValue{
 			"device_id": &types.AttributeValueMemberS{Value: "sensor-1"},
-			"at":        &types.AttributeValueMemberS{Value: base.Format(time.RFC3339Nano)},
+			"at":        &types.AttributeValueMemberS{Value: SortKey(base)},
 			"kind":      &types.AttributeValueMemberS{Value: "temperature"},
 			"reading":   &types.AttributeValueMemberN{Value: "22"},
 		},
@@ -438,4 +438,34 @@ func TestReservedWordsNeedPlaceholders(t *testing.T) {
 	})
 	require.NoError(t, err, "the placeholder form is accepted")
 	require.Equal(t, int32(0), out.Count, "no item has a size attribute, which is a different thing from being rejected")
+}
+
+// TestSortKeyOrdersSubSecondTimes is why the sort key is fixed-width. RFC3339Nano trims trailing zeros, so a whole
+// second is written "12:00:00Z" and a tenth later is "12:00:00.1Z". As strings, 'Z' sorts after '.', so the
+// earlier event sorts last, and a range starting on the whole second has a lower bound above its upper bound.
+func TestSortKeyOrdersSubSecondTimes(t *testing.T) {
+	client, name := table(t)
+	ctx := context.Background()
+
+	// The same instant written in another zone must land on the same key, not one hours away in string order.
+	lisbonSummer := time.FixedZone("WEST", 3600)
+
+	for _, at := range []time.Time{
+		base,
+		base.Add(100 * time.Millisecond).In(lisbonSummer),
+		base.Add(250 * time.Millisecond),
+	} {
+		require.NoError(t, Put(ctx, client, name, Event{DeviceID: "sensor-1", At: at, Kind: "temperature", Version: 1}))
+	}
+
+	res, err := QueryDevice(ctx, client, name, "sensor-1", base, base.Add(500*time.Millisecond))
+	require.NoError(t, err)
+	require.Len(t, res.Events, 3, "a range that starts on a whole second must still match")
+
+	for i, want := range []time.Duration{0, 100 * time.Millisecond, 250 * time.Millisecond} {
+		require.True(t, base.Add(want).Equal(res.Events[i].At), "event %d is at %s", i, res.Events[i].At)
+	}
+
+	_, err = Get(ctx, client, name, "sensor-1", base.Add(100*time.Millisecond))
+	require.NoError(t, err, "the key is the instant, whatever zone the time.Time carried")
 }

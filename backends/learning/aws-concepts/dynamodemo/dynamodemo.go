@@ -52,11 +52,42 @@ func New(cfg aws.Config) *dynamodb.Client {
 // missing a field rather than holding "".
 type Event struct {
 	DeviceID string    `dynamodbav:"device_id"` // partition key
-	At       time.Time `dynamodbav:"at"`        // sort key, RFC3339 so it sorts lexicographically
+	At       time.Time `dynamodbav:"at"`        // sort key, written by SortKey so it sorts as a string
 	Kind     string    `dynamodbav:"kind"`      // partition key of the by-kind index
 	Reading  float64   `dynamodbav:"reading"`
 	Version  int       `dynamodbav:"version"`
 	Payload  string    `dynamodbav:"payload"`
+}
+
+// SortKeyLayout is RFC 3339 in UTC with all nine fractional digits, always.
+//
+// # Why not the default
+//
+// attributevalue writes a time.Time as RFC3339Nano, which trims trailing zeros and keeps the zone. Both break a
+// sort key, because DynamoDB compares S keys byte by byte. A whole second is "12:00:00Z" and a tenth later is
+// "12:00:00.1Z", and 'Z' sorts after '.', so the earlier event sorts last. A range from the whole second to
+// half a second later has a lower bound above its upper bound, and DynamoDB rejects the query outright. A time
+// carrying +01:00 is an hour away in string order from the same instant in UTC.
+//
+// Fixed width and one zone make string order and time order the same thing.
+const SortKeyLayout = "2006-01-02T15:04:05.000000000Z"
+
+// SortKey formats t for the "at" attribute.
+func SortKey(t time.Time) string {
+	return t.UTC().Format(SortKeyLayout)
+}
+
+// marshalEvent is attributevalue.MarshalMap with the sort key written by SortKey. Every write goes through it,
+// because one write in the default format puts that item out of order.
+func marshalEvent(e Event) (map[string]types.AttributeValue, error) {
+	item, err := attributevalue.MarshalMap(e)
+	if err != nil {
+		return nil, err
+	}
+
+	item["at"] = &types.AttributeValueMemberS{Value: SortKey(e.At)}
+
+	return item, nil
 }
 
 // Two constraints on key attributes that only bite once an index exists, both found by the tests here:
@@ -143,7 +174,7 @@ func DeleteTable(ctx context.Context, client *dynamodb.Client, table string) err
 // difference from UpdateItem and the source of a data-loss bug in every codebase that read an item, modified a
 // field, and put it back while another writer did the same.
 func Put(ctx context.Context, client *dynamodb.Client, table string, e Event) error {
-	item, err := attributevalue.MarshalMap(e)
+	item, err := marshalEvent(e)
 	if err != nil {
 		return err
 	}
@@ -196,7 +227,7 @@ func Get(ctx context.Context, client *dynamodb.Client, table, deviceID string, a
 func key(deviceID string, at time.Time) map[string]types.AttributeValue {
 	return map[string]types.AttributeValue{
 		"device_id": &types.AttributeValueMemberS{Value: deviceID},
-		"at":        &types.AttributeValueMemberS{Value: at.Format(time.RFC3339Nano)},
+		"at":        &types.AttributeValueMemberS{Value: SortKey(at)},
 	}
 }
 
@@ -226,8 +257,8 @@ type QueryResult struct {
 func QueryDevice(ctx context.Context, client *dynamodb.Client, table, deviceID string, from, to time.Time) (QueryResult, error) {
 	cond := expression.Key("device_id").Equal(expression.Value(deviceID)).
 		And(expression.Key("at").Between(
-			expression.Value(from.Format(time.RFC3339Nano)),
-			expression.Value(to.Format(time.RFC3339Nano)),
+			expression.Value(SortKey(from)),
+			expression.Value(SortKey(to)),
 		))
 
 	expr, err := expression.NewBuilder().WithKeyCondition(cond).Build()
@@ -370,7 +401,7 @@ func QueryByKind(ctx context.Context, client *dynamodb.Client, table, kind strin
 // you are writing; it asks whether the ITEM AT THIS KEY already has it, and an item that does not exist has no
 // attributes. So "the partition key attribute does not exist" is the idiom for "this key is free".
 func PutIfAbsent(ctx context.Context, client *dynamodb.Client, table string, e Event) (wrote bool, err error) {
-	item, err := attributevalue.MarshalMap(e)
+	item, err := marshalEvent(e)
 	if err != nil {
 		return false, err
 	}
@@ -460,7 +491,7 @@ func BatchPut(ctx context.Context, client *dynamodb.Client, table string, events
 		requests := make([]types.WriteRequest, 0, end-start)
 
 		for _, e := range events[start:end] {
-			item, err := attributevalue.MarshalMap(e)
+			item, err := marshalEvent(e)
 			if err != nil {
 				return 0, err
 			}

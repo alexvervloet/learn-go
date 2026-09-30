@@ -507,3 +507,23 @@ func TestARejectedBookmarkLeavesNoTagsBehind(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, tags, "the tags were created for a bookmark that was never saved")
 }
+
+// TestDeleteExpiredTokensKeepsLiveOnes is the sweep. Expired refresh tokens are dead rows, and only those go.
+func TestDeleteExpiredTokensKeepsLiveOnes(t *testing.T) {
+	s, ctx := newStore(t)
+
+	u := user(t, s, ctx, "alex@example.com")
+
+	_, err := s.StoreRefreshToken(ctx, u.ID, []byte("expired-hash-00000000000000000000"), time.Now().Add(-time.Hour), "00000000-0000-4000-8000-000000000001", nil)
+	require.NoError(t, err)
+
+	_, err = s.StoreRefreshToken(ctx, u.ID, []byte("live-hash-000000000000000000000000"), time.Now().Add(time.Hour), "00000000-0000-4000-8000-000000000002", nil)
+	require.NoError(t, err)
+
+	deleted, err := s.DeleteExpiredTokens(ctx)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), deleted)
+
+	_, err = s.RefreshTokenByHash(ctx, []byte("live-hash-000000000000000000000000"))
+	require.NoError(t, err, "the live token survives the sweep")
+}

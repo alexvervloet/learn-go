@@ -199,6 +199,10 @@ export REDIS_ADDR=localhost:6382
 export JWT_SECRET="a-secret-that-is-at-least-thirty-two-bytes"
 export BASE_URL="http://localhost:8080"
 
+# The schema. Only the test harness migrates on its own, so a fresh database needs this once.
+# The goose version matches go.mod.
+go run github.com/pressly/goose/v3/cmd/goose@v3.28.0 -dir migrations postgres "$DATABASE_URL" up
+
 go run ./cmd/api &
 go run ./cmd/worker &
 

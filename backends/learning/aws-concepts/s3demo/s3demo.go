@@ -315,6 +315,9 @@ func PresignPut(ctx context.Context, client *s3.Client, bucket, key string, expi
 	return req.URL, nil
 }
 
+// ErrBadPartSize is returned for a part size that is not positive.
+var ErrBadPartSize = errors.New("s3demo: part size must be positive")
+
 // Multipart uploads a body in parts and returns the etag.
 //
 // # When this is required and when it is a choice
@@ -349,6 +352,11 @@ func PresignPut(ctx context.Context, client *s3.Client, bucket, key string, expi
 // was cancelled, a client hung up or a deadline passed, and a request sent on a cancelled ctx fails before it
 // leaves the process. The abort would fail in exactly the case it exists for.
 func Multipart(ctx context.Context, client *s3.Client, bucket, key string, body []byte, partSize int) (etag string, parts int, err error) {
+	// A part size of zero never moves the offset, so the loop below would upload empty parts forever.
+	if partSize <= 0 {
+		return "", 0, fmt.Errorf("%w: %d", ErrBadPartSize, partSize)
+	}
+
 	start, err := client.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{
 		Bucket:            aws.String(bucket),
 		Key:               aws.String(key),

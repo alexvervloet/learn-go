@@ -472,3 +472,17 @@ func TestACancelledUploadIsStillAborted(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, out.Uploads, "an upload left open keeps its parts, and S3 bills for them")
 }
+
+// TestPartSizeMustBePositive is the loop that never advanced: a part of zero bytes moves the offset by zero.
+func TestPartSizeMustBePositive(t *testing.T) {
+	client, name := bucket(t)
+
+	for _, size := range []int{0, -1} {
+		_, _, err := Multipart(context.Background(), client, name, "x.bin", []byte("abc"), size)
+		require.ErrorIs(t, err, ErrBadPartSize)
+	}
+
+	out, err := client.ListMultipartUploads(context.Background(), &s3.ListMultipartUploadsInput{Bucket: aws.String(name)})
+	require.NoError(t, err)
+	require.Empty(t, out.Uploads, "the size is checked before an upload is started")
+}

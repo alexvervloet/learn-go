@@ -141,10 +141,17 @@ func Parse(args []string, output io.Writer, getenv func(string) string) (*Config
 
 	var tags stringList
 
+	timeout, timeoutErr := envDuration(getenv, "TOOL_TIMEOUT", 30*time.Second)
+	workers, workersErr := envInt(getenv, "TOOL_WORKERS", 4)
+
+	if err := errors.Join(timeoutErr, workersErr); err != nil {
+		return nil, err
+	}
+
 	fs.BoolVar(&cfg.Verbose, "v", false, "log every step")
 	fs.StringVar(&cfg.Format, "format", envOr(getenv, "TOOL_FORMAT", "text"), "output format: text or json")
-	fs.DurationVar(&cfg.Timeout, "timeout", envDuration(getenv, "TOOL_TIMEOUT", 30*time.Second), "how long to wait")
-	fs.IntVar(&cfg.Workers, "workers", envInt(getenv, "TOOL_WORKERS", 4), "how many workers")
+	fs.DurationVar(&cfg.Timeout, "timeout", timeout, "how long to wait")
+	fs.IntVar(&cfg.Workers, "workers", workers, "how many workers")
 	fs.Var(&tags, "tag", "a tag; repeat for several")
 
 	fs.Usage = func() {
@@ -237,23 +244,37 @@ func envOr(getenv func(string) string, key, fallback string) string {
 	return fallback
 }
 
-// envInt reads an int, falling back on anything unparseable.
+// envInt reads an int. Unset is the fallback; set and unparseable is an error.
 //
-// Falling back rather than failing, because an environment variable is often set by something other than the
-// user running the command, and killing the process over a typo in a CI variable is worse than using the
-// default. A FLAG with a bad value does fail, because the user typed it.
-func envInt(getenv func(string) string, key string, fallback int) int {
-	if n, err := strconv.Atoi(getenv(key)); err == nil {
-		return n
+// An earlier version fell back on anything unparseable, reasoning that a variable is often set by something
+// other than the person running the command. But TOOL_WORKERS=sixteen then runs with 4 workers and says
+// nothing, and whoever set it finds out from a slow run, if at all. Refusing to start names the variable and
+// the value, which is the same rule the capstones' config follows, and the same rule a bad FLAG gets.
+func envInt(getenv func(string) string, key string, fallback int) (int, error) {
+	raw := getenv(key)
+	if raw == "" {
+		return fallback, nil
 	}
 
-	return fallback
+	n, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, fmt.Errorf("cliflags: %s=%q is not a whole number", key, raw)
+	}
+
+	return n, nil
 }
 
-func envDuration(getenv func(string) string, key string, fallback time.Duration) time.Duration {
-	if d, err := time.ParseDuration(getenv(key)); err == nil {
-		return d
+// envDuration is envInt for a duration, with the same rule.
+func envDuration(getenv func(string) string, key string, fallback time.Duration) (time.Duration, error) {
+	raw := getenv(key)
+	if raw == "" {
+		return fallback, nil
 	}
 
-	return fallback
+	d, err := time.ParseDuration(raw)
+	if err != nil {
+		return 0, fmt.Errorf("cliflags: %s=%q is not a duration like 30s or 2m", key, raw)
+	}
+
+	return d, nil
 }

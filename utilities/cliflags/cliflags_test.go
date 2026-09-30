@@ -81,22 +81,20 @@ func TestAnEmptyRepeatedValueIsRejected(t *testing.T) {
 	require.Contains(t, out.String(), "empty value", "the flag package prints what Set returned")
 }
 
-// TestAnUnparseableEnvironmentValueFallsBack rather than killing the process.
+// TestAnUnparseableEnvironmentValueIsAnError rather than a silent default.
 //
-// An environment variable is often set by something other than the person running the command, and dying over
-// a typo in a CI variable is worse than using the default. A FLAG with a bad value does fail, because the user
-// typed it.
-func TestAnUnparseableEnvironmentValueFallsBack(t *testing.T) {
+// A silently ignored variable is a setting nobody knows is not applied, so an unparseable one is an error that
+// names it, the same as the same value passed as a flag.
+func TestAnUnparseableEnvironmentValueIsAnError(t *testing.T) {
 	var out bytes.Buffer
 
-	cfg, err := Parse([]string{"serve"}, &out, env(map[string]string{
+	_, err := Parse([]string{"serve"}, &out, env(map[string]string{
 		"TOOL_WORKERS": "lots", "TOOL_TIMEOUT": "a while",
 	}))
-	require.NoError(t, err)
-	require.Equal(t, 4, cfg.Workers)
-	require.Equal(t, 30*time.Second, cfg.Timeout)
+	require.ErrorContains(t, err, "TOOL_WORKERS")
+	require.ErrorContains(t, err, "TOOL_TIMEOUT", "both problems at once, not one per run")
 
-	// The same value as a flag is an error.
+	// The same value as a flag is an error too.
 	_, err = Parse([]string{"serve", "-workers", "lots"}, &out, env(nil))
 	require.Error(t, err)
 }

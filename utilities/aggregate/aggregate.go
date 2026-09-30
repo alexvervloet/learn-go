@@ -14,7 +14,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
 	"sync"
 	"time"
 
@@ -225,16 +224,4 @@ func FirstError(ctx context.Context, sources []Source, opts Options) (map[string
 	}
 
 	return values, nil
-}
-
-// Names returns the sources' names, sorted, for a stable log line.
-func Names(results []Result) []string {
-	out := make([]string, 0, len(results))
-	for _, r := range results {
-		out = append(out, r.Name)
-	}
-
-	sort.Strings(out)
-
-	return out
 }

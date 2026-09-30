@@ -163,6 +163,8 @@ reads a request body has to put it back.
 
 Everything here runs against LocalStack. No AWS account, no credentials, no bill.
 
-If you point it at real AWS by setting `AWS_ENDPOINT_URL` and supplying credentials, the tests create and delete
-buckets, tables, queues and topics. The DynamoDB tables are on-demand billing and the data is small, so the cost
-is cents, but it is not zero, and `TestQueryPagesAtOneMegabyte` writes 1.6 MB.
+The tests cannot reach real AWS, by design. `awstest.Config` checks LocalStack's own `/_localstack/health`
+endpoint before a test runs, and signs every request with fixed test credentials. Point `AWS_ENDPOINT_URL` at
+AWS and the health check fails, so every test skips; the credentials would be rejected anyway. Running the
+demos against a real account means building the config yourself, and then the tests create and delete buckets,
+tables, queues and topics. That costs cents, not nothing: `TestQueryPagesAtOneMegabyte` alone writes 1.6 MB.

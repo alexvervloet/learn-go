@@ -106,8 +106,9 @@ func SendFIFO(ctx context.Context, client *sqs.Client, url, body, group, dedup s
 
 // SendBatch sends up to ten messages in one request.
 //
-// Ten is a hard limit, and so is 256 KB for the whole batch. Like DynamoDB's BatchWriteItem this can partially
-// succeed, and the Failed slice is the part a careless caller drops on the floor.
+// Ten is a hard limit, and so is 1 MiB for the whole batch, the same as for a single message (both were 256 KB
+// until AWS raised them in 2025, and older emulators and blog posts still say 256). Like DynamoDB's
+// BatchWriteItem this can partially succeed, and the Failed slice is the part a careless caller drops on the floor.
 func SendBatch(ctx context.Context, client *sqs.Client, url string, bodies []string) (failed int, err error) {
 	const maxBatch = 10
 

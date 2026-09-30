@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/alexvervloet/learn-go/backends/learning/graphql-concepts/dataloader"
 	"github.com/alexvervloet/learn-go/backends/learning/graphql-concepts/graph/generated"
 	"github.com/alexvervloet/learn-go/backends/learning/graphql-concepts/graph/model"
 	"github.com/alexvervloet/learn-go/backends/learning/graphql-concepts/store"
@@ -31,7 +32,7 @@ func (r *authorResolver) Books(ctx context.Context, obj *model.Author) ([]model.
 		if err != nil {
 			// A missing key means the author has no books, which is not an error: the schema
 			// says [Book!]!, so the answer is an empty list.
-			if strings.Contains(err.Error(), "no result for key") {
+			if errors.Is(err, dataloader.ErrNoResult) {
 				return []model.Book{}, nil
 			}
 

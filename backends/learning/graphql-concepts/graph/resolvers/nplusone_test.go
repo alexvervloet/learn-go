@@ -1,10 +1,12 @@
 package resolvers_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/alexvervloet/learn-go/backends/learning/graphql-concepts/gqltest"
+	"github.com/alexvervloet/learn-go/backends/learning/graphql-concepts/graph/model"
 	"github.com/alexvervloet/learn-go/backends/learning/graphql-concepts/graph/resolvers"
 	"github.com/alexvervloet/learn-go/backends/learning/graphql-concepts/store"
 )
@@ -362,4 +364,23 @@ func containsAny(s string, subs ...string) bool {
 		}
 	}
 	return false
+}
+
+// TestAnAuthorWithNoBooksHasAnEmptyList is the key the batch function leaves out. BooksByAuthors only returns
+// authors that have books, so the loader reports ErrNoResult for one that has none, and the resolver has to
+// read that as "no books" rather than as a failure: the schema says [Book!]!.
+func TestAnAuthorWithNoBooksHasAnEmptyList(t *testing.T) {
+	s := store.New(1, 1)
+	r := &resolvers.Resolver{Store: s, UseLoaders: true}
+
+	ctx := resolvers.WithLoaders(context.Background(), resolvers.NewLoaders(s, time.Millisecond))
+
+	books, err := r.Author().Books(ctx, &model.Author{ID: "author-with-no-books"})
+	if err != nil {
+		t.Fatalf("an author with no books is not an error: %v", err)
+	}
+
+	if books == nil || len(books) != 0 {
+		t.Fatalf("got %#v, want an empty, non-nil list", books)
+	}
 }

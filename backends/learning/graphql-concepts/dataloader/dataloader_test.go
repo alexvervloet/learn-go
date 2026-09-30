@@ -2,6 +2,7 @@ package dataloader
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -117,5 +118,17 @@ func TestPrimeSkipsTheFetch(t *testing.T) {
 
 	if calls.Load() != 0 {
 		t.Fatal("a primed key was fetched anyway")
+	}
+}
+
+// TestAMissingKeyIsATypedError lets a caller tell "absent" from "failed" without reading the message.
+func TestAMissingKeyIsATypedError(t *testing.T) {
+	l := New(func(context.Context, []int) (map[int]int, error) {
+		return map[int]int{}, nil
+	}, time.Millisecond, 10)
+
+	_, err := l.Load(context.Background(), 9)
+	if !errors.Is(err, ErrNoResult) {
+		t.Fatalf("got %v, want ErrNoResult", err)
 	}
 }

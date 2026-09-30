@@ -45,11 +45,18 @@ package dataloader
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
 )
+
+// ErrNoResult is the error for a key the batch function did not return.
+//
+// A caller that treats a missing key as an empty answer checks for it with errors.Is. Matching on the message
+// instead ties the caller to a string this package is free to reword.
+var ErrNoResult = errors.New("dataloader: no result for key")
 
 // BatchFunc fetches many keys at once.
 //
@@ -213,7 +220,7 @@ func (l *Loader[K, V]) run(ctx context.Context, batch map[K]*result[V]) {
 			// A key the batch function did not return. This has to be an error rather than a
 			// zero value: a resolver that gets a zero Author renders `{"id":"","name":""}` and
 			// nothing says the row was missing.
-			r.err = fmt.Errorf("dataloader: no result for key %v", k)
+			r.err = fmt.Errorf("%w %v", ErrNoResult, k)
 		}
 
 		// Closing the channel is what completes the future, and it must happen exactly once per

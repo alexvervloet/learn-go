@@ -70,6 +70,30 @@ func TestDuplicateToolNamesAreRejected(t *testing.T) {
 	require.Contains(t, err.Error(), "get_weather")
 }
 
+// TestToolOrderIsStable is the prompt cache's precondition: the tool list is the start of the prefix.
+func TestToolOrderIsStable(t *testing.T) {
+	names := []string{"delta", "alpha", "echo", "charlie", "bravo", "foxtrot", "golf", "hotel"}
+
+	var tools []Tool
+
+	for _, name := range names {
+		tools = append(tools, Tool{Name: name, Schema: ObjectSchema(nil)})
+	}
+
+	registry, err := NewRegistry(tools...)
+	require.NoError(t, err)
+
+	first, err := json.Marshal(registry.Params())
+	require.NoError(t, err)
+
+	// Map iteration order is randomised per range, so eight tools in 20 tries would almost surely differ once.
+	for range 20 {
+		again, err := json.Marshal(registry.Params())
+		require.NoError(t, err)
+		require.Equal(t, string(first), string(again), "a reordered tool list is a cache miss on every turn")
+	}
+}
+
 // TestTheLoopRunsTheToolAndSendsTheResultBack is the protocol, end to end.
 func TestTheLoopRunsTheToolAndSendsTheResultBack(t *testing.T) {
 	var toolCalls int

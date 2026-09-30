@@ -30,6 +30,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -71,8 +73,8 @@ type Registry map[string]Tool
 
 // NewRegistry builds one and rejects a duplicate name.
 //
-// A duplicate is not a warning. The model picks by name, so two tools called the same thing means the model's
-// choice is decided by map iteration order, which is random.
+// A duplicate is not a warning. The model picks by name, and in a map the second tool would silently replace the
+// first, so a call the model meant for one runs the other.
 func NewRegistry(tools ...Tool) (Registry, error) {
 	r := make(Registry, len(tools))
 
@@ -87,11 +89,15 @@ func NewRegistry(tools ...Tool) (Registry, error) {
 	return r, nil
 }
 
-// Params returns the tool list for a request.
+// Params returns the tool list for a request, sorted by name.
+//
+// The order matters more than it looks. Tools are the first thing in the prompt, and prompt caching matches a
+// byte-for-byte prefix, so a tool list in map iteration order is a different prefix on most turns and every
+// cached token after it is paid for again. Sorting makes the list identical on every turn of every run.
 func (r Registry) Params() []anthropic.ToolUnionParam {
 	out := make([]anthropic.ToolUnionParam, 0, len(r))
-	for _, t := range r {
-		out = append(out, t.Param())
+	for _, name := range slices.Sorted(maps.Keys(r)) {
+		out = append(out, r[name].Param())
 	}
 
 	return out

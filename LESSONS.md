@@ -2552,3 +2552,10 @@ queues, though its comment said the opposite. Every run was a coin with a 1% cha
 trusting it, and pick the sample size from that. At 100 picks the same check fails about 2 times in 10 million,
 and still runs in under a second.
 
+### Follow-up, same day: the next run found a sleep standing in for a signal
+
+The next push failed on macOS in `TestGracefulShutdown`, again in code the push did not touch. The demo started a
+request, slept 20ms, and called `Shutdown`, assuming the request had reached the handler by then. On a slow
+runner it had not, so `Shutdown` found nothing in flight and returned nil. The handler now closes a `started`
+channel and the demo waits on that. A sleep that orders two goroutines is a race with the machine's speed.
+

@@ -40,9 +40,9 @@ jobs:
             goarch: amd64
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.27"
 
@@ -70,12 +70,17 @@ jobs:
           # -s -w strips the symbol table and DWARF, which is most of the size of a Go binary.
           # -X writes the version into a variable, so `myapp --version` reports the tag it was built from
           # rather than a constant somebody forgot to bump.
+          # Windows will not run a binary without .exe, and the first version of this example shipped one
+          # anyway: myapp-windows-amd64, a file Explorer offers to open with Notepad.
+          ext=""
+          if [ "$GOOS" = "windows" ]; then ext=".exe"; fi
+
           go build -trimpath \
             -ldflags "-s -w -X main.version=$TAG -X main.commit=$GITHUB_SHA" \
-            -o "dist/myapp-${GOOS}-${GOARCH}" \
+            -o "dist/myapp-${GOOS}-${GOARCH}${ext}" \
             ./cmd/myapp
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           # A job gets a fresh machine, so dist/ is gone the moment this job ends. An artifact is the only way
           # anything reaches the next job.
@@ -96,9 +101,12 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
-          # No name, so every artifact from the matrix is downloaded, each into its own directory.
+          # No name, so every artifact from the matrix is downloaded. On its own that puts each in a
+          # directory named after the artifact; merge-multiple puts all their files straight into dist/,
+          # which is what `gh release create dist/*` below needs. (An earlier version of this comment said
+          # each went into its own directory, which is what merge-multiple turns off.)
           path: dist
           merge-multiple: true
 

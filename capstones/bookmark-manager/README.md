@@ -201,6 +201,18 @@ The first version keyed on `r.URL.Path`, so `/register` and `/login` each got th
 each look right and together allow twice the traffic: both run bcrypt, and an attacker told that login is full
 moves to register. There is one `CredentialsKey` now.
 
+### Two limits: one for bcrypt, one per account
+
+The shared bucket protects the CPU, and every user is in it, so it is sized to what bcrypt can afford
+(`LOGIN_LIMIT`, 120 a minute: at cost 12 a hash took 225ms here, so a full bucket is about half a core). It
+used to be 20 a minute, and at 20 one script logging in on a loop locked every user out of the service.
+
+Guessing one person's password is a different attack and gets a different bucket: `ACCOUNT_LIMIT` attempts per
+lower-cased email per `ACCOUNT_WINDOW` (10 per 15 minutes). It refuses the account under attack and nobody
+else, which the shared bucket cannot do. `TestOneAccountsLimitDoesNotLockOutAnother` covers it. It only shows
+itself on a refusal: the `RateLimit-*` headers on a success describe the shared bucket, because telling a
+caller how many attempts remain on an account is telling a guesser their budget.
+
 It **fails closed**: if Redis is unreachable, credential endpoints refuse. On a login endpoint the limiter is
 the only thing between a credential-stuffing run and bcrypt, so failing open converts a Redis outage into an
 open door. Reads are not limited at all, which is a decision the handler makes rather than the limiter.

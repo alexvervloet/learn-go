@@ -329,10 +329,12 @@ func cancellationDoesCross(handlerWork, clientPatience time.Duration) (serverSaw
 // connections and waits for in-flight handlers, bounded by the context it is
 // given.
 func gracefulShutdown(inFlightWork, shutdownBudget time.Duration) (finished bool, shutdownErr error) {
+	started := make(chan struct{})
 	completed := make(chan struct{})
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/slow", func(w http.ResponseWriter, r *http.Request) {
+		close(started)
 		time.Sleep(inFlightWork)
 		close(completed)
 		_, _ = fmt.Fprint(w, "ok")
@@ -351,7 +353,11 @@ func gracefulShutdown(inFlightWork, shutdownBudget time.Duration) (finished bool
 			_ = resp.Body.Close()
 		}
 	}()
-	time.Sleep(20 * time.Millisecond)
+
+	// Wait until the handler is running. A fixed sleep here raced on a slow CI
+	// machine: the request had not arrived, Shutdown found nothing in flight and
+	// returned nil at once, and the demo showed the opposite of its point.
+	<-started
 
 	ctx, cancel := context.WithTimeout(context.Background(), shutdownBudget)
 	defer cancel()

@@ -131,13 +131,36 @@ type Tag struct {
 // The other is to insert and then SELECT, which is what this does. Two statements in one transaction rather
 // than one clever one, and the SELECT is the source of truth for what the caller gets back.
 func (s *Store) EnsureTags(ctx context.Context, userID int64, names []string) ([]Tag, error) {
-	if len(names) == 0 {
+	unique := uniqueTagNames(names)
+	if len(unique) == 0 {
 		return nil, nil
 	}
 
-	// Deduplicate before the insert. ON CONFLICT does not fire for two rows in the SAME statement: Postgres
-	// reports `ON CONFLICT DO UPDATE command cannot affect row a second time` and the whole statement fails.
-	// A request with ["go", "Go"] hits this, because the column is CITEXT.
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	tags, err := ensureTags(ctx, tx, userID, unique)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+
+	return tags, nil
+}
+
+// uniqueTagNames trims, drops empties and deduplicates case-insensitively, keeping the first spelling.
+//
+// Deduplicate before the insert. ON CONFLICT does not fire for two rows in the SAME statement: Postgres reports
+// `ON CONFLICT DO UPDATE command cannot affect row a second time` and the whole statement fails. A request with
+// ["go", "Go"] hits this, because the column is CITEXT.
+func uniqueTagNames(names []string) []string {
 	seen := make(map[string]bool, len(names))
 	unique := make([]string, 0, len(names))
 
@@ -157,17 +180,15 @@ func (s *Store) EnsureTags(ctx context.Context, userID int64, names []string) ([
 		unique = append(unique, n)
 	}
 
-	if len(unique) == 0 {
-		return nil, nil
-	}
+	return unique
+}
 
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	defer func() { _ = tx.Rollback(ctx) }()
-
+// ensureTags is EnsureTags inside a transaction the caller owns, for names that are already deduplicated.
+//
+// CreateBookmark needs this form. With EnsureTags committing its own transaction first, a bookmark refused as a
+// duplicate left behind the tags it had asked for, and "a bookmark with half its tags is worse than no
+// bookmark" was only half true.
+func ensureTags(ctx context.Context, tx pgx.Tx, userID int64, unique []string) ([]Tag, error) {
 	// unnest turns an array parameter into rows, so this is ONE statement whatever the tag count. The
 	// alternative is a VALUES list built with fmt.Sprintf, which is a placeholder-counting exercise and the
 	// classic place SQL injection gets introduced.
@@ -187,16 +208,7 @@ func (s *Store) EnsureTags(ctx context.Context, userID int64, names []string) ([
 		return nil, err
 	}
 
-	tags, err := pgx.CollectRows(rows, pgx.RowToStructByPos[Tag])
-	if err != nil {
-		return nil, err
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return nil, err
-	}
-
-	return tags, nil
+	return pgx.CollectRows(rows, pgx.RowToStructByPos[Tag])
 }
 
 // TagsOf lists a user's tags with how many bookmarks each one has.
@@ -249,19 +261,23 @@ type NewBookmark struct {
 
 // CreateBookmark inserts a bookmark and its tags.
 //
-// One transaction, because a bookmark with half its tags is worse than no bookmark.
+// One transaction, the tags included, because a bookmark with half its tags is worse than no bookmark, and tags
+// created for a bookmark that was then refused are clutter nobody asked for.
 func (s *Store) CreateBookmark(ctx context.Context, userID int64, in NewBookmark) (*Bookmark, error) {
-	tags, err := s.EnsureTags(ctx, userID, in.Tags)
-	if err != nil {
-		return nil, err
-	}
-
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	defer func() { _ = tx.Rollback(ctx) }()
+
+	var tags []Tag
+
+	if unique := uniqueTagNames(in.Tags); len(unique) > 0 {
+		if tags, err = ensureTags(ctx, tx, userID, unique); err != nil {
+			return nil, err
+		}
+	}
 
 	const q = `
 		INSERT INTO bookmarks (user_id, category_id, url, title, description)

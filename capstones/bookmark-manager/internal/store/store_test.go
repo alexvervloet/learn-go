@@ -487,3 +487,23 @@ func TestTagsOfIncludesUnusedTags(t *testing.T) {
 	require.Equal(t, int64(0), counts["orphan"])
 	require.Equal(t, int64(1), counts["used"])
 }
+
+// TestARejectedBookmarkLeavesNoTagsBehind is the transaction boundary. A bookmark refused as a duplicate must
+// not leave the tags it asked for: they were created for it, and it does not exist.
+func TestARejectedBookmarkLeavesNoTagsBehind(t *testing.T) {
+	s, ctx := newStore(t)
+
+	u := user(t, s, ctx, "alex@example.com")
+
+	_, err := s.CreateBookmark(ctx, u.ID, store.NewBookmark{URL: "https://a.example/", Title: "A"})
+	require.NoError(t, err)
+
+	_, err = s.CreateBookmark(ctx, u.ID, store.NewBookmark{
+		URL: "https://a.example/", Title: "A again", Tags: []string{"only-for-the-duplicate"},
+	})
+	require.ErrorIs(t, err, store.ErrURLSaved)
+
+	tags, err := s.TagsOf(ctx, u.ID)
+	require.NoError(t, err)
+	require.Empty(t, tags, "the tags were created for a bookmark that was never saved")
+}

@@ -6,6 +6,7 @@ import (
 	"sort"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/require"
 )
@@ -264,4 +265,19 @@ func TestNormaliseAndGradeAreOrdinaryFunctions(t *testing.T) {
 	ok, err := Grade(Record{ID: 4, Score: 100})
 	require.NoError(t, err)
 	require.Equal(t, 100, ok.Score, "100 is in range; an off-by-one here rejects a perfect score")
+}
+
+// TestNormaliseKeepsMultiByteNamesIntact is the byte slice that cut é in half.
+func TestNormaliseKeepsMultiByteNamesIntact(t *testing.T) {
+	for in, want := range map[string]string{
+		"élodie": "Élodie",
+		"ÅSA":    "Åsa",
+		" zoë ":  "Zoë",
+		"x":      "X",
+	} {
+		got, err := Normalise(Record{ID: 1, Name: in})
+		require.NoError(t, err)
+		require.Equal(t, want, got.Name)
+		require.True(t, utf8.ValidString(got.Name), "%q came out as invalid UTF-8", in)
+	}
 }

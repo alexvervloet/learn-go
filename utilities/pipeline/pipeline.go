@@ -25,6 +25,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"unicode"
+	"unicode/utf8"
 )
 
 // Generate sends the values and closes.
@@ -203,13 +205,17 @@ var ErrInvalid = errors.New("pipeline: invalid record")
 type Stage func(Record) (Record, error)
 
 // Normalise trims and title-cases the name.
+//
+// The first letter is split off as a RUNE, not as name[:1]. A byte slice cuts "élodie" through the middle of
+// the two-byte é, ToUpper leaves the broken half alone, and the name comes out as invalid UTF-8.
 func Normalise(r Record) (Record, error) {
 	name := strings.TrimSpace(r.Name)
 	if name == "" {
 		return Record{}, fmt.Errorf("%w: record %d has no name", ErrInvalid, r.ID)
 	}
 
-	r.Name = strings.ToUpper(name[:1]) + strings.ToLower(name[1:])
+	first, size := utf8.DecodeRuneInString(name)
+	r.Name = string(unicode.ToUpper(first)) + strings.ToLower(name[size:])
 
 	return r, nil
 }

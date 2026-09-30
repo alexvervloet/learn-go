@@ -153,8 +153,9 @@ func New(client *redis.Client, opts Options) (*Limiter, error) {
 //   - FAIL CLOSED, refuse. Right when the limit is the only thing standing between a login endpoint and a
 //     credential-stuffing run.
 //
-// This service fails open for reads and closed for login, and the handler is where that lives. A limiter that
-// picks for you has picked wrong for half its callers.
+// This service limits only the credential endpoints, and they fail closed; reads are not limited at all, so
+// there is nothing for them to fail open on. The choice lives in the handler either way. A limiter that picks
+// for you has picked wrong for half its callers.
 func (l *Limiter) Allow(ctx context.Context, key string) (Decision, error) {
 	now := time.Now()
 

@@ -2,6 +2,9 @@ package streaming
 
 import (
 	"context"
+	"io"
+	"net/http"
+	"sync"
 	"testing"
 	"time"
 
@@ -132,4 +135,78 @@ func TestContextCancellationEndsTheStream(t *testing.T) {
 
 	_, err := Collect(ctx, c, params("hi"), nil)
 	require.ErrorIs(t, err, context.Canceled)
+}
+
+// closeCounter wraps every response body so a test can see whether it was closed.
+type closeCounter struct {
+	mu     sync.Mutex
+	opened int
+	closed int
+}
+
+func (c *closeCounter) RoundTrip(r *http.Request) (*http.Response, error) {
+	resp, err := http.DefaultTransport.RoundTrip(r)
+	if err != nil {
+		return nil, err
+	}
+
+	c.mu.Lock()
+	c.opened++
+	c.mu.Unlock()
+
+	resp.Body = &countedBody{ReadCloser: resp.Body, c: c}
+
+	return resp, nil
+}
+
+type countedBody struct {
+	io.ReadCloser
+	c *closeCounter
+}
+
+func (b *countedBody) Close() error {
+	b.c.mu.Lock()
+	b.c.closed++
+	b.c.mu.Unlock()
+
+	return b.ReadCloser.Close()
+}
+
+// TestEveryReaderClosesTheStream is the connection leak: reading to the end is not the same as closing.
+func TestEveryReaderClosesTheStream(t *testing.T) {
+	readers := map[string]func(context.Context, anthropic.Client, anthropic.MessageNewParams) error{
+		"Collect": func(ctx context.Context, c anthropic.Client, p anthropic.MessageNewParams) error {
+			_, err := Collect(ctx, c, p, nil)
+			return err
+		},
+		"EventNames": func(ctx context.Context, c anthropic.Client, p anthropic.MessageNewParams) error {
+			_, err := EventNames(ctx, c, p)
+			return err
+		},
+		"FirstSentence": func(ctx context.Context, c anthropic.Client, p anthropic.MessageNewParams) error {
+			_, err := FirstSentence(ctx, c, p)
+			return err
+		},
+	}
+
+	for name, read := range readers {
+		t.Run(name, func(t *testing.T) {
+			srv := fake.New(t, fake.StreamResponse([]string{"One. ", "Two."}, 10, 4))
+			counter := &closeCounter{}
+
+			c, err := llm.New(llm.Config{
+				APIKey: "k", BaseURL: srv.URL, Timeout: 10 * time.Second,
+				HTTPClient: &http.Client{Transport: counter},
+			})
+			require.NoError(t, err)
+
+			require.NoError(t, read(context.Background(), c, params("two sentences")))
+
+			counter.mu.Lock()
+			defer counter.mu.Unlock()
+
+			require.Equal(t, 1, counter.opened)
+			require.Equal(t, 1, counter.closed, "an unclosed body is a connection that is never reused or released")
+		})
+	}
 }

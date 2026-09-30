@@ -59,8 +59,14 @@ type Result struct {
 //
 // That last part is worth stating plainly. A tool call's arguments are streamed as a string, in pieces, and a
 // piece is usually not parseable. Anything that tries to json.Unmarshal each delta fails on the first one.
+//
+// # Close it even when you read it to the end
+//
+// Next returning false does not close the response body. Until Close runs, the connection is neither reused
+// nor released, so a server that calls this once per request leaks one connection per call.
 func Collect(ctx context.Context, client anthropic.Client, params anthropic.MessageNewParams, onText func(string)) (*Result, error) {
 	stream := client.Messages.NewStreaming(ctx, params)
+	defer func() { _ = stream.Close() }()
 
 	var (
 		message anthropic.Message
@@ -169,6 +175,7 @@ func textOf(msg *anthropic.Message) string {
 // content_block_start works by accident.
 func EventNames(ctx context.Context, client anthropic.Client, params anthropic.MessageNewParams) ([]string, error) {
 	stream := client.Messages.NewStreaming(ctx, params)
+	defer func() { _ = stream.Close() }()
 
 	var names []string
 

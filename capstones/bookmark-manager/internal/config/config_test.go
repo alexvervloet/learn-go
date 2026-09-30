@@ -139,3 +139,18 @@ func TestANonPositiveLimitIsRefused(t *testing.T) {
 		require.ErrorContains(t, err, "LOGIN_LIMIT", "LOGIN_LIMIT=%q", raw)
 	}
 }
+
+// TestADurationUnderASecondIsRefused moves the failure to startup. A 500ms token TTL used to load fine and fail
+// on the first login, because a JWT's times are whole seconds.
+func TestADurationUnderASecondIsRefused(t *testing.T) {
+	for _, raw := range []string{"500ms", "0", "0s", "-5m", "-30"} {
+		t.Run(raw, func(t *testing.T) {
+			set(t, map[string]string{
+				"DATABASE_URL": "postgres:///db", "JWT_SECRET": goodSecret, "ACCESS_TTL": raw,
+			})
+
+			_, err := config.Load()
+			require.ErrorContains(t, err, "ACCESS_TTL")
+		})
+	}
+}

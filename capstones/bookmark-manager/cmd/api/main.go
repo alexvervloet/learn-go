@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -85,8 +86,19 @@ func run() error {
 		return err
 	}
 
+	st := store.New(pool)
+
+	// Expired refresh tokens are rows nobody can use, and nothing else removes them. There is no worker in this
+	// service, so the API sweeps hourly. Every replica does it, which is harmless because the DELETE is
+	// idempotent. The WaitGroup is waited on before pool.Close runs (defers run last-in first-out), so a sweep in
+	// progress is never left holding a closed pool.
+	var sweeper sync.WaitGroup
+	defer sweeper.Wait()
+
+	sweeper.Go(func() { sweepExpiredTokens(ctx, st, log, time.Hour) })
+
 	srv := api.New(api.Options{
-		Store:          store.New(pool),
+		Store:          st,
 		Limiter:        limiter,
 		AccountLimiter: accountLimiter,
 		Logger:         log,
@@ -140,4 +152,26 @@ func run() error {
 	log.Info("stopped")
 
 	return nil
+}
+
+// sweepExpiredTokens deletes expired refresh tokens every interval until ctx ends.
+func sweepExpiredTokens(ctx context.Context, st *store.Store, log *slog.Logger, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			deleted, err := st.DeleteExpiredTokens(ctx)
+			if err != nil {
+				log.ErrorContext(ctx, "sweep expired refresh tokens", "error", err)
+
+				continue
+			}
+
+			log.InfoContext(ctx, "swept expired refresh tokens", "deleted", deleted)
+		}
+	}
 }

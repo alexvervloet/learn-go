@@ -104,6 +104,7 @@ the index below groups them by topic.
 - [The Docker measurements, and two things I had backwards](#the-docker-measurements-and-two-things-i-had-backwards)
 - ["Is Docker available" is not the question; "can it build a Linux image" is](#is-docker-available-is-not-the-question-can-it-build-a-linux-image-is)
 - [A reported GraphQL complexity bypass was already closed by gqlgen](#a-reported-graphql-complexity-bypass-was-already-closed-by-gqlgen)
+- [A bidi hang I reasoned my way into, and grpc-go ruled out](#a-bidi-hang-i-reasoned-my-way-into-and-grpc-go-ruled-out)
 
 **Tooling, tests and CI.**
 
@@ -2558,4 +2559,19 @@ The next push failed on macOS in `TestGracefulShutdown`, again in code the push 
 request, slept 20ms, and called `Shutdown`, assuming the request had reached the handler by then. On a slow
 runner it had not, so `Shutdown` found nothing in flight and returned nil. The handler now closes a `started`
 channel and the demo waits on that. A sleep that orders two goroutines is a race with the machine's speed.
+
+## A bidi hang I reasoned my way into, and grpc-go ruled out
+
+**Expected.** The audit said the bidirectional chat server could hang. After a failed `Send`, the writer waits
+for the reader goroutine, and the reader can be parked in `Recv` with the client still waiting for a reply.
+`Recv` returns only when the stream ends, and the stream ends when the handler returns. A server-side
+`MaxSendMsgSize` makes `Send` fail with the connection still healthy, so it looked like a clean reproduction.
+
+**What happened.** The test passed first time. grpc-go's `serverStream.SendMsg` writes the final status on ANY
+error, so a failed `Send` ends the stream, and the parked `Recv` returns. The deadlock needs a `Send` that fails
+and leaves the stream open, and grpc-go doesn't have one.
+
+**Next time.** A hang argued from our own code needs the library's side of the argument too, and a test that
+fails is the only proof. This one stays as a guard, since the wait is safe only because of that grpc-go
+behaviour, and it would hang if an upgrade changed it.
 

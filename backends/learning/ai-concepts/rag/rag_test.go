@@ -273,3 +273,22 @@ func TestBagOfWordsHasNoNotionOfMeaning(t *testing.T) {
 	// stand-in for arithmetic and not a model.
 	require.InDelta(t, 0.5, score, 1e-9)
 }
+
+// TestSentenceOffsetsPointAtTheSource is the citation: Start and End must slice the original text back out,
+// in runes, for every chunk, including a sentence that appears twice.
+func TestSentenceOffsetsPointAtTheSource(t *testing.T) {
+	text := "Café é bom.  Yes. Café é bom. Yes."
+
+	chunks, err := Sentences("doc", text, ChunkOptions{Size: 12})
+	require.NoError(t, err)
+	require.Len(t, chunks, 4)
+
+	runes := []rune(text)
+
+	for _, c := range chunks {
+		require.Equal(t, c.Text, string(runes[c.Start:c.End]), "chunk %d", c.Index)
+	}
+
+	require.Equal(t, 18, chunks[2].Start, "the second \"Café é bom.\" is not the first one")
+	require.Equal(t, 30, chunks[3].Start)
+}

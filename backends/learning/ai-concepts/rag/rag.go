@@ -126,38 +126,44 @@ func Sentences(docID, text string, opts ChunkOptions) ([]Chunk, error) {
 		return nil, fmt.Errorf("%w: size must be positive", ErrBadChunkOptions)
 	}
 
-	sentences := splitSentences(text)
+	sentences := sentenceSpans(text)
 	if len(sentences) == 0 {
 		return nil, nil
 	}
 
 	var (
 		chunks  []Chunk
-		current []string
+		current []sentence
 		length  int
 		index   int
 	)
 
+	// Start and End come from the splitter, which knows where each sentence was. Searching the text for the
+	// sentence afterwards gives a byte offset where a rune offset was promised, and points every repeat of a
+	// sentence ("Yes.", a boilerplate disclaimer) at its first appearance.
 	flush := func() {
 		if len(current) == 0 {
 			return
 		}
 
-		joined := strings.Join(current, " ")
+		texts := make([]string, len(current))
+		for i, c := range current {
+			texts[i] = c.text
+		}
 
 		chunks = append(chunks, Chunk{
 			DocID: docID,
 			Index: index,
-			Text:  joined,
-			Start: strings.Index(text, current[0]),
-			End:   strings.Index(text, current[len(current)-1]) + len(current[len(current)-1]),
+			Text:  strings.Join(texts, " "),
+			Start: current[0].start,
+			End:   current[len(current)-1].end,
 		})
 
 		index++
 	}
 
 	for _, s := range sentences {
-		runes := len([]rune(s))
+		runes := s.end - s.start
 
 		// A single sentence longer than the budget goes in alone rather than being dropped or cut. A chunk
 		// slightly over budget is better than a chunk that is half a sentence.
@@ -166,11 +172,11 @@ func Sentences(docID, text string, opts ChunkOptions) ([]Chunk, error) {
 
 			// Carry the last `Overlap` sentences into the next chunk.
 			keep := min(opts.Overlap, len(current))
-			current = append([]string(nil), current[len(current)-keep:]...)
+			current = append([]sentence(nil), current[len(current)-keep:]...)
 
 			length = 0
 			for _, c := range current {
-				length += len([]rune(c))
+				length += c.end - c.start
 			}
 		}
 
@@ -183,14 +189,46 @@ func Sentences(docID, text string, opts ChunkOptions) ([]Chunk, error) {
 	return chunks, nil
 }
 
+// sentence is one sentence and where it sits in the source, in runes, with surrounding whitespace excluded.
+type sentence struct {
+	text       string
+	start, end int
+}
+
 // splitSentences is the naive segmenter described above.
 func splitSentences(text string) []string {
+	spans := sentenceSpans(text)
+
+	out := make([]string, len(spans))
+	for i, s := range spans {
+		out[i] = s.text
+	}
+
+	return out
+}
+
+// sentenceSpans does the splitting and keeps each sentence's position.
+func sentenceSpans(text string) []sentence {
 	var (
-		out   []string
+		out   []sentence
 		start int
 	)
 
 	runes := []rune(text)
+
+	emit := func(from, to int) {
+		for from < to && unicode.IsSpace(runes[from]) {
+			from++
+		}
+
+		for to > from && unicode.IsSpace(runes[to-1]) {
+			to--
+		}
+
+		if from < to {
+			out = append(out, sentence{text: string(runes[from:to]), start: from, end: to})
+		}
+	}
 
 	for i, r := range runes {
 		if r != '.' && r != '!' && r != '?' {
@@ -203,16 +241,12 @@ func splitSentences(text string) []string {
 			continue
 		}
 
-		if s := strings.TrimSpace(string(runes[start : i+1])); s != "" {
-			out = append(out, s)
-		}
+		emit(start, i+1)
 
 		start = i + 1
 	}
 
-	if s := strings.TrimSpace(string(runes[start:])); s != "" {
-		out = append(out, s)
-	}
+	emit(start, len(runes))
 
 	return out
 }

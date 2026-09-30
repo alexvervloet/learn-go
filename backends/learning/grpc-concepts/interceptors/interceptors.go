@@ -360,7 +360,7 @@ func AddMetadataUnary(pairs ...string) grpc.UnaryClientInterceptor {
 //
 // # Which codes are retryable
 //
-// Unavailable and ResourceExhausted, and nothing else by default. The reasoning:
+// With no codes passed, this retries Unavailable and ResourceExhausted and nothing else. The reasoning:
 //
 //	Unavailable        the server was not reachable, so the call probably did not happen
 //	ResourceExhausted  a rate limit or a quota, so waiting may help
@@ -373,9 +373,15 @@ func AddMetadataUnary(pairs ...string) grpc.UnaryClientInterceptor {
 //
 // # And the part that makes retries dangerous
 //
-// A retry on a unary call is safe only if the method is IDEMPOTENT, and gRPC has no way to declare that. So the
-// safe default is to retry nothing and to opt in per method, which is what grpc-go's built-in retry policy does
-// through a service config rather than an interceptor.
+// A retry on a unary call is safe only if the method is IDEMPOTENT. Protobuf can say so, with
+// `option idempotency_level = IDEMPOTENT;` on the method, but grpc-go never reads it and nothing enforces it.
+// This interceptor's default set is safe to retry only because both codes usually mean the server never ran
+// the call. Even so, wrap it around idempotent methods only, because an interceptor applies to every method on
+// the connection.
+//
+// grpc-go's built-in alternative is a retryPolicy in the service config. It is per method, and it has no
+// default codes at all: a policy with an empty retryableStatusCodes is rejected as invalid, so nothing is
+// retried until you list what may be.
 func RetryUnary(attempts int, backoff time.Duration, retryable ...codes.Code) grpc.UnaryClientInterceptor {
 	if len(retryable) == 0 {
 		retryable = []codes.Code{codes.Unavailable, codes.ResourceExhausted}

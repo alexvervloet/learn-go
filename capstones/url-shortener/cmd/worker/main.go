@@ -104,23 +104,21 @@ func run() error {
 		return err
 	}
 
-	errc := make(chan error, 1)
-
-	go func() {
-		log.Info("worker started", "queues", tasks.Queues, "concurrency", 10)
-
-		errc <- server.Run(mux)
-	}()
-
-	select {
-	case err := <-errc:
+	// Start, not Run. Run installs its own SIGTERM handler and calls Shutdown when the signal arrives, and so
+	// does this function, through ctx. asynq's Shutdown returns at once for a server that is already shutting
+	// down, so whichever call came second returned early. If that was this one, run returned and the deferred
+	// pool.Close ran while in-flight tasks were still draining and writing to the database. With Start there is
+	// one signal handler, ctx, and one Shutdown, the one below, which waits.
+	if err := server.Start(mux); err != nil {
 		scheduler.Shutdown()
 
 		return err
-
-	case <-ctx.Done():
-		log.Info("shutting down")
 	}
+
+	log.Info("worker started", "queues", tasks.Queues, "concurrency", 10)
+
+	<-ctx.Done()
+	log.Info("shutting down")
 
 	// Shutdown, not Stop.
 	//

@@ -154,7 +154,8 @@ from somewhere", not "there are rows before this one". The stronger version need
 
 `totalCount` is in the schema and the store counts it as a query returning every row, because that is what
 `count(*)` does. backend-concepts measured the same thing against Postgres: 1,428µs against 18.5µs for an
-estimate.
+estimate. The `books` resolver checks `graphql.CollectAllFields(ctx)` and runs the count only when the query
+selects `totalCount`, so a client paging through without it does not pay for it on every page.
 
 ## Complexity limiting
 

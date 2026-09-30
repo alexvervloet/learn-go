@@ -168,7 +168,7 @@ DIR ?= $(MODULES)
 ```
 
 `:=` because it shells out and every target uses it. `?=` on DIR so a caller can scope any target to one module
-with `make test DIR=./go-concepts/04-errors`. It expands to the twelve modules in this workspace and keeps
+with `make test DIR=./go-concepts/04-errors`. It expands to every module in this workspace (eighteen at the time of writing) and keeps
 working as modules are added.
 
 Two more things the Go workflow file does:
@@ -176,10 +176,14 @@ Two more things the Go workflow file does:
 **`.DEFAULT_GOAL := help`**, so a bare `make` prints the targets rather than running the first one. Without it,
 `make` runs whatever happens to be first, which for most Makefiles is a build and for some is a deploy.
 
-**A file target for a tool.** `$(GOBIN)/golangci-lint` is the one place a real file rule earns its keep in a Go
-Makefile: the target is a binary that either exists or does not, which is exactly what make is for. A version
-pinned in the Makefile rather than `@latest`, because `@latest` in a build is how CI breaks on a day nobody
-touched the repo.
+**A file target for a tool.** A tool install is the one place a real file rule earns its keep in a Go Makefile:
+the target is a file that either exists or does not, which is exactly what make is for. A version is pinned in the
+Makefile rather than `@latest`, because `@latest` in a build is how CI breaks on a day nobody touched the repo.
+
+The first version targeted the binary, `$(GOBIN)/golangci-lint`, and that made the pin decorative: the binary
+exists after ANY version is installed, so bumping `GOLANGCI_VERSION` never reinstalled anything. The target is
+now a stamp file with the version in its name, `.tools/golangci-lint-v2.6.2`, so a new version is a new file make
+has never seen.
 
 ## The self-documenting help target
 

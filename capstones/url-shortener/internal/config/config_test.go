@@ -135,3 +135,18 @@ func TestBaseURLIsNotDerivedFromTheRequest(t *testing.T) {
 	require.Equal(t, "https://sho.rt", cfg.BaseURL)
 	require.True(t, strings.HasPrefix(cfg.BaseURL, "https://"))
 }
+
+// TestADurationUnderASecondIsRefused moves the failure to startup. A 500ms token TTL used to load fine and fail
+// on the first login, because a JWT's times are whole seconds.
+func TestADurationUnderASecondIsRefused(t *testing.T) {
+	for _, raw := range []string{"500ms", "0", "0s", "-5m", "-30"} {
+		t.Run(raw, func(t *testing.T) {
+			set(t, map[string]string{
+				"DATABASE_URL": "postgres:///db", "JWT_SECRET": goodSecret, "TOKEN_TTL": raw,
+			})
+
+			_, err := config.Load()
+			require.ErrorContains(t, err, "TOKEN_TTL")
+		})
+	}
+}

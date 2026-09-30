@@ -110,14 +110,23 @@ func durationOr(key string, fallback time.Duration) (time.Duration, error) {
 		return fallback, nil
 	}
 
-	if d, err := time.ParseDuration(raw); err == nil {
-		return d, nil
-	}
-
-	seconds, err := strconv.Atoi(raw)
+	d, err := time.ParseDuration(raw)
 	if err != nil {
-		return 0, fmt.Errorf("%s=%q is neither a duration nor a number of seconds", key, raw)
+		seconds, atoiErr := strconv.Atoi(raw)
+		if atoiErr != nil {
+			return 0, fmt.Errorf("%s=%q is neither a duration nor a number of seconds", key, raw)
+		}
+
+		d = time.Duration(seconds) * time.Second
 	}
 
-	return time.Duration(seconds) * time.Second, nil
+	// At least a second, for every duration here. Zero and negative values are always mistakes. A sub-second
+	// token TTL truncates to zero in a JWT, whose times are whole seconds, and auth refuses it on the first
+	// login rather than at startup. A sub-second window or cache TTL is not a setting anyone means. Refusing
+	// here moves all of that to the moment the service starts.
+	if d < time.Second {
+		return 0, fmt.Errorf("%s=%q must be at least one second", key, raw)
+	}
+
+	return d, nil
 }

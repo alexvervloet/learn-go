@@ -123,6 +123,7 @@ the index below groups them by topic.
 - [`MAKELEVEL` leaks into a child make, and two tests failed only under `make test`](#makelevel-leaks-into-a-child-make-and-two-tests-failed-only-under-make-test)
 - [The Redis harnesses flushed the developer's own Redis](#the-redis-harnesses-flushed-the-developers-own-redis)
 - [The modernize analyzer rewrote a loop into one that stops a step short](#the-modernize-analyzer-rewrote-a-loop-into-one-that-stops-a-step-short)
+- [A randomised test that fails 1% of the time is a flaky test](#a-randomised-test-that-fails-1-of-the-time-is-a-flaky-test)
 
 ## 2026-09-25 — Two pieces of escape-analysis folklore, both wrong
 
@@ -2536,3 +2537,18 @@ dead tuple until vacuum reclaims it. Half the table was dead rows. With `books` 
 
 **Next time.** A size measurement on a table that tests write to measures its history as much as its data. Run
 `VACUUM FULL`, or measure a freshly loaded copy, before writing a number down, and say which was done.
+
+## A randomised test that fails 1% of the time is a flaky test
+
+**Expected.** CI for a push that touched only the makefile and github-actions modules would pass, since neither
+is anywhere near the job queue.
+
+**What happened.** `TestQueueWeighting` in jobs-concepts failed. It checked that a low-weight queue got at least
+one of the first 30 picks, with weights 6 to 1. asynq picks a queue at random in proportion to weight, so the
+chance of 30 critical picks in a row is (6/7)^30, about 1%. The test also started the worker before filling the
+queues, though its comment said the opposite. Every run was a coin with a 1% chance of landing red.
+
+**Next time.** When a test asserts something about a random process, work out its false-failure rate before
+trusting it, and pick the sample size from that. At 100 picks the same check fails about 2 times in 10 million,
+and still runs in under a second.
+

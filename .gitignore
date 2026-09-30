@@ -69,3 +69,6 @@ mem.pprof
 # A working plan kept at the root while a multi-step change is in progress.
 # It is scratch, never committed; LESSONS.md is the part that stays.
 PLAN.md
+
+# Version stamps from the makefile-concepts example workflow.
+.tools/

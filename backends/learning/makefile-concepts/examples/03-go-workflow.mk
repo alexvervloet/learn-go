@@ -96,19 +96,25 @@ vet:
 
 ## tools: install the pinned development tools
 #
-# Into $(GOBIN), which is on PATH for anyone who has set it up. The alternative is a tools.go with blank imports
-# and `go install` reading the module's own go.mod, which pins the versions in go.mod rather than here and is the
-# better answer for a single-module repo.
+# Into $(GOBIN), which is on PATH for anyone who has set it up. The alternative, for a single-module repo, is the
+# go.mod `tool` directive (Go 1.24): `go get -tool github.com/.../golangci-lint@vX` records the version in go.mod
+# and `go tool golangci-lint` runs it, with no install step at all. It replaced the older tools.go file of blank
+# imports. In a workspace it is a poorer fit, because one module's tool dependencies raise the shared versions
+# every module builds with.
 .PHONY: tools
 tools:
 	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_VERSION)
+
+# The version stamp the lint target depends on; see the $(TOOLS_STAMP) rule below. Defined BEFORE the rule that
+# names it, because make expands a prerequisite list when it reads the rule.
+TOOLS_STAMP := .tools/golangci-lint-$(GOLANGCI_VERSION)
 
 ## lint: run golangci-lint over every module
 #
 # golangci-lint has no workspace mode, so it runs once per module directory. A `for` loop in a recipe needs the
 # whole thing on one logical line, because each recipe LINE is its own shell.
 .PHONY: lint
-lint: $(GOBIN)/golangci-lint
+lint: $(TOOLS_STAMP)
 	@for dir in $(shell go list -m -f '{{.Dir}}' 2>/dev/null); do \
 		echo "linting $$dir"; \
 		(cd $$dir && $(GOBIN)/golangci-lint run ./...) || exit 1; \
@@ -116,11 +122,15 @@ lint: $(GOBIN)/golangci-lint
 
 # A FILE target for the tool, so `make lint` installs it only when it is missing.
 #
-# This is the one place a real file rule earns its keep in a Go Makefile: the target is a binary that either exists
-# or does not, which is exactly what make is for.
-$(GOBIN)/golangci-lint:
-	@echo "golangci-lint is not installed; installing $(GOLANGCI_VERSION)"
+# This is the one place a real file rule earns its keep in a Go Makefile: the target is a file that either exists
+# or does not, which is exactly what make is for. But the file has to name the VERSION. The first version of this
+# rule targeted $(GOBIN)/golangci-lint itself, which exists after any install of any version, so bumping
+# GOLANGCI_VERSION never reinstalled anything and the "pin" pinned nothing. A stamp file per version fixes it: a
+# new version is a new file name, so make sees it missing.
+$(TOOLS_STAMP):
+	@echo "installing golangci-lint $(GOLANGCI_VERSION)"
 	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_VERSION)
+	@mkdir -p $(dir $@) && touch $@
 
 ## ci: everything CI runs, in the order it runs it
 #

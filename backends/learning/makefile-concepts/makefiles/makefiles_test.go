@@ -44,8 +44,9 @@ func requireMake(t testing.TB) string {
 	// Windows has GNU make, on the GitHub runner and anywhere MSYS or Chocolatey
 	// has been near. What it does not have is a POSIX shell for the recipes.
 	//
-	// make picks its shell from $SHELL on Unix and from COMSPEC on Windows, so every recipe here runs under
-	// cmd.exe: `cd` changes the directory and does not persist the way the test asserts, `pwd` is not a command,
+	// GNU make runs recipes with /bin/sh on Unix, and IGNORES the SHELL environment variable there (a Makefile has
+	// to set SHELL itself). On Windows it looks for sh.exe on the PATH and otherwise uses cmd.exe via COMSPEC, so
+	// on a runner without one every recipe here runs under cmd.exe: `cd` changes the directory and does not persist the way the test asserts, `pwd` is not a command,
 	// and `grep` is not either. Three tests failed in CI on Windows for three different spellings of that one
 	// fact.
 	//
@@ -552,4 +553,20 @@ func TestExamplesAreFast(t *testing.T) {
 
 func indent(s string) string {
 	return "  " + strings.ReplaceAll(strings.TrimRight(s, "\n"), "\n", "\n  ")
+}
+
+// TestPipefailNeedsBash runs trap-pipeline, which nothing ran before. On Linux make's /bin/sh is dash, which
+// rejects `set -o pipefail`, so the target failed there and passed on a Mac, where /bin/sh is bash. The target now
+// sets SHELL to bash for itself.
+func TestPipefailNeedsBash(t *testing.T) {
+	out := runMake(t, "04-traps.mk", "trap-pipeline")
+
+	t.Logf("\n%s", out)
+
+	if !strings.Contains(out, "make saw exit code 0") {
+		t.Error("without pipefail, the pipeline should report tee's success")
+	}
+	if !strings.Contains(out, "the shell saw exit code 3") {
+		t.Error("with pipefail, the pipeline should report the failure")
+	}
 }

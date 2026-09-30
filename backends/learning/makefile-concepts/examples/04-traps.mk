@@ -37,7 +37,13 @@ trap-phony:
 # This is exactly the shape of a CI step that captures output, and it is why every such step in this repo's
 # workflow sets `set -o pipefail`.
 
+# pipefail is a bash (and ksh and zsh) option, and make runs recipes with /bin/sh. On macOS that is bash, so
+# this target worked there. On Ubuntu 24.04 (GitHub's ubuntu-latest) and Debian 12, /bin/sh is dash, which
+# answers "Illegal option -o pipefail" and fails the line, so the first version of this target failed there, and
+# no test ran it to notice. (Debian 13's dash has since been patched to accept it, so "Linux" is not one answer.)
+# A target-specific SHELL is the fix: this target, and only this target, runs under bash.
 .PHONY: trap-pipeline
+trap-pipeline: SHELL := /bin/bash
 trap-pipeline:
 	@echo "--- without pipefail ---"
 	@(exit 3) | cat; echo "make saw exit code $$?"

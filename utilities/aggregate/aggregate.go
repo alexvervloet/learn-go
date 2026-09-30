@@ -76,40 +76,46 @@ func All(ctx context.Context, sources []Source, opts Options) ([]Result, error) 
 	results := make([]Result, len(sources))
 
 	var (
-		wg   sync.WaitGroup
-		sem  chan struct{}
-		lim  = opts.Limit
-		gate = func() func() { return func() {} }
+		wg  sync.WaitGroup
+		sem chan struct{}
 	)
 
-	if lim > 0 {
-		sem = make(chan struct{}, lim)
-
-		// A buffered channel as a semaphore: acquire by sending, release by receiving. It is three lines and
-		// it composes with select, which a sync.Mutex-based counter does not.
-		gate = func() func() {
-			sem <- struct{}{}
-
-			return func() { <-sem }
-		}
+	// A buffered channel as a semaphore: acquire by sending, release by receiving. It is three lines and it
+	// composes with select, which a sync.Mutex-based counter does not.
+	if opts.Limit > 0 {
+		sem = make(chan struct{}, opts.Limit)
 	}
 
 	for i, src := range sources {
+		// Acquire BEFORE starting the goroutine, in the loop. Acquiring inside it bounds the fetches and not
+		// the goroutines: a thousand sources with a limit of 2 started a thousand goroutines that sat on the
+		// semaphore. Here the loop itself waits, so at most Limit goroutines exist at once.
+		//
+		// The select is also the context check. A cancelled aggregate with a limit of 2 and 100 sources
+		// stops handing out slots, and every source not yet started gets the context's error without running.
+		if sem != nil {
+			select {
+			case sem <- struct{}{}:
+			case <-ctx.Done():
+				results[i] = Result{Name: src.Name, Err: ctx.Err()}
+
+				continue
+			}
+		}
+
 		wg.Add(1)
 
 		go func() {
 			defer wg.Done()
 
-			release := gate()
-			defer release()
+			if sem != nil {
+				defer func() { <-sem }()
+			}
 
 			start := time.Now()
 
-			// The context check AFTER acquiring the gate.
-			//
-			// A source that waited behind a full semaphore while the context was cancelled should not run.
-			// Without this, a cancelled aggregate with a limit of 2 and 100 sources still runs all 100, two
-			// at a time, because each goroutine was already started.
+			// Checked again here for the no-limit case, and for a context cancelled between the slot and the
+			// goroutine starting.
 			if err := ctx.Err(); err != nil {
 				results[i] = Result{Name: src.Name, Err: err}
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -301,4 +302,52 @@ func TestAnEmptyListIsNotAnError(t *testing.T) {
 func TestNamesIsStable(t *testing.T) {
 	results := []Result{{Name: "c"}, {Name: "a"}, {Name: "b"}}
 	require.Equal(t, []string{"a", "b", "c"}, Names(results))
+}
+
+// TestALimitBoundsGoroutinesNotJustFetches is the difference between limiting the work and limiting the
+// goroutines. A thousand sources with a limit of 2 used to start a thousand goroutines that queued on the
+// semaphore; the fetches were bounded, the stacks and scheduler load were not.
+func TestALimitBoundsGoroutinesNotJustFetches(t *testing.T) {
+	const n = 1000
+
+	release := make(chan struct{})
+	running := make(chan struct{}, n)
+
+	sources := make([]Source, n)
+	for i := range sources {
+		sources[i] = Source{Name: fmt.Sprint(i), Fetch: func(context.Context) (string, error) {
+			running <- struct{}{}
+			<-release
+
+			return "ok", nil
+		}}
+	}
+
+	before := runtime.NumGoroutine()
+
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+
+		_, _ = All(context.Background(), sources, Options{Limit: 2})
+	}()
+
+	<-running
+	<-running
+
+	// The peak over the next 100ms, while both fetches are held. Sampling rather than one reading, because a
+	// loop that spawns everything may not have finished spawning at the first look. NumGoroutine counts the
+	// whole process, so this is a margin, not an exact count: a limit that holds adds a handful, one that does
+	// not adds about a thousand.
+	grew := 0
+	for range 100 {
+		grew = max(grew, runtime.NumGoroutine()-before)
+		time.Sleep(time.Millisecond)
+	}
+
+	close(release)
+	<-done
+
+	require.Less(t, grew, 50, "a limit of 2 started %d goroutines", grew)
 }

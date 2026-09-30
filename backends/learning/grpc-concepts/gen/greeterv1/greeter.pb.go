@@ -34,9 +34,9 @@ type HelloRequest struct {
 	//
 	// 1 to 15 encode their tag in one byte and 16 to 2047 take two, so the fields on every message go first.
 	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	// repeated is a list. In proto3 a repeated scalar is packed by default, which means one length-delimited run
-	// rather than a tag per element, and that is a wire-format difference from proto2 that only matters if
-	// something old is reading it.
+	// repeated is a list. In proto3 a repeated NUMERIC field (int32, double, bool, an enum) is packed by default:
+	// one length-delimited run rather than a tag per element. Strings, bytes and messages are never packed, since
+	// each element already carries its own length, so every title here is sent with its own tag.
 	Titles []string `protobuf:"bytes,2,rep,name=titles,proto3" json:"titles,omitempty"`
 	// optional in proto3 makes the field's presence detectable: the generated Go type is a POINTER, so nil and
 	// "" are different. Without it, a string field that arrives empty is indistinguishable from one that was

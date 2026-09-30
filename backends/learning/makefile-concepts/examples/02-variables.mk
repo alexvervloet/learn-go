@@ -21,10 +21,8 @@ SIMPLE := $(shell echo "expanded at $$(date +%s.%N)")
 .PHONY: expansion
 expansion:
 	@echo "simple, reference 1:    $(SIMPLE)"
-	@sleep 0.1
 	@echo "simple, reference 2:    $(SIMPLE)"
 	@echo "recursive, reference 1: $(RECURSIVE)"
-	@sleep 0.1
 	@echo "recursive, reference 2: $(RECURSIVE)"
 	@echo
 	@echo "the two simple values are identical and the two recursive ones are not."

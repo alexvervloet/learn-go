@@ -42,8 +42,16 @@ func TestOverlapThatCannotAdvanceIsRejected(t *testing.T) {
 		{Size: 10, Overlap: 10},
 		{Size: 10, Overlap: 11},
 		{Size: 0, Overlap: 0},
+		{Size: 3, Overlap: -2},
 	} {
 		_, err := Fixed("doc", "some text", opts)
+		require.ErrorIs(t, err, ErrBadChunkOptions, "%+v", opts)
+	}
+
+	// Sentences measures overlap in sentences, so only size and sign are wrong in every case. A negative
+	// overlap there used to be a slice out of range.
+	for _, opts := range []ChunkOptions{{Size: 0}, {Size: 5, Overlap: -1}} {
+		_, err := Sentences("doc", "A a. B b. C c.", opts)
 		require.ErrorIs(t, err, ErrBadChunkOptions, "%+v", opts)
 	}
 }

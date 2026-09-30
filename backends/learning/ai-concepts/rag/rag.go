@@ -58,8 +58,8 @@ type ChunkOptions struct {
 	Overlap int
 }
 
-// ErrBadChunkOptions is returned for a configuration that cannot terminate.
-var ErrBadChunkOptions = errors.New("rag: overlap must be smaller than size")
+// ErrBadChunkOptions is returned for a configuration that cannot terminate or would skip text.
+var ErrBadChunkOptions = errors.New("rag: bad chunk options")
 
 // Fixed splits text into fixed-size overlapping chunks.
 //
@@ -78,6 +78,11 @@ func Fixed(docID, text string, opts ChunkOptions) ([]Chunk, error) {
 	if opts.Overlap >= opts.Size {
 		return nil, fmt.Errorf("%w: size %d, overlap %d, so the window never advances",
 			ErrBadChunkOptions, opts.Size, opts.Overlap)
+	}
+
+	// A negative overlap is a step longer than a chunk, which skips the text between chunks without a word.
+	if opts.Overlap < 0 {
+		return nil, fmt.Errorf("%w: overlap %d is negative", ErrBadChunkOptions, opts.Overlap)
 	}
 
 	runes := []rune(text)
@@ -126,6 +131,10 @@ func Fixed(docID, text string, opts ChunkOptions) ([]Chunk, error) {
 func Sentences(docID, text string, opts ChunkOptions) ([]Chunk, error) {
 	if opts.Size <= 0 {
 		return nil, fmt.Errorf("%w: size must be positive", ErrBadChunkOptions)
+	}
+
+	if opts.Overlap < 0 {
+		return nil, fmt.Errorf("%w: overlap %d is negative", ErrBadChunkOptions, opts.Overlap)
 	}
 
 	sentences := sentenceSpans(text)

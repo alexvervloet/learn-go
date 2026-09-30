@@ -363,7 +363,13 @@ func (s *Store) DeleteURL(ctx context.Context, userID int64, slug string) error 
 // first finds it as a foreign-key violation (23503) instead, which the worker cannot tell from a real failure,
 // so it retries a task that will never succeed. The update also locks the URL row, so a DELETE that arrives
 // between the two statements waits for this transaction rather than removing the row under the insert.
-func (s *Store) RecordClick(ctx context.Context, urlID int64, referrer, userAgent string) error {
+//
+// # clickedAt is when the click happened, not when this runs
+//
+// The click reaches this function through a queue, so it can run seconds or, after retries, an hour after the
+// redirect. The column's DEFAULT now() is the worker's clock. The handler's time comes in the task, and a zero
+// value falls back to now().
+func (s *Store) RecordClick(ctx context.Context, urlID int64, clickedAt time.Time, referrer, userAgent string) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -382,9 +388,14 @@ func (s *Store) RecordClick(ctx context.Context, urlID int64, referrer, userAgen
 		return fmt.Errorf("%w: url %d", ErrNotFound, urlID)
 	}
 
+	var at *time.Time
+	if !clickedAt.IsZero() {
+		at = &clickedAt
+	}
+
 	if _, err := tx.Exec(ctx,
-		`INSERT INTO clicks (url_id, referrer, user_agent) VALUES ($1, $2, $3)`,
-		urlID, nullIfEmpty(referrer), nullIfEmpty(userAgent),
+		`INSERT INTO clicks (url_id, clicked_at, referrer, user_agent) VALUES ($1, COALESCE($2, now()), $3, $4)`,
+		urlID, at, nullIfEmpty(referrer), nullIfEmpty(userAgent),
 	); err != nil {
 		return err
 	}

@@ -123,7 +123,7 @@ var Queues = map[string]int{
 // An interface here and not a *store.Store, so the worker package does not import the store package and a test
 // can supply a counter. One method, defined where it is used, which is the Go shape.
 type ClickRecorder interface {
-	RecordClick(ctx context.Context, urlID int64, referrer, userAgent string) error
+	RecordClick(ctx context.Context, urlID int64, clickedAt time.Time, referrer, userAgent string) error
 }
 
 // ExpirySweeper is the other half.
@@ -152,7 +152,7 @@ func HandleRecordClick(recorder ClickRecorder, notFound func(error) bool) asynq.
 			return fmt.Errorf("%w: decode: %w: %w", ErrDropped, err, asynq.SkipRetry)
 		}
 
-		if err := recorder.RecordClick(ctx, p.URLID, p.Referrer, p.UserAgent); err != nil {
+		if err := recorder.RecordClick(ctx, p.URLID, p.ClickedAt, p.Referrer, p.UserAgent); err != nil {
 			if notFound(err) {
 				return fmt.Errorf("%w: url %d is gone: %w", ErrDropped, p.URLID, asynq.SkipRetry)
 			}

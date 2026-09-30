@@ -15,12 +15,14 @@ import (
 
 // recorder counts calls and can be told to fail.
 type recorder struct {
-	calls int
-	err   error
+	calls     int
+	clickedAt time.Time
+	err       error
 }
 
-func (r *recorder) RecordClick(_ context.Context, _ int64, _, _ string) error {
+func (r *recorder) RecordClick(_ context.Context, _ int64, clickedAt time.Time, _, _ string) error {
 	r.calls++
+	r.clickedAt = clickedAt
 
 	return r.err
 }
@@ -78,11 +80,14 @@ func TestARecordedClickSucceeds(t *testing.T) {
 	rec := &recorder{}
 	handler := tasks.HandleRecordClick(rec, isNotFound)
 
-	payload, err := json.Marshal(tasks.RecordClickPayload{URLID: 7, Referrer: "r", UserAgent: "a"})
+	clickedAt := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
+
+	payload, err := json.Marshal(tasks.RecordClickPayload{URLID: 7, Referrer: "r", UserAgent: "a", ClickedAt: clickedAt})
 	require.NoError(t, err)
 
 	require.NoError(t, handler(context.Background(), asynq.NewTask(tasks.TypeRecordClick, payload)))
 	require.Equal(t, 1, rec.calls)
+	require.True(t, clickedAt.Equal(rec.clickedAt), "the click time rides in the task to the store")
 }
 
 // TestAMissingURLIsDroppedRatherThanRetried is the SkipRetry case.

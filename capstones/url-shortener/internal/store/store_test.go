@@ -125,7 +125,7 @@ func TestDeletingAUserCascades(t *testing.T) {
 	url, err := s.CreateURL(ctx, u.ID, "https://example.com/", "", nil, shortener.Obfuscate)
 	require.NoError(t, err)
 
-	require.NoError(t, s.RecordClick(ctx, url.ID, "https://news.example/", "agent"))
+	require.NoError(t, s.RecordClick(ctx, url.ID, time.Time{}, "https://news.example/", "agent"))
 
 	_, err = s.Pool().Exec(ctx, `DELETE FROM users WHERE id = $1`, u.ID)
 	require.NoError(t, err, "with ON DELETE NO ACTION, the default, this would fail")
@@ -149,7 +149,7 @@ func TestRecordClickIsAtomic(t *testing.T) {
 	require.NoError(t, err)
 
 	for range 5 {
-		require.NoError(t, s.RecordClick(ctx, url.ID, "https://news.example/", "agent"))
+		require.NoError(t, s.RecordClick(ctx, url.ID, time.Time{}, "https://news.example/", "agent"))
 	}
 
 	counter, err := s.ClickCount(ctx, url.Slug)
@@ -178,7 +178,7 @@ func TestConcurrentClicksAllCount(t *testing.T) {
 	errs := make(chan error, clicks)
 
 	for range clicks {
-		go func() { errs <- s.RecordClick(ctx, url.ID, "", "") }()
+		go func() { errs <- s.RecordClick(ctx, url.ID, time.Time{}, "", "") }()
 	}
 
 	for range clicks {
@@ -201,7 +201,7 @@ func TestConcurrentClicksAllCount(t *testing.T) {
 func TestAClickForAMissingURLIsNotFound(t *testing.T) {
 	s, ctx := newStore(t)
 
-	err := s.RecordClick(ctx, 999_999, "", "")
+	err := s.RecordClick(ctx, 999_999, time.Time{}, "", "")
 	require.ErrorIs(t, err, store.ErrNotFound)
 }
 
@@ -214,8 +214,8 @@ func TestAnEmptyReferrerIsNULL(t *testing.T) {
 	url, err := s.CreateURL(ctx, u.ID, "https://example.com/", "", nil, shortener.Obfuscate)
 	require.NoError(t, err)
 
-	require.NoError(t, s.RecordClick(ctx, url.ID, "", ""))
-	require.NoError(t, s.RecordClick(ctx, url.ID, "https://news.example/", "agent"))
+	require.NoError(t, s.RecordClick(ctx, url.ID, time.Time{}, "", ""))
+	require.NoError(t, s.RecordClick(ctx, url.ID, time.Time{}, "https://news.example/", "agent"))
 
 	var direct int64
 	require.NoError(t, s.Pool().QueryRow(ctx,
@@ -378,4 +378,23 @@ func TestAGeneratedSlugSkipsOneAPersonTook(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEqual(t, "squatted", url.Slug)
 	require.Equal(t, 2, calls, "one taken slug costs one extra id, not the request")
+}
+
+// TestAClickKeepsTheTimeItHappened is the queue delay. The worker can record a click long after the redirect,
+// and the stored time is the redirect's, not the worker's.
+func TestAClickKeepsTheTimeItHappened(t *testing.T) {
+	s, ctx := newStore(t)
+
+	u := user(t, s, ctx, "alex@example.com")
+
+	url, err := s.CreateURL(ctx, u.ID, "https://example.com/", "", nil, shortener.Obfuscate)
+	require.NoError(t, err)
+
+	clickedAt := time.Now().Add(-time.Hour).UTC().Truncate(time.Microsecond)
+
+	require.NoError(t, s.RecordClick(ctx, url.ID, clickedAt, "", ""))
+
+	var stored time.Time
+	require.NoError(t, s.Pool().QueryRow(ctx, `SELECT clicked_at FROM clicks WHERE url_id = $1`, url.ID).Scan(&stored))
+	require.True(t, clickedAt.Equal(stored), "stored %s, clicked %s", stored, clickedAt)
 }

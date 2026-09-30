@@ -363,3 +363,62 @@ func TestNoToolUseMeansOneTurn(t *testing.T) {
 	require.Equal(t, 1, srv.Count())
 	require.Equal(t, "Hello.", res.Text)
 }
+
+// TestAnUnfinishedAnswerIsAnError is the check a loop that only looks for tool_use gets wrong: each of these
+// responses has text in it and would otherwise come back as a successful answer.
+func TestAnUnfinishedAnswerIsAnError(t *testing.T) {
+	for _, reason := range []anthropic.StopReason{
+		anthropic.StopReasonMaxTokens,
+		anthropic.StopReasonRefusal,
+		anthropic.StopReasonModelContextWindowExceeded,
+		"a_stop_reason_from_next_year",
+	} {
+		t.Run(string(reason), func(t *testing.T) {
+			var n int
+
+			registry, err := NewRegistry(weather(&n))
+			require.NoError(t, err)
+
+			c, srv := client(t, fake.StoppedMessage("The weather in Lis", string(reason), 40, 256))
+
+			res, err := Run(context.Background(), c, registry, "weather in Lisbon?", opts())
+			require.ErrorIs(t, err, ErrIncomplete)
+			require.Equal(t, 1, srv.Count(), "retrying the same request would stop the same way")
+
+			// The partial text comes back with the error, so the caller can show it, log it, or ask to continue.
+			require.Equal(t, reason, res.StopReason)
+			require.Equal(t, "The weather in Lis", res.Text)
+		})
+	}
+}
+
+// TestPauseTurnIsResent is the server-tool case: the API paused a long turn and the model picks it up again
+// when the transcript comes back unchanged.
+func TestPauseTurnIsResent(t *testing.T) {
+	registry, err := NewRegistry()
+	require.NoError(t, err)
+
+	c, srv := client(t,
+		fake.StoppedMessage("Searching.", "pause_turn", 40, 10),
+		fake.TextMessage("Found it.", 60, 5),
+	)
+
+	res, err := Run(context.Background(), c, registry, "look it up", opts())
+	require.NoError(t, err)
+
+	require.Equal(t, "Found it.", res.Text)
+	require.Equal(t, anthropic.StopReasonEndTurn, res.StopReason)
+	require.Equal(t, 2, res.Turns)
+
+	// The second request ends with the paused assistant turn and nothing after it: no empty user message,
+	// no "please continue". Adding either changes what the model is continuing from.
+	second := srv.Requests()[1].Messages
+	require.Len(t, second, 2)
+
+	var last struct {
+		Role string `json:"role"`
+	}
+
+	require.NoError(t, json.Unmarshal(second[1], &last))
+	require.Equal(t, "assistant", last.Role)
+}

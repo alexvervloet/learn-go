@@ -120,10 +120,19 @@ type Result struct {
 	Calls []Call
 	Turns int
 	Usage anthropic.Usage
+
+	// StopReason is why the last response ended. It is end_turn or stop_sequence when Run returns no error.
+	StopReason anthropic.StopReason
 }
 
-// ErrTooManyTurns is returned when the loop hits its bound.
-var ErrTooManyTurns = errors.New("agent: the model kept asking for tools past the turn limit")
+var (
+	// ErrTooManyTurns is returned when the loop hits its bound.
+	ErrTooManyTurns = errors.New("agent: the model kept asking for tools past the turn limit")
+
+	// ErrIncomplete is returned when the model stopped without finishing: it ran out of output tokens, filled
+	// the context window, or refused. Result.StopReason says which, and Result.Text holds whatever it wrote.
+	ErrIncomplete = errors.New("agent: the model stopped before finishing")
+)
 
 // Options configures a run.
 type Options struct {
@@ -185,10 +194,29 @@ func Run(ctx context.Context, client anthropic.Client, registry Registry, questi
 		// would drop them and the next request would be a 400.
 		messages = append(messages, msg.ToParam())
 
-		if msg.StopReason != anthropic.StopReasonToolUse {
+		result.StopReason = msg.StopReason
+
+		// Only two stop reasons mean the model is done. Every other one is a response that looks like an answer
+		// and is not: max_tokens cut it off mid-sentence (and, if it was writing a tool call, mid-JSON), refusal
+		// declined it, and model_context_window_exceeded ran out of room. Treating those as success hands the
+		// caller half an answer with no sign anything went wrong. A stop reason added to the API later lands in
+		// the default case too, which is the safe direction to be wrong in.
+		switch msg.StopReason {
+		case anthropic.StopReasonEndTurn, anthropic.StopReasonStopSequence:
 			result.Text = textOf(msg)
 
 			return result, nil
+		case anthropic.StopReasonToolUse:
+			// Handled below.
+		case anthropic.StopReasonPauseTurn:
+			// A server-side tool (web search, code execution) ran long and the API paused the turn. The
+			// assistant message is already in the transcript; sending it back as it is lets the model carry
+			// on. That costs a request, so it counts as a turn.
+			continue
+		default:
+			result.Text = textOf(msg)
+
+			return result, fmt.Errorf("turn %d: %w: stop_reason %q", turn, ErrIncomplete, msg.StopReason)
 		}
 
 		var results []anthropic.ContentBlockParamUnion

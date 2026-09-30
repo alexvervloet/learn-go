@@ -144,6 +144,12 @@ func (s *Server) Count() int {
 
 // TextMessage builds a Message response carrying one text block.
 func TextMessage(text string, inputTokens, outputTokens int) Response {
+	return StoppedMessage(text, "end_turn", inputTokens, outputTokens)
+}
+
+// StoppedMessage is TextMessage with a chosen stop_reason, for the responses that look finished and are not:
+// "max_tokens", "refusal", "pause_turn", "model_context_window_exceeded".
+func StoppedMessage(text, stopReason string, inputTokens, outputTokens int) Response {
 	encoded, _ := json.Marshal(text)
 
 	return Response{Body: fmt.Sprintf(`{
@@ -152,10 +158,10 @@ func TextMessage(text string, inputTokens, outputTokens int) Response {
   "role": "assistant",
   "model": "claude-haiku-4-5-20251001",
   "content": [{"type": "text", "text": %s}],
-  "stop_reason": "end_turn",
+  "stop_reason": %q,
   "stop_sequence": null,
   "usage": {"input_tokens": %d, "output_tokens": %d}
-}`, encoded, inputTokens, outputTokens)}
+}`, encoded, stopReason, inputTokens, outputTokens)}
 }
 
 // ToolUseMessage builds a Message response asking for a tool call.

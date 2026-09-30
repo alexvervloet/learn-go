@@ -12,9 +12,12 @@
 // the same destination, or one of them wants to delete theirs. It also needs a collision check for the same
 // reason, because a truncated hash collides.
 //
-// Encoding the row's own id is the third. The database already guarantees the id is unique, so there is nothing
-// to check, nothing to retry and no collision to handle. The slug is derived, not stored, and the shortest
-// possible for the number of URLs that exist.
+// Encoding the row's own id is the third. The database already guarantees the id is unique, so two generated
+// slugs can never collide, and the slug is the shortest possible for the number of URLs that exist.
+//
+// Custom slugs break the "nothing to check" part. They share the column, so a person can choose today the
+// string a future id will encode to. The store handles that one case by skipping to the next id, which is a
+// much smaller retry than a random scheme needs, but it is a retry, and it has a test.
 //
 // # What it costs
 //

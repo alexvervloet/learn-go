@@ -249,11 +249,13 @@ func TestCancellationSkipsQueuedSources(t *testing.T) {
 func TestFirstErrorCancelsTheRest(t *testing.T) {
 	boom := errors.New("the service is down")
 
-	var cancelled atomic.Bool
+	var started, cancelled atomic.Bool
 
 	watcher := Source{
 		Name: "watcher",
 		Fetch: func(ctx context.Context) (string, error) {
+			started.Store(true)
+
 			select {
 			case <-time.After(2 * time.Second):
 				return "never", nil
@@ -273,7 +275,11 @@ func TestFirstErrorCancelsTheRest(t *testing.T) {
 
 	require.ErrorIs(t, err, boom)
 	require.Nil(t, values, "nothing is returned, because the policy is that partial data is useless here")
-	require.True(t, cancelled.Load(), "errgroup cancelled the derived context on the first error")
+	// Two correct outcomes, and which one happens is scheduling. The watcher was already fetching and saw the
+	// cancellation, or the failure landed before its goroutine got going and it never started at all.
+	if started.Load() {
+		require.True(t, cancelled.Load(), "errgroup cancelled the derived context on the first error")
+	}
 	require.Less(t, elapsed, time.Second, "it did not wait out the slow source: %v", elapsed)
 }
 

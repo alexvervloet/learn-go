@@ -172,6 +172,14 @@ func TestEveryPriceFollowsTheCacheMultipliers(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			require.InDelta(t, 1.25*price.Input, price.CacheWrite, 1e-9)
 			require.InDelta(t, 2.00*price.Input, price.CacheWrite1h, 1e-9)
+
+			// Reads are 0.1x input, with published exceptions.
+			read := 0.10
+			if name == anthropic.ModelClaudeOpus5_5 {
+				read = 0.05
+			}
+
+			require.InDelta(t, read*price.Input, price.CacheRead, 1e-9)
 		})
 	}
 }

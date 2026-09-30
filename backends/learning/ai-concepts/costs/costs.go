@@ -28,6 +28,9 @@ import (
 // Prices change. Hard-coding them in a program that bills anyone is a mistake; the numbers are here so the
 // RATIOS can be demonstrated, and those are stable: output is several times input, a cache write is a premium
 // over input, a cache read is a large discount.
+//
+// The table was checked against https://platform.claude.com/docs/en/about-claude/pricing on 2026-09-30. Even
+// the ratios have exceptions there: a cache read is 0.1x input on most models and 0.05x on Opus 5.5.
 type Price struct {
 	Input  float64
 	Output float64
@@ -41,10 +44,11 @@ type Price struct {
 	ContextWindow int
 }
 
-// Prices covers the models used in this module.
+// Prices covers the models used in this module, plus the current Sonnet and Opus for comparison.
 //
 // Haiku is the default everywhere here for the obvious reason: it is the cheapest, and none of what this module
-// demonstrates improves with a more expensive model.
+// demonstrates improves with a more expensive model. Newer is not always dearer, though: Sonnet 5.5 costs less
+// per token than Sonnet 4.5 did.
 var Prices = map[anthropic.Model]Price{
 	anthropic.ModelClaudeHaiku4_5_20251001: {
 		Input: 1.00, Output: 5.00, CacheWrite: 1.25, CacheWrite1h: 2.00, CacheRead: 0.10, ContextWindow: 200_000,
@@ -54,6 +58,12 @@ var Prices = map[anthropic.Model]Price{
 	},
 	anthropic.ModelClaudeSonnet4_5_20250929: {
 		Input: 3.00, Output: 15.00, CacheWrite: 3.75, CacheWrite1h: 6.00, CacheRead: 0.30, ContextWindow: 200_000,
+	},
+	anthropic.ModelClaudeSonnet5_5: {
+		Input: 2.00, Output: 10.00, CacheWrite: 2.50, CacheWrite1h: 4.00, CacheRead: 0.20, ContextWindow: 1_000_000,
+	},
+	anthropic.ModelClaudeOpus5_5: {
+		Input: 4.00, Output: 20.00, CacheWrite: 5.00, CacheWrite1h: 8.00, CacheRead: 0.20, ContextWindow: 1_000_000,
 	},
 }
 
@@ -167,7 +177,8 @@ func SimulateConversation(turns, perTurn int) []anthropic.Usage {
 //
 // The break-even is one request: with a write premium of 25% and a read discount of 90%, a second request
 // already more than repays the first. That is why a long system prompt or a large document is the canonical
-// thing to cache and a user's question is not.
+// thing to cache and a user's question is not. This uses the five-minute TTL; the one-hour write costs 2x input
+// and needs a third request to pay for itself.
 func CacheSavings(model anthropic.Model, prefixTokens, requests int) (cached, uncached float64, err error) {
 	price, ok := Prices[model]
 	if !ok {

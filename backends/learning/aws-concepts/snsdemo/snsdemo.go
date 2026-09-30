@@ -89,9 +89,11 @@ func SubscribeQueue(ctx context.Context, client *sns.Client, topicARN, queueARN 
 		TopicArn: aws.String(topicARN),
 		Protocol: aws.String("sqs"),
 		Endpoint: aws.String(queueARN),
-		// Without this the subscription is PendingConfirmation and nothing is delivered. For SQS the
-		// confirmation is automatic, but the attributes are only applied if they are set at subscribe time
-		// or with a later SetSubscriptionAttributes call.
+		// This changes the response, not the subscription. Without it, a subscription that still needs
+		// confirming comes back with the literal ARN "pending confirmation", which cannot be used to
+		// unsubscribe. Delivery does not depend on it: an SQS queue in the same account is confirmed
+		// automatically either way. The attributes, separately, only apply if they are set here or with a
+		// later SetSubscriptionAttributes call.
 		ReturnSubscriptionArn: true,
 		Attributes:            attrs,
 	})

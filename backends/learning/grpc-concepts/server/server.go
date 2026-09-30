@@ -29,10 +29,10 @@
 // enumeration with seventeen values, and mapping it to HTTP is a gateway's job. Returning a plain Go error gives
 // the client codes.Unknown, which tells it nothing.
 //
-// METADATA is HTTP/2 headers, sent before the body and again as trailers after it. Keys are lower-cased, a
-// "-bin" suffix means the value is base64-encoded binary, and a value set after the first Send arrives in the
-// trailers rather than the headers, which is a distinction that only shows up when a client reads one and not
-// the other.
+// METADATA is HTTP/2 headers, sent before the body and again as trailers after it. Keys are lower-cased, and a
+// "-bin" suffix means the value is base64-encoded binary. Headers go out with the first response message, so
+// SetHeader after that fails, and the value is not sent at all. It does not slide into the trailers. Anything
+// known only once the work is done has to be set as a trailer from the start.
 package server
 
 import (
@@ -107,8 +107,8 @@ func (g *Greeter) SayHello(ctx context.Context, req *greeterv1.HelloRequest) (*g
 		greeting = title + " " + greeting
 	}
 
-	// Metadata sent as HEADERS, which means before the response body. After the first Send it would become a
-	// trailer instead, and a client reading only headers would not see it.
+	// Metadata sent as HEADERS, which means before the response body. Set after the headers have gone out, it
+	// would not be sent at all: SetHeader returns an error and the value is dropped.
 	if err := grpcSetHeader(ctx, metadata.Pairs(
 		"x-server-id", fmt.Sprint(g.ID),
 		"x-call-count", fmt.Sprint(g.calls.Load()),
@@ -508,8 +508,9 @@ func (c *Chat) readThenWrite(stream chatv1.Chat_JoinServer) error {
 
 // grpcSetHeader sends metadata as HEADERS, turning the failure into a status.
 //
-// grpc.SetHeader returns an error when it is called twice or after the first Send, and returning it unwrapped
-// would give the client codes.Unknown for what is a server bug.
+// grpc.SetHeader merges when it is called more than once, and returns an error when it is called after the
+// headers have gone out: after SendHeader, after the first Send, or once the status is on its way. Returning that
+// unwrapped would give the client codes.Unknown for what is a server bug.
 func grpcSetHeader(ctx context.Context, md metadata.MD) error {
 	if err := grpc.SetHeader(ctx, md); err != nil {
 		return status.Errorf(codes.Internal, "setting headers: %v", err)

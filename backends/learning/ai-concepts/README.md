@@ -14,8 +14,8 @@ An LLM API is an HTTP API, so [`fake/`](fake/) is an `httptest.Server` replaying
 marshals, signs, sends, retries and unmarshals for real; only the sentence at the end is canned.
 
 That is not a compromise. A test asserting "the model answers 4 when asked what 2+2 is" tests the model, which
-is not the subject, is not deterministic, and costs money on every run. A test asserting "the SDK retries a 429
-four times and does not retry a 400" tests the code you wrote and will actually break.
+is not the subject, is not deterministic, and costs money on every run. A test asserting "the SDK makes four
+attempts against a 429 and one against a 400" tests the code you wrote and will actually break.
 
 There is exactly one live test, `TestLiveRoundTrip`, gated on `ANTHROPIC_API_KEY` and capped at 16 output
 tokens on the cheapest model. Its assertions are about the *shape* of a reply, because those hold on any day.
@@ -89,7 +89,7 @@ The whole protocol:
 1. Send a request with a list of tools, each a name, a description and a JSON Schema.
 2. The model replies with `stop_reason: "tool_use"` and one or more `tool_use` blocks.
 3. Run the tools, send the results back as `tool_result` blocks **in a user message**.
-4. Repeat until it stops asking.
+4. Repeat until `stop_reason` is `end_turn`.
 
 The model never calls anything. It emits a structured request and waits, so every piece of the execution,
 including whether to execute at all, is yours. That is where the safety lives: the model is choosing which of
@@ -103,6 +103,13 @@ Three things the tests pin because they are the ones that break:
   replying to one is a 400. `TestEveryToolUseBlockNeedsAResult` covers it.
 - **`msg.ToParam()`, not a rebuild from the text.** Reconstructing the assistant turn from its text drops the
   `tool_use` block, and the next request is a 400.
+- **"Not `tool_use`" does not mean "done".** `max_tokens` cut the answer off, `refusal` declined it and
+  `model_context_window_exceeded` ran out of room. Each comes back with text that looks like an answer, so
+  `Run` returns it with `ErrIncomplete`. `pause_turn` means a server-side tool paused a long turn, and the loop
+  sends the transcript back unchanged so the model carries on. `TestAnUnfinishedAnswerIsAnError` covers these.
+- **The tool list goes out in the same order every turn.** Tools are the start of the prompt, and the prompt
+  cache matches an exact prefix. Built by ranging over a map, the list changes order between turns and every
+  turn pays full price for everything after it. `TestToolOrderIsStable` covers it.
 
 A failing tool sends its error back as a `tool_result` with `is_error`, rather than ending the loop. The model
 can then apologise, retry with different arguments, or give up, which is usually better than the program
@@ -160,7 +167,10 @@ invalid UTF-8, which then fails to embed, fails to display, and fails quietly.
 `TestFixedChunkingDoesNotSplitRunes` uses a 25-character, 75-byte string to show it.
 
 An overlap equal to or larger than the size is refused, because the window never advances and the loop does not
-terminate.
+terminate. So is a negative one, which would step past text between chunks. `Sentences` measures overlap in
+sentences and caps it at one less than the chunk holds, so each chunk starts at least a sentence later than the
+last. Its `Start` and `End` are rune offsets taken from the splitter, so they slice the source back out even when
+a sentence appears twice.
 
 `TestTheSentenceSplitterIsNaive` asserts a known wrong answer: "Dr. Smith arrived." splits into two. Stating the
 limit and checking it is better than pretending a regex handles English.

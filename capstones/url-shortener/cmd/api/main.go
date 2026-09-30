@@ -30,7 +30,7 @@ import (
 //
 // "unknown" rather than "", because -X against a variable that does not exist is NOT an error: the build
 // succeeds and the variable keeps its default. A default of "unknown" makes a typo in the flag visible in the
-// health endpoint; a default of "" looks like a field nobody filled in.
+// "listening" log line at startup; a default of "" looks like a field nobody filled in.
 var (
 	version = "unknown"
 	commit  = "unknown"

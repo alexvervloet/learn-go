@@ -76,13 +76,23 @@ func run() error {
 		return err
 	}
 
+	accountLimiter, err := ratelimit.New(redisClient, ratelimit.Options{
+		Limit:  cfg.AccountLimit,
+		Window: cfg.AccountWindow,
+		Prefix: "account",
+	})
+	if err != nil {
+		return err
+	}
+
 	srv := api.New(api.Options{
-		Store:      store.New(pool),
-		Limiter:    limiter,
-		Logger:     log,
-		Secret:     cfg.JWTSecret,
-		AccessTTL:  cfg.AccessTTL,
-		RefreshTTL: cfg.RefreshTTL,
+		Store:          store.New(pool),
+		Limiter:        limiter,
+		AccountLimiter: accountLimiter,
+		Logger:         log,
+		Secret:         cfg.JWTSecret,
+		AccessTTL:      cfg.AccessTTL,
+		RefreshTTL:     cfg.RefreshTTL,
 	})
 
 	httpServer := &http.Server{

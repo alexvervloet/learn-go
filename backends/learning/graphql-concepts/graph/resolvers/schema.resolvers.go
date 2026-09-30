@@ -9,8 +9,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
+	"github.com/99designs/gqlgen/graphql"
 	"github.com/alexvervloet/learn-go/backends/learning/graphql-concepts/dataloader"
 	"github.com/alexvervloet/learn-go/backends/learning/graphql-concepts/graph/generated"
 	"github.com/alexvervloet/learn-go/backends/learning/graphql-concepts/graph/model"
@@ -313,16 +315,21 @@ func (r *queryResolver) Books(ctx context.Context, first *int, after *string, la
 		info.EndCursor = &edges[len(edges)-1].Cursor
 	}
 
-	total, err := r.Store.CountBooks(ctx)
-	if err != nil {
-		return nil, wrap("counting books", err)
+	conn := &model.BookConnection{Edges: edges, PageInfo: info}
+
+	// totalCount is a count over every row, and this resolver returns the whole connection, so it would run
+	// for every page whether the client asked for the total or not. CollectAllFields lists what the query
+	// selected on this field, so the count runs only when someone will read it.
+	if slices.Contains(graphql.CollectAllFields(ctx), "totalCount") {
+		total, err := r.Store.CountBooks(ctx)
+		if err != nil {
+			return nil, wrap("counting books", err)
+		}
+
+		conn.TotalCount = total
 	}
 
-	return &model.BookConnection{
-		Edges:      edges,
-		PageInfo:   info,
-		TotalCount: total,
-	}, nil
+	return conn, nil
 }
 
 // Failing returns an error, so the error-propagation tests can ask for one.

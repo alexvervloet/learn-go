@@ -617,3 +617,25 @@ func deref(s *string) string {
 	}
 	return *s
 }
+
+// TestTotalCountCostsAQueryOnlyWhenAskedFor is the count over every row. A page that does not select totalCount
+// must not pay for it.
+func TestTotalCountCostsAQueryOnlyWhenAskedFor(t *testing.T) {
+	for _, tc := range []struct {
+		selection string
+		queries   int64
+	}{
+		{"edges { node { id } }", 1},
+		{"edges { node { id } } totalCount", 2},
+	} {
+		srv := gqltest.New(t, gqltest.Options{Authors: 2, BooksPerAuthor: 3})
+
+		var out map[string]any
+
+		srv.Query(t, `{ books(first: 2) { `+tc.selection+` } }`, &out)
+
+		if got := srv.Store.Queries(); got != tc.queries {
+			t.Errorf("selecting %q ran %d store queries, want %d", tc.selection, got, tc.queries)
+		}
+	}
+}

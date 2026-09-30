@@ -152,7 +152,10 @@ func (l *Loader[K, V]) Load(ctx context.Context, key K) (V, error) {
 		batch := l.takePendingLocked()
 		l.mu.Unlock()
 
-		l.run(ctx, batch)
+		// Without cancel for the same reason as the timer path below: this batch belongs to every key in
+		// it, and this caller is only the one that happened to fill it. If this caller gives up, the
+		// others are still waiting.
+		l.run(context.WithoutCancel(ctx), batch)
 	} else {
 		// The first key of a batch starts the timer. Later keys join it, which is why the timer is
 		// started only when there is not one.

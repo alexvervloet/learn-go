@@ -132,3 +132,65 @@ func TestAMissingKeyIsATypedError(t *testing.T) {
 		t.Fatalf("got %v, want ErrNoResult", err)
 	}
 }
+
+// pendingLen reads how many keys are waiting for the next batch.
+func pendingLen[K comparable, V any](l *Loader[K, V]) int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	return len(l.pending)
+}
+
+// TestOneCallerCancellingDoesNotFailTheBatch is the full-batch path. The Load that fills a batch runs it, on
+// its own goroutine, and a batch run on that caller's context fails for every other waiter the moment that one
+// caller gives up.
+func TestOneCallerCancellingDoesNotFailTheBatch(t *testing.T) {
+	entered := make(chan struct{})
+
+	l := New(func(ctx context.Context, keys []int) (map[int]int, error) {
+		close(entered)
+
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(100 * time.Millisecond):
+		}
+
+		out := make(map[int]int, len(keys))
+		for _, k := range keys {
+			out[k] = k
+		}
+
+		return out, nil
+	}, time.Hour, 2)
+
+	// A waits in the pending batch with a context nobody cancels.
+	type answer struct {
+		v   int
+		err error
+	}
+
+	a := make(chan answer, 1)
+
+	go func() {
+		v, err := l.Load(context.Background(), 1)
+		a <- answer{v, err}
+	}()
+
+	for pendingLen(l) == 0 {
+		time.Sleep(time.Millisecond)
+	}
+
+	// B fills the batch, so the batch runs on B's goroutine, and B gives up partway through.
+	ctx, cancel := context.WithCancel(context.Background())
+
+	go func() { _, _ = l.Load(ctx, 2) }()
+
+	<-entered
+	cancel()
+
+	got := <-a
+	if got.err != nil || got.v != 1 {
+		t.Fatalf("A got %d, %v: B's cancellation failed a batch A was waiting on", got.v, got.err)
+	}
+}

@@ -30,7 +30,6 @@ package interceptors
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"runtime"
@@ -423,9 +422,6 @@ func RetryUnary(attempts int, backoff time.Duration, retryable ...codes.Code) gr
 		return fmt.Errorf("after %d attempts: %w", attempts, err)
 	}
 }
-
-// ErrNoStream is returned by the stream interceptor when it cannot open a stream at all.
-var ErrNoStream = errors.New("no stream")
 
 // stack captures a stack trace for the recovery interceptors.
 func stack() []byte {

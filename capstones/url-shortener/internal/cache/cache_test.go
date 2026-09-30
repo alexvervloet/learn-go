@@ -342,3 +342,59 @@ func TestDeletingALinkClearsTheCache(t *testing.T) {
 	gone.JSON(t, &problem)
 	require.Equal(t, http.StatusNotFound, gone.Status)
 }
+
+// TestOneCallerLeavingDoesNotFailTheOthers is the shared fetch's context. The first caller starts the fetch and
+// then hangs up; the second, collapsed onto the same fetch, still gets the entry.
+func TestOneCallerLeavingDoesNotFailTheOthers(t *testing.T) {
+	c := newCache(t, cache.Options{TTL: time.Minute})
+
+	var (
+		fetches atomic.Int64
+		once    sync.Once
+	)
+
+	started := make(chan struct{})
+
+	fetch := func(ctx context.Context) (cache.Entry, error) {
+		fetches.Add(1)
+		once.Do(func() { close(started) })
+
+		select {
+		case <-ctx.Done():
+			return cache.Entry{}, ctx.Err()
+		case <-time.After(100 * time.Millisecond):
+		}
+
+		return cache.Entry{URLID: 1, Target: "https://example.com/"}, nil
+	}
+
+	first, cancel := context.WithCancel(context.Background())
+
+	firstErr := make(chan error, 1)
+
+	go func() {
+		_, err := c.Lookup(first, "leaver", fetch)
+		firstErr <- err
+	}()
+
+	<-started
+
+	second := make(chan error, 1)
+
+	go func() {
+		entry, err := c.Lookup(context.Background(), "leaver", fetch)
+		if err == nil && entry.URLID != 1 {
+			err = errors.New("wrong entry")
+		}
+		second <- err
+	}()
+
+	cancel()
+
+	require.ErrorIs(t, <-firstErr, context.Canceled, "the caller that left returns at once")
+	require.NoError(t, <-second, "the caller that stayed gets the entry")
+
+	// One fetch, whichever way the second caller arrived: collapsed onto the running one, or after it, from the
+	// cache it filled. A fetch cancelled by the first caller would have made the second start its own.
+	require.Equal(t, int64(1), fetches.Load())
+}

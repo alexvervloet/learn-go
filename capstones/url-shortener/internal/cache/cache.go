@@ -53,6 +53,7 @@ type Cache struct {
 
 	ttl         time.Duration
 	negativeTTL time.Duration
+	loadTimeout time.Duration
 
 	// group collapses concurrent misses for one key into a single database call.
 	//
@@ -86,6 +87,9 @@ type Stats struct {
 type Options struct {
 	TTL         time.Duration
 	NegativeTTL time.Duration
+
+	// LoadTimeout bounds the shared fetch in Lookup, which does not run on any one caller's context.
+	LoadTimeout time.Duration
 }
 
 // New builds a Cache.
@@ -100,7 +104,11 @@ func New(client *redis.Client, opts Options) *Cache {
 		opts.NegativeTTL = 30 * time.Second
 	}
 
-	return &Cache{client: client, ttl: opts.TTL, negativeTTL: opts.NegativeTTL}
+	if opts.LoadTimeout == 0 {
+		opts.LoadTimeout = 5 * time.Second
+	}
+
+	return &Cache{client: client, ttl: opts.TTL, negativeTTL: opts.NegativeTTL, loadTimeout: opts.LoadTimeout}
 }
 
 // ErrMiss is returned by Get when the key is not cached.
@@ -190,10 +198,19 @@ func (c *Cache) Lookup(ctx context.Context, slug string, fetch func(context.Cont
 		return *entry, nil
 	}
 
-	// singleflight.Do returns `shared` telling you whether this call's result was given to more than one
-	// caller. That is the measurement: it is how a test proves the collapse happened rather than inferring it
-	// from a call count that could be one by luck.
-	value, err, shared := c.group.Do(slug, func() (any, error) {
+	// The fetch serves every caller collapsed onto it, so it must not run on any ONE caller's context. With the
+	// first caller's ctx, a client that hung up mid-redirect cancelled the query and every other caller got
+	// context.Canceled with nothing wrong on their side. So the fetch runs on context.WithoutCancel(ctx), which
+	// keeps the values and drops the cancellation, bounded by loadTimeout, and each caller waits on its own ctx
+	// through DoChan.
+	//
+	// The result's Shared field says whether this call's result was given to more than one caller. That is the
+	// measurement: it is how a test proves the collapse happened rather than inferring it from a call count that
+	// could be one by luck.
+	ch := c.group.DoChan(slug, func() (any, error) {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), c.loadTimeout)
+		defer cancel()
+
 		entry, err := fetch(ctx)
 		if err != nil {
 			return Entry{}, err
@@ -212,17 +229,25 @@ func (c *Cache) Lookup(ctx context.Context, slug string, fetch func(context.Cont
 		return entry, nil
 	})
 
-	if shared {
+	var res singleflight.Result
+
+	select {
+	case res = <-ch:
+	case <-ctx.Done():
+		return Entry{}, ctx.Err()
+	}
+
+	if res.Shared {
 		c.collapsed.Add(1)
 	}
 
-	if err != nil {
-		return Entry{}, err
+	if res.Err != nil {
+		return Entry{}, res.Err
 	}
 
-	entry, ok := value.(Entry)
+	entry, ok := res.Val.(Entry)
 	if !ok {
-		return Entry{}, fmt.Errorf("cache: fetch for %q returned %T", slug, value)
+		return Entry{}, fmt.Errorf("cache: fetch for %q returned %T", slug, res.Val)
 	}
 
 	return entry, nil

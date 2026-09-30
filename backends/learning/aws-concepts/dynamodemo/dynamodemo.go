@@ -393,9 +393,12 @@ func QueryByKind(ctx context.Context, client *dynamodb.Client, table, kind strin
 //
 // # The condition expression is the whole concurrency story
 //
-// DynamoDB has no transactions in the everyday sense and does not need one for this. A condition expression is
-// evaluated on the partition holding the item, atomically with the write, so two writers racing produce one
-// success and one ConditionalCheckFailedException.
+// This needs no transaction. A condition expression is evaluated on the partition holding the item, atomically
+// with the write, so two writers racing produce one success and one ConditionalCheckFailedException.
+//
+// DynamoDB does have transactions, TransactWriteItems and TransactGetItems, for the case a condition cannot
+// cover: several items that must all change or none. Each costs twice the capacity of the plain operation, so
+// they are for that case, not for making one conditional write feel safer.
 //
 // attribute_not_exists(device_id) reads oddly. It is not asking whether the attribute is missing from the item
 // you are writing; it asks whether the ITEM AT THIS KEY already has it, and an item that does not exist has no

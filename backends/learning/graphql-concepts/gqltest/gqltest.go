@@ -51,11 +51,9 @@ type Options struct {
 	// arrive first.
 	LoaderWait time.Duration
 
-	// ComplexityLimit rejects queries above a cost. Zero disables it.
+	// ComplexityLimit rejects queries above a cost. Zero disables it. It also covers deep nesting, since
+	// each level multiplies the cost, which is why there is no separate depth limit.
 	ComplexityLimit int
-
-	// MaxDepth rejects queries nested deeper than this. Zero disables it.
-	MaxDepth int
 }
 
 // New builds a test server.

@@ -19,14 +19,15 @@ resolver:
   package: resolvers
   filename_template: "{name}.resolvers.go"
 
-# omit_slice_element_pointers: a []Book! becomes []*model.Book by default, which means every element can be nil
-# and every loop needs a nil check for something the schema says cannot be null. Turning it on gives []*model.Book
-# for [Book] and []*model.Book for [Book!]... actually gqlgen still uses pointers for structs; what this controls
-# is the extra pointer for NON-NULL elements.
+# omit_slice_element_pointers: by default a list of an object type is a slice of pointers, so [Book!] becomes
+# []*model.Book. Every element can then be nil, and every loop needs a nil check for something the schema says
+# cannot be null. Turned on, a non-null element is a value, [Book!] becomes []model.Book, and a nullable one keeps
+# its pointer, [Book] stays []*model.Book. The Go type then says what the schema says.
 omit_slice_element_pointers: true
 
-# Returning a pointer for a nullable field and a value for a non-null one is what makes the Go types carry the
-# schema's nullability. Without it, every field is a pointer and the compiler stops helping.
+# autobind lists Go packages to search for a type with the same name as a schema type, and binds to it when one
+# matches. Empty here, so every binding is written out under models: below, and a schema type with no binding is
+# generated rather than quietly bound to whatever Go type happens to share its name.
 autobind: []
 
 models:

@@ -776,3 +776,40 @@ func itoa(n int) string {
 	}
 	return string(digits)
 }
+
+// TestAFailedSendEndsTheBidiCall guards the writer's error path. When Send fails, the writer waits for the
+// reader, and the reader may be parked in Recv with the client still waiting for a reply. Recv returns only when
+// the stream ends, so that wait would hang if a failed Send left the stream open.
+//
+// It does not, and this test is what says so. A message over the server's MaxSendMsgSize is refused locally,
+// the connection is fine, and grpc-go still ends the stream: any SendMsg error writes the final status. If a
+// grpc-go upgrade changed that, this test would hang until the client's deadline and fail.
+func TestAFailedSendEndsTheBidiCall(t *testing.T) {
+	srv := grpctest.Start(t, grpctest.Options{
+		Register: func(s *grpc.Server) {
+			chatv1.RegisterChatServer(s, &server.Chat{Mode: server.Concurrent})
+		},
+		ServerOptions: []grpc.ServerOption{grpc.MaxSendMsgSize(64)},
+	})
+
+	client := chatv1.NewChatClient(srv.Dial(t))
+
+	ctx := grpctest.Context(t, 3*time.Second)
+
+	stream, err := client.Join(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The echo of this is over 64 bytes, and the client does not close its side: it waits for an answer.
+	if err := stream.Send(&chatv1.ChatMessage{From: "client", Text: strings.Repeat("x", 200)}); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = stream.Recv()
+
+	if got := status.Code(err); got != codes.ResourceExhausted {
+		t.Fatalf("Recv: %v (code %s); want the handler to return the send failure, not hang until the "+
+			"client's deadline", err, got)
+	}
+}

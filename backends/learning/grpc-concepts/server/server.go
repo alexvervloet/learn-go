@@ -447,7 +447,9 @@ func (c *Chat) concurrent(stream chatv1.Chat_JoinServer) error {
 			Sequence: sequence,
 		}); err != nil {
 			// Drain the reader before returning, or Join returns while the goroutine is still
-			// touching the stream.
+			// touching the stream. This cannot hang on a reader parked in Recv: grpc-go ends the
+			// stream on any SendMsg error, which makes that Recv return. TestAFailedSendEndsTheBidiCall
+			// holds it to that.
 			wg.Wait()
 			return fmt.Errorf("sending: %w", err)
 		}

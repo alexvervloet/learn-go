@@ -9,6 +9,7 @@ package api
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -798,15 +799,24 @@ func (s *Server) handleListBookmarks(w http.ResponseWriter, r *http.Request) {
 		limit = n
 	}
 
+	after, err := decodeCursor(r.URL.Query().Get("after"))
+	if err != nil {
+		s.problem(w, r, http.StatusBadRequest, TypeValidation, "Bad request", "after is not a cursor this API issued.")
+
+		return
+	}
+
+	// One row more than the page, to learn whether there is a next page without a count(*). The extra row is
+	// dropped before the response.
 	if tag := r.URL.Query().Get("tag"); tag != "" {
-		bookmarks, err := s.store.BookmarksByTag(r.Context(), userID, tag, limit)
+		bookmarks, err := s.store.BookmarksByTag(r.Context(), userID, tag, limit+1, after)
 		if err != nil {
 			s.internalError(w, r, "list by tag", err)
 
 			return
 		}
 
-		s.writeList(w, r, bookmarks)
+		s.writeList(w, r, bookmarks, limit)
 
 		return
 	}
@@ -815,23 +825,74 @@ func (s *Server) handleListBookmarks(w http.ResponseWriter, r *http.Request) {
 	//
 	// The three are measured in the store's tests. Two queries is the one that keeps the row scan simple and
 	// does not depend on the driver's array handling, and the difference from one query is one round trip.
-	bookmarks, _, err := s.store.ListTwoQueries(r.Context(), userID, limit)
+	bookmarks, _, err := s.store.ListTwoQueries(r.Context(), userID, limit+1, after)
 	if err != nil {
 		s.internalError(w, r, "list bookmarks", err)
 
 		return
 	}
 
-	s.writeList(w, r, bookmarks)
+	s.writeList(w, r, bookmarks, limit)
 }
 
-func (s *Server) writeList(w http.ResponseWriter, r *http.Request, bookmarks []store.Bookmark) {
+// writeList writes one page. bookmarks may hold one row more than limit, which means there is a next page, and
+// "next" is then the cursor to ask for it with. On the last page there is no "next" at all.
+func (s *Server) writeList(w http.ResponseWriter, r *http.Request, bookmarks []store.Bookmark, limit int) {
+	var next string
+
+	if len(bookmarks) > limit {
+		bookmarks = bookmarks[:limit]
+		last := bookmarks[len(bookmarks)-1]
+		next = encodeCursor(store.Cursor{CreatedAt: last.CreatedAt, ID: last.ID})
+	}
+
 	items := make([]bookmarkResponse, 0, len(bookmarks))
 	for i := range bookmarks {
 		items = append(items, toResponse(&bookmarks[i]))
 	}
 
-	s.writeJSON(w, r, http.StatusOK, map[string]any{"items": items})
+	body := map[string]any{"items": items}
+	if next != "" {
+		body["next"] = next
+	}
+
+	s.writeJSON(w, r, http.StatusOK, body)
+}
+
+// encodeCursor makes a cursor opaque: base64url of "<unix microseconds>.<id>". Microseconds because that is
+// timestamptz's precision, so the value round-trips exactly. Opaque so a client passes it back rather than
+// building one, and the format can change without breaking anyone who did.
+func encodeCursor(c store.Cursor) string {
+	return base64.RawURLEncoding.EncodeToString(fmt.Appendf(nil, "%d.%d", c.CreatedAt.UnixMicro(), c.ID))
+}
+
+// decodeCursor reverses encodeCursor. An empty string is the first page.
+func decodeCursor(raw string) (*store.Cursor, error) {
+	if raw == "" {
+		return nil, nil
+	}
+
+	b, err := base64.RawURLEncoding.DecodeString(raw)
+	if err != nil {
+		return nil, err
+	}
+
+	micros, id, ok := strings.Cut(string(b), ".")
+	if !ok {
+		return nil, errors.New("cursor has no separator")
+	}
+
+	us, err := strconv.ParseInt(micros, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	n, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	return &store.Cursor{CreatedAt: time.UnixMicro(us), ID: n}, nil
 }
 
 func (s *Server) handleDeleteBookmark(w http.ResponseWriter, r *http.Request) {

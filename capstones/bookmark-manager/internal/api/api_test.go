@@ -402,6 +402,63 @@ func TestCreateAndListBookmarks(t *testing.T) {
 	require.ElementsMatch(t, []any{"go", "style"}, list.Items[0]["tags"])
 }
 
+// TestListingPagesWithACursor walks every page. Five bookmarks at two a page is three pages, newest first, with
+// no bookmark twice and none missed, and the last page has no "next".
+func TestListingPagesWithACursor(t *testing.T) {
+	h := harness(t)
+
+	tokens := h.Register(t, "alex@example.com", goodPassword)
+
+	for i := range 5 {
+		createBookmark(t, h, tokens.Access, map[string]any{
+			"url": fmt.Sprintf("https://example.com/%d", i), "title": fmt.Sprint(i), "tags": []string{"all"},
+		})
+	}
+
+	for _, base := range []string{"/api/v1/bookmarks?limit=2", "/api/v1/bookmarks?limit=2&tag=all"} {
+		t.Run(base, func(t *testing.T) {
+			var (
+				titles []string
+				pages  int
+				path   = base
+			)
+
+			for {
+				resp := h.Do(t, http.MethodGet, path, tokens.Access, nil)
+				require.Equal(t, http.StatusOK, resp.Status)
+
+				var page struct {
+					Items []map[string]any `json:"items"`
+					Next  string           `json:"next"`
+				}
+
+				resp.JSON(t, &page)
+
+				pages++
+
+				for _, item := range page.Items {
+					titles = append(titles, item["title"].(string))
+				}
+
+				if page.Next == "" {
+					break
+				}
+
+				// A cursor that does not advance hands out "next" forever. Fail rather than hang.
+				require.Less(t, pages, 10, "the cursor is not moving through the list")
+
+				path = base + "&after=" + page.Next
+			}
+
+			require.Equal(t, 3, pages)
+			require.Equal(t, []string{"4", "3", "2", "1", "0"}, titles, "newest first, each exactly once")
+		})
+	}
+
+	resp := h.Do(t, http.MethodGet, "/api/v1/bookmarks?after=not-a-cursor", tokens.Access, nil)
+	require.Equal(t, http.StatusBadRequest, resp.Status)
+}
+
 // TestABookmarkWithNoTagsHasAnEmptyArray is the null-versus-empty rule.
 func TestABookmarkWithNoTagsHasAnEmptyArray(t *testing.T) {
 	h := harness(t)

@@ -250,6 +250,30 @@ type Bookmark struct {
 	Tags []string
 }
 
+// Cursor is where a page of bookmarks stopped: the last row's sort key.
+//
+// # Keyset, not OFFSET
+//
+// OFFSET 1000 makes the database read and discard a thousand rows to return the next twenty, so page fifty
+// costs fifty times page one, and a bookmark added while someone pages shifts every later page by one: an item
+// shows twice or not at all. A cursor asks for the rows after the last one seen, which is one index seek on
+// (user_id, created_at DESC, id DESC) whatever the page, and an insert elsewhere does not move it. The id is in
+// the key because created_at is not unique: two bookmarks saved in the same microsecond would otherwise have no
+// defined order, and a page boundary between them would drop one.
+type Cursor struct {
+	CreatedAt time.Time
+	ID        int64
+}
+
+// args returns the query parameters for an optional cursor, NULLs for the first page.
+func (c *Cursor) args() (*time.Time, *int64) {
+	if c == nil {
+		return nil, nil
+	}
+
+	return &c.CreatedAt, &c.ID
+}
+
 // NewBookmark is what a caller supplies.
 type NewBookmark struct {
 	CategoryID  *int64
@@ -432,17 +456,22 @@ func (s *Store) ListNPlusOne(ctx context.Context, userID int64, limit int) ([]Bo
 //
 // This is usually the right answer. It keeps the row scan simple, it does not need a driver that understands
 // arrays of composite types, and two round trips is not meaningfully worse than one.
-func (s *Store) ListTwoQueries(ctx context.Context, userID int64, limit int) ([]Bookmark, Queries, error) {
+//
+// after is where the previous page stopped, or nil for the first page; see Cursor.
+func (s *Store) ListTwoQueries(ctx context.Context, userID int64, limit int, after *Cursor) ([]Bookmark, Queries, error) {
 	var q Queries
 
 	const listQ = `
 		SELECT id, user_id, category_id, url, title, description, created_at, updated_at
 		FROM bookmarks
 		WHERE user_id = $1
+		  AND ($3::timestamptz IS NULL OR (created_at, id) < ($3, $4))
 		ORDER BY created_at DESC, id DESC
 		LIMIT $2`
 
-	rows, err := s.pool.Query(ctx, listQ, userID, limit)
+	at, id := after.args()
+
+	rows, err := s.pool.Query(ctx, listQ, userID, limit, at, id)
 	if err != nil {
 		return nil, q, err
 	}
@@ -643,8 +672,8 @@ func (s *Store) ExplainSearch(ctx context.Context, userID int64, query string) (
 	return strings.Join(lines, "\n"), nil
 }
 
-// BookmarksByTag lists a user's bookmarks carrying a tag.
-func (s *Store) BookmarksByTag(ctx context.Context, userID int64, tag string, limit int) ([]Bookmark, error) {
+// BookmarksByTag lists a user's bookmarks carrying a tag, a page at a time like ListTwoQueries.
+func (s *Store) BookmarksByTag(ctx context.Context, userID int64, tag string, limit int, after *Cursor) ([]Bookmark, error) {
 	const q = `
 		SELECT b.id, b.user_id, b.category_id, b.url, b.title, b.description, b.created_at, b.updated_at,
 		       coalesce(array_agg(t2.name ORDER BY t2.name) FILTER (WHERE t2.name IS NOT NULL), '{}')
@@ -654,11 +683,14 @@ func (s *Store) BookmarksByTag(ctx context.Context, userID int64, tag string, li
 		LEFT JOIN bookmark_tags bt2 ON bt2.bookmark_id = b.id
 		LEFT JOIN tags t2 ON t2.id = bt2.tag_id
 		WHERE b.user_id = $1
+		  AND ($4::timestamptz IS NULL OR (b.created_at, b.id) < ($4, $5))
 		GROUP BY b.id
-		ORDER BY b.created_at DESC
+		ORDER BY b.created_at DESC, b.id DESC
 		LIMIT $3`
 
-	rows, err := s.pool.Query(ctx, q, userID, tag, limit)
+	at, id := after.args()
+
+	rows, err := s.pool.Query(ctx, q, userID, tag, limit, at, id)
 	if err != nil {
 		return nil, err
 	}

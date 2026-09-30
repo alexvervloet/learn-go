@@ -123,7 +123,7 @@ func TestDeletingACategoryKeepsItsBookmarks(t *testing.T) {
 
 	require.NoError(t, s.DeleteCategory(ctx, u.ID, category.ID))
 
-	after, _, err := s.ListTwoQueries(ctx, u.ID, 10)
+	after, _, err := s.ListTwoQueries(ctx, u.ID, 10, nil)
 	require.NoError(t, err)
 	require.Len(t, after, 1, "ON DELETE SET NULL, not CASCADE: the bookmark survives")
 	require.Nil(t, after[0].CategoryID)
@@ -202,7 +202,7 @@ func TestTheThreeLoadersAgreeAndCostDifferently(t *testing.T) {
 	elapsedA := time.Since(start)
 
 	start = time.Now()
-	two, qB, err := s.ListTwoQueries(ctx, u.ID, n)
+	two, qB, err := s.ListTwoQueries(ctx, u.ID, n, nil)
 	require.NoError(t, err)
 	elapsedB := time.Since(start)
 
@@ -449,14 +449,14 @@ func TestBookmarksByTagReturnsEveryTag(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	found, err := s.BookmarksByTag(ctx, u.ID, "testing", 10)
+	found, err := s.BookmarksByTag(ctx, u.ID, "testing", 10, nil)
 	require.NoError(t, err)
 	require.Len(t, found, 1)
 	require.ElementsMatch(t, []string{"go", "testing", "concurrency"}, found[0].Tags,
 		"the filter picks the bookmark; it must not truncate its tags")
 
 	// CITEXT, so the lookup is case-insensitive without the caller lowercasing.
-	upper, err := s.BookmarksByTag(ctx, u.ID, "TESTING", 10)
+	upper, err := s.BookmarksByTag(ctx, u.ID, "TESTING", 10, nil)
 	require.NoError(t, err)
 	require.Len(t, upper, 1)
 }
@@ -526,4 +526,41 @@ func TestDeleteExpiredTokensKeepsLiveOnes(t *testing.T) {
 
 	_, err = s.RefreshTokenByHash(ctx, []byte("live-hash-000000000000000000000000"))
 	require.NoError(t, err, "the live token survives the sweep")
+}
+
+// TestPagesDoNotSkipRowsWithTheSameTimestamp is why the cursor carries the id. Three bookmarks saved at the same
+// instant, a page of one at a time: with created_at alone, the cursor after the first would skip the other two.
+func TestPagesDoNotSkipRowsWithTheSameTimestamp(t *testing.T) {
+	s, ctx := newStore(t)
+
+	u := user(t, s, ctx, "alex@example.com")
+
+	for i := range 3 {
+		_, err := s.CreateBookmark(ctx, u.ID, store.NewBookmark{URL: fmt.Sprintf("https://same.example/%d", i), Title: "t"})
+		require.NoError(t, err)
+	}
+
+	_, err := s.Pool().Exec(ctx, `UPDATE bookmarks SET created_at = '2026-01-01T00:00:00Z' WHERE user_id = $1`, u.ID)
+	require.NoError(t, err)
+
+	var (
+		seen  []int64
+		after *store.Cursor
+	)
+
+	for range 5 {
+		page, _, err := s.ListTwoQueries(ctx, u.ID, 1, after)
+		require.NoError(t, err)
+
+		if len(page) == 0 {
+			break
+		}
+
+		seen = append(seen, page[0].ID)
+		after = &store.Cursor{CreatedAt: page[0].CreatedAt, ID: page[0].ID}
+	}
+
+	require.Len(t, seen, 3, "every row once, in id order among equal timestamps")
+	require.Greater(t, seen[0], seen[1])
+	require.Greater(t, seen[1], seen[2])
 }

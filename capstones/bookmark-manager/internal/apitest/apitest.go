@@ -420,6 +420,10 @@ type HarnessOptions struct {
 	// default, which is generous enough that a test not about rate limiting never trips it.
 	LoginLimit  int
 	LoginWindow time.Duration
+
+	// AccountLimit and AccountWindow configure the per-email limit, with the same zero-means-generous rule.
+	AccountLimit  int
+	AccountWindow time.Duration
 }
 
 // New starts the service.
@@ -460,9 +464,27 @@ func New(t *testing.T, opts HarnessOptions) *Harness {
 		t.Fatalf("build limiter: %v", err)
 	}
 
+	if opts.AccountLimit == 0 {
+		opts.AccountLimit = 1000
+	}
+
+	if opts.AccountWindow == 0 {
+		opts.AccountWindow = time.Minute
+	}
+
+	accountLimiter, err := ratelimit.New(client, ratelimit.Options{
+		Limit:  opts.AccountLimit,
+		Window: opts.AccountWindow,
+		Prefix: "account",
+	})
+	if err != nil {
+		t.Fatalf("build account limiter: %v", err)
+	}
+
 	srv := api.New(api.Options{
-		Store:   st,
-		Limiter: limiter,
+		Store:          st,
+		Limiter:        limiter,
+		AccountLimiter: accountLimiter,
 		// Discard, not stderr: a passing test prints nothing, and a handler logging from a goroutine after
 		// the test ends is a data race the detector finds.
 		Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),

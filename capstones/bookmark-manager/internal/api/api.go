@@ -27,9 +27,10 @@ import (
 
 // Server holds the dependencies.
 type Server struct {
-	store   *store.Store
-	limiter *ratelimit.Limiter
-	log     *slog.Logger
+	store          *store.Store
+	limiter        *ratelimit.Limiter
+	accountLimiter *ratelimit.Limiter
+	log            *slog.Logger
 
 	secret     []byte
 	accessTTL  time.Duration
@@ -41,7 +42,11 @@ type Server struct {
 type Options struct {
 	Store   *store.Store
 	Limiter *ratelimit.Limiter
-	Logger  *slog.Logger
+
+	// AccountLimiter limits attempts per email address, on top of Limiter's cap on the endpoints as a whole.
+	AccountLimiter *ratelimit.Limiter
+
+	Logger *slog.Logger
 
 	Secret     []byte
 	AccessTTL  time.Duration
@@ -68,13 +73,14 @@ func New(opts Options) *Server {
 	}
 
 	return &Server{
-		store:      opts.Store,
-		limiter:    opts.Limiter,
-		log:        opts.Logger,
-		secret:     opts.Secret,
-		accessTTL:  opts.AccessTTL,
-		refreshTTL: opts.RefreshTTL,
-		hashCost:   opts.HashCost,
+		store:          opts.Store,
+		limiter:        opts.Limiter,
+		accountLimiter: opts.AccountLimiter,
+		log:            opts.Logger,
+		secret:         opts.Secret,
+		accessTTL:      opts.AccessTTL,
+		refreshTTL:     opts.RefreshTTL,
+		hashCost:       opts.HashCost,
 	}
 }
 
@@ -249,9 +255,10 @@ const CredentialsKey = "credentials"
 // load balancer is the load balancer. Keying on it would give every user one shared bucket.
 //
 // So this is a GLOBAL limit on the credential endpoints, which is a blunt instrument and is honest about what
-// it protects: bcrypt and the database, not an individual account. A per-account limit belongs on the email in
-// the body, with a different key and a different window, and mixing the two into one middleware is how both
-// end up wrong.
+// it protects: bcrypt and the database, not an individual account. Set it to what bcrypt can afford, not to
+// what one user needs, because every user shares it: at 20 a minute, one script logging in over and over
+// locks everyone out. The per-account limit is limitAccount, keyed on the email in the body, which is why it
+// lives in the handlers and not in this middleware.
 //
 // # Fail closed
 //
@@ -268,33 +275,79 @@ func (s *Server) rateLimited(next http.HandlerFunc) http.Handler {
 
 		decision, err := s.limiter.Allow(r.Context(), CredentialsKey)
 		if err != nil {
-			s.log.ErrorContext(r.Context(), "rate limiter unavailable", "error", err)
-			s.problem(w, r, http.StatusServiceUnavailable, TypeRateLimited, "Unavailable",
-				"The rate limiter is unreachable, so credential endpoints are closed.")
+			s.limiterDown(w, r, err)
 
 			return
 		}
 
-		// The draft RFC headers. RateLimit-Reset is a number of SECONDS from now rather than a timestamp,
-		// which is what makes it possible to compute without agreeing on a clock.
-		w.Header().Set("RateLimit-Limit", strconv.Itoa(decision.Limit))
-		w.Header().Set("RateLimit-Remaining", strconv.Itoa(decision.Remaining))
-		w.Header().Set("RateLimit-Reset", strconv.Itoa(int(decision.ResetIn.Seconds()+0.999)))
+		setRateHeaders(w, decision)
 
 		if !decision.Allowed {
-			// Retry-After as well, because it is the one every client library already understands. It is
-			// also seconds, and it must be at least 1: a value of 0 tells a client to retry immediately.
-			retry := max(int(decision.ResetIn.Seconds()+0.999), 1)
-
-			w.Header().Set("Retry-After", strconv.Itoa(retry))
-			s.problem(w, r, http.StatusTooManyRequests, TypeRateLimited, "Too many requests",
-				fmt.Sprintf("Try again in %d second(s).", retry))
+			s.refuse(w, r, decision)
 
 			return
 		}
 
 		next(w, r)
 	})
+}
+
+// limitAccount applies the per-account limit and reports whether the request may go on.
+//
+// # Why per account, and why it only shows itself on a refusal
+//
+// The global bucket protects bcrypt; this one protects an account. Keyed on the lower-cased email, it stops a
+// guesser working through passwords for one person without touching anyone else's logins, which the global
+// bucket cannot do. It fails closed for the same reason the global one does.
+//
+// On success it sets no headers, so the RateLimit-* headers keep describing the endpoint-wide bucket. Telling
+// a caller how many attempts remain on a particular account is telling a guesser their budget.
+func (s *Server) limitAccount(w http.ResponseWriter, r *http.Request, email string) bool {
+	if s.accountLimiter == nil {
+		return true
+	}
+
+	decision, err := s.accountLimiter.Allow(r.Context(), "account:"+strings.ToLower(email))
+	if err != nil {
+		s.limiterDown(w, r, err)
+
+		return false
+	}
+
+	if !decision.Allowed {
+		setRateHeaders(w, decision)
+		s.refuse(w, r, decision)
+
+		return false
+	}
+
+	return true
+}
+
+// setRateHeaders writes the draft RFC headers. RateLimit-Reset is a number of SECONDS from now rather than a
+// timestamp, which is what makes it possible to compute without agreeing on a clock.
+func setRateHeaders(w http.ResponseWriter, d ratelimit.Decision) {
+	w.Header().Set("RateLimit-Limit", strconv.Itoa(d.Limit))
+	w.Header().Set("RateLimit-Remaining", strconv.Itoa(d.Remaining))
+	w.Header().Set("RateLimit-Reset", strconv.Itoa(int(d.ResetIn.Seconds()+0.999)))
+}
+
+// refuse is the 429. Retry-After as well as the RateLimit headers, because it is the one every client library
+// already understands. It is also seconds, and it must be at least 1: a value of 0 tells a client to retry
+// immediately.
+func (s *Server) refuse(w http.ResponseWriter, r *http.Request, d ratelimit.Decision) {
+	retry := max(int(d.ResetIn.Seconds()+0.999), 1)
+
+	w.Header().Set("Retry-After", strconv.Itoa(retry))
+	s.problem(w, r, http.StatusTooManyRequests, TypeRateLimited, "Too many requests",
+		fmt.Sprintf("Try again in %d second(s).", retry))
+}
+
+// limiterDown is the fail-closed answer when Redis is unreachable.
+func (s *Server) limiterDown(w http.ResponseWriter, r *http.Request, err error) {
+	s.log.ErrorContext(r.Context(), "rate limiter unavailable", "error", err)
+	s.problem(w, r, http.StatusServiceUnavailable, TypeRateLimited, "Unavailable",
+		"The rate limiter is unreachable, so credential endpoints are closed.")
 }
 
 func (s *Server) logRequests(next http.Handler) http.Handler {
@@ -353,6 +406,10 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 
 	email := strings.TrimSpace(body.Email)
 
+	if !s.limitAccount(w, r, email) {
+		return
+	}
+
 	// Not a regex. The only way to validate an email address is to send one, and every regex that tries
 	// rejects valid addresses. 254 is RFC 5321's maximum.
 	if !strings.Contains(email, "@") || len(email) > 254 {
@@ -398,7 +455,13 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := s.store.UserByEmail(r.Context(), strings.TrimSpace(body.Email))
+	email := strings.TrimSpace(body.Email)
+
+	if !s.limitAccount(w, r, email) {
+		return
+	}
+
+	user, err := s.store.UserByEmail(r.Context(), email)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			s.problem(w, r, http.StatusUnauthorized, TypeUnauthorized, "Unauthorized", "Email or password is wrong.")

@@ -300,6 +300,34 @@ func TestTheLoginEndpointIsRateLimited(t *testing.T) {
 	require.Equal(t, "0", refused.Header.Get("RateLimit-Remaining"))
 }
 
+// TestOneAccountsLimitDoesNotLockOutAnother is why the limit is per account as well as global. A guesser
+// hammering one address runs out of attempts on it, and a different user logs in untouched.
+func TestOneAccountsLimitDoesNotLockOutAnother(t *testing.T) {
+	h := apitest.New(t, apitest.HarnessOptions{AccountLimit: 3, AccountWindow: time.Minute})
+
+	h.Register(t, "victim@example.com", goodPassword)
+	h.Register(t, "bystander@example.com", goodPassword)
+
+	// Registration used one of the victim's three. Two wrong guesses use the rest, in any letter case.
+	for _, email := range []string{"victim@example.com", "VICTIM@example.com"} {
+		resp := h.Do(t, http.MethodPost, "/api/v1/login", "", map[string]string{
+			"email": email, "password": "not-the-password",
+		})
+		require.Equal(t, http.StatusUnauthorized, resp.Status)
+	}
+
+	refused := h.Do(t, http.MethodPost, "/api/v1/login", "", map[string]string{
+		"email": "victim@example.com", "password": goodPassword,
+	})
+	require.Equal(t, http.StatusTooManyRequests, refused.Status, "even the right password waits out the window")
+	require.NotEmpty(t, refused.Header.Get("Retry-After"))
+
+	other := h.Do(t, http.MethodPost, "/api/v1/login", "", map[string]string{
+		"email": "bystander@example.com", "password": goodPassword,
+	})
+	require.Equal(t, http.StatusOK, other.Status, "another account is not affected")
+}
+
 // TestRateLimitHeadersAppearOnSuccessToo is what lets a client pace itself.
 func TestRateLimitHeadersAppearOnSuccessToo(t *testing.T) {
 	h := apitest.New(t, apitest.HarnessOptions{LoginLimit: 10, LoginWindow: time.Minute})

@@ -12,8 +12,9 @@
 // # What this package shows that a tutorial usually does not
 //
 //   - Subcommands, which `flag` supports through a FlagSet per command and nothing else.
-//   - A custom flag.Value, which is how a flag parses into a type the package does not know about, and the
-//     only way to get a repeatable flag.
+//   - A custom flag.Value, which is how a flag parses into a type the package does not know about, and one of
+//     two ways to get a repeatable flag. The other is flag.Func with a closure that appends; the Value is the
+//     one to reach for when the flag also needs to print its default.
 //   - Environment fallback done in the right ORDER: a flag beats an environment variable beats a default.
 //   - Writing usage to a buffer instead of os.Stderr, which is what makes any of it testable.
 package cliflags
@@ -38,8 +39,8 @@ type Config struct {
 	Timeout time.Duration
 	Workers int
 
-	// Tags is a repeatable flag: -tag a -tag b. The flag package has no built-in for this, so it is a
-	// flag.Value whose Set appends rather than replaces.
+	// Tags is a repeatable flag: -tag a -tag b. The flag package has no typed built-in for a list, so it is a
+	// flag.Value whose Set appends rather than replaces. flag.Func with an appending closure would also work.
 	Tags []string
 
 	// Args are what is left after the flags.
@@ -132,8 +133,9 @@ func Parse(args []string, output io.Writer, getenv func(string) string) (*Config
 
 	// A FlagSet per subcommand, which is how `flag` does subcommands and the only way it does.
 	//
-	// ContinueOnError, not ExitOnError. The default panics the process on a bad flag, which is fine for a
-	// main and impossible to test, and turns a library into something that can kill its caller.
+	// ContinueOnError, not ExitOnError. ExitOnError, which flag.CommandLine uses, calls os.Exit(2) on a bad
+	// flag: fine for a main, impossible to test, and it turns a library into something that can end its
+	// caller's process. (PanicOnError is the third mode, and it panics.)
 	fs := flag.NewFlagSet(command, flag.ContinueOnError)
 	fs.SetOutput(output)
 

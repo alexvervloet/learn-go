@@ -117,6 +117,8 @@ func Fixed(docID, text string, opts ChunkOptions) ([]Chunk, error) {
 // nothing except a variable chunk size.
 //
 // The overlap here is measured in SENTENCES rather than runes, which is the same idea applied to the same unit.
+// It is capped at one less than the sentences in the chunk, so every chunk starts at least a sentence later than
+// the one before.
 //
 // The sentence splitter is deliberately naive: a period, question mark or exclamation followed by a space. It
 // gets "Dr. Smith" and "e.g." wrong, and a real system uses a proper segmenter. Saying so is better than
@@ -170,8 +172,10 @@ func Sentences(docID, text string, opts ChunkOptions) ([]Chunk, error) {
 		if length+runes > opts.Size && len(current) > 0 {
 			flush()
 
-			// Carry the last `Overlap` sentences into the next chunk.
-			keep := min(opts.Overlap, len(current))
+			// Carry the last `Overlap` sentences into the next chunk, but never all of them. Carrying the whole
+			// chunk means the next one starts where this one did, and each chunk after that is the previous
+			// chunk plus a sentence: the output grows with the square of the document.
+			keep := min(opts.Overlap, len(current)-1)
 			current = append([]sentence(nil), current[len(current)-keep:]...)
 
 			length = 0

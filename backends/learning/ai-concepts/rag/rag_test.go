@@ -292,3 +292,17 @@ func TestSentenceOffsetsPointAtTheSource(t *testing.T) {
 	require.Equal(t, 18, chunks[2].Start, "the second \"Café é bom.\" is not the first one")
 	require.Equal(t, 30, chunks[3].Start)
 }
+
+// TestSentenceOverlapStillAdvances is the overlap larger than a chunk. Without the cap each chunk is the one before
+// plus a sentence, and 5 sentences come out as 15.
+func TestSentenceOverlapStillAdvances(t *testing.T) {
+	chunks, err := Sentences("doc", "A a. B b. C c. D d. E e.", ChunkOptions{Size: 5, Overlap: 10})
+	require.NoError(t, err)
+
+	var texts []string
+	for _, c := range chunks {
+		texts = append(texts, c.Text)
+	}
+
+	require.Equal(t, []string{"A a.", "B b.", "C c.", "D d.", "E e."}, texts)
+}

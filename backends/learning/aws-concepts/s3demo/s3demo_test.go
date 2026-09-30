@@ -434,3 +434,41 @@ func TestCopyIsTheOnlyRename(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, oldBody, newBody)
 }
+
+// cancelAfterPart cancels a context as soon as the response to part 1 of a multipart upload arrives, which is
+// the shape of a client disconnecting halfway through an upload.
+type cancelAfterPart struct {
+	inner  aws.HTTPClient
+	cancel context.CancelFunc
+}
+
+func (c cancelAfterPart) Do(req *http.Request) (*http.Response, error) {
+	resp, err := c.inner.Do(req)
+	if req.URL.Query().Get("partNumber") == "1" {
+		c.cancel()
+	}
+
+	return resp, err
+}
+
+// TestACancelledUploadIsStillAborted is the abort that has to outlive the context. The upload stops because
+// ctx was cancelled; an abort sent on that same ctx fails before it leaves the process, and the parts stay in
+// the bucket, invisible and billed.
+func TestACancelledUploadIsStillAborted(t *testing.T) {
+	client, name := bucket(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	cfg := awstest.Config(t)
+	cfg.HTTPClient = cancelAfterPart{inner: &http.Client{Timeout: 30 * time.Second}, cancel: cancel}
+
+	const partSize = 5 << 20
+
+	_, _, err := Multipart(ctx, New(cfg), name, "abandoned.bin", make([]byte, partSize*2), partSize)
+	require.ErrorIs(t, err, context.Canceled)
+
+	out, err := client.ListMultipartUploads(context.Background(), &s3.ListMultipartUploadsInput{Bucket: aws.String(name)})
+	require.NoError(t, err)
+	require.Empty(t, out.Uploads, "an upload left open keeps its parts, and S3 bills for them")
+}

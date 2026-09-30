@@ -344,6 +344,10 @@ func PresignPut(ctx context.Context, client *s3.Client, bucket, key string, expi
 // ListObjectsV2, and billed. Every production bucket wants a lifecycle rule that aborts incomplete uploads after
 // a few days. The deferred abort here handles the process-crash case badly (it does not run) and the
 // error-return case well, which is the honest state of affairs.
+//
+// The abort runs on context.WithoutCancel(ctx), not ctx. The commonest reason to abandon an upload is that ctx
+// was cancelled, a client hung up or a deadline passed, and a request sent on a cancelled ctx fails before it
+// leaves the process. The abort would fail in exactly the case it exists for.
 func Multipart(ctx context.Context, client *s3.Client, bucket, key string, body []byte, partSize int) (etag string, parts int, err error) {
 	start, err := client.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{
 		Bucket:            aws.String(bucket),
@@ -363,11 +367,16 @@ func Multipart(ctx context.Context, client *s3.Client, bucket, key string, body 
 			return
 		}
 
-		_, _ = client.AbortMultipartUpload(ctx, &s3.AbortMultipartUploadInput{
+		abortCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		defer cancel()
+
+		if _, abortErr := client.AbortMultipartUpload(abortCtx, &s3.AbortMultipartUploadInput{
 			Bucket:   aws.String(bucket),
 			Key:      aws.String(key),
 			UploadId: uploadID,
-		})
+		}); abortErr != nil {
+			err = errors.Join(err, fmt.Errorf("abort upload %s: %w", aws.ToString(uploadID), abortErr))
+		}
 	}()
 
 	var finished []types.CompletedPart

@@ -351,3 +351,24 @@ func TestALimitBoundsGoroutinesNotJustFetches(t *testing.T) {
 
 	require.Less(t, grew, 50, "a limit of 2 started %d goroutines", grew)
 }
+
+// TestFirstErrorDoesNotStartQueuedSourcesAfterAFailure is the check errgroup does not make for you. With a
+// limit, sources wait for a slot; once one has failed, the ones still waiting must not run on a cancelled
+// context, because a source that does not check ctx would do its whole fetch for nothing.
+func TestFirstErrorDoesNotStartQueuedSourcesAfterAFailure(t *testing.T) {
+	var ran atomic.Int32
+
+	ignoresCtx := Source{Name: "later", Fetch: func(context.Context) (string, error) {
+		ran.Add(1)
+
+		return "wasted", nil
+	}}
+
+	failing := Source{Name: "first", Fetch: func(context.Context) (string, error) {
+		return "", errors.New("down")
+	}}
+
+	_, err := FirstError(context.Background(), []Source{failing, ignoresCtx, ignoresCtx}, Options{Limit: 1})
+	require.ErrorContains(t, err, "down")
+	require.Zero(t, ran.Load(), "a source queued behind the failure ran anyway")
+}

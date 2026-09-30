@@ -197,6 +197,13 @@ func FirstError(ctx context.Context, sources []Source, opts Options) (map[string
 
 	for _, src := range sources {
 		g.Go(func() error {
+			// errgroup cancels ctx on the first error, and does nothing else about the sources still waiting
+			// for a slot under SetLimit: they start later, on a context that is already cancelled. A source
+			// that does not check ctx would then do its whole fetch for an answer that will be thrown away.
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+
 			value, err := src.Fetch(ctx)
 			if err != nil {
 				return fmt.Errorf("%s: %w", src.Name, err)

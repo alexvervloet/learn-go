@@ -123,8 +123,11 @@ func (s *Server) Routes() http.Handler {
 	// The catch-all, last in the file and last in precedence. It is the redirect.
 	mux.HandleFunc("GET /{slug}", s.handleRedirect)
 
-	// Middleware wraps outside in, so the recoverer is outermost and catches a panic from anything below it,
-	// including the logger.
+	// Middleware wraps outside in, and the last one applied below is the outermost. RequestID is outermost, so
+	// every line after it, the recoverer's included, carries the id. The recoverer comes next and catches a
+	// panic from anything inside it, the logger included. One consequence of the logger being inside: a request
+	// that panics unwinds through logRequests before its line is written, so the recoverer's output is the only
+	// record of it.
 	//
 	// # What is NOT here: chi's RealIP
 	//

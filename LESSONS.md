@@ -125,6 +125,7 @@ the index below groups them by topic.
 - [The Redis harnesses flushed the developer's own Redis](#the-redis-harnesses-flushed-the-developers-own-redis)
 - [The modernize analyzer rewrote a loop into one that stops a step short](#the-modernize-analyzer-rewrote-a-loop-into-one-that-stops-a-step-short)
 - [A randomised test that fails 1% of the time is a flaky test](#a-randomised-test-that-fails-1-of-the-time-is-a-flaky-test)
+- [My fix for wasted work broke a test that assumed the work would start](#my-fix-for-wasted-work-broke-a-test-that-assumed-the-work-would-start)
 
 ## 2026-09-25 — Two pieces of escape-analysis folklore, both wrong
 
@@ -2574,4 +2575,17 @@ and leaves the stream open, and grpc-go doesn't have one.
 **Next time.** A hang argued from our own code needs the library's side of the argument too, and a test that
 fails is the only proof. This one stays as a guard, since the wait is safe only because of that grpc-go
 behaviour, and it would hang if an upgrade changed it.
+
+## My fix for wasted work broke a test that assumed the work would start
+
+**Expected.** Making `aggregate.FirstError` check `ctx.Err()` before each fetch would only skip sources queued
+behind a failure. Three local runs passed.
+
+**What happened.** CI failed on every platform in `TestFirstErrorCancelsTheRest`, which asserted that a slow
+source SAW the cancellation. When the failing source finished before the slow one's goroutine got going, the new
+check skipped it entirely, so it never saw anything. Twenty local runs reproduced it. Both outcomes are correct:
+the property is that the slow source does not hold up the answer, and the test now accepts either.
+
+**Next time.** A change that adds an early return to concurrent code changes which interleavings are possible.
+Run the package's tests a few hundred times with `-count`, not three, before calling it green.
 

@@ -217,6 +217,18 @@ It **fails closed**: if Redis is unreachable, credential endpoints refuse. On a 
 the only thing between a credential-stuffing run and bcrypt, so failing open converts a Redis outage into an
 open door. Reads are not limited at all, which is a decision the handler makes rather than the limiter.
 
+## Paging
+
+`GET /api/v1/bookmarks?limit=20` returns a page and, when there is more, a `next` cursor. Pass it back as
+`&after=<next>` for the following page; the last page has no `next`. `?tag=` pages the same way.
+
+The cursor is the last row's `(created_at, id)`, not an offset. `OFFSET 1000` reads and throws away a thousand
+rows to return twenty, and a bookmark saved while someone pages shifts every later page by one, so an item shows
+twice or not at all. A cursor is one seek on the `(user_id, created_at DESC, id DESC)` index, whichever page it
+is. The `id` is in it because two bookmarks can share a timestamp, and `TestPagesDoNotSkipRowsWithTheSameTimestamp`
+is what a cursor without it gets wrong. To learn whether there is a next page, the API asks for one row more than
+the limit, rather than running a `count(*)`.
+
 ## Schema decisions
 
 - `categories` and `tags` are unique **per user**, not globally. Two people can both have a "Reading" category,

@@ -13,7 +13,12 @@
 # all. The error is "no such file or directory" for the binary, which is there: the missing file is the dynamic
 # linker.
 
-FROM golang:1.27 AS build
+# golang:1.27-bookworm, not golang:1.27, so the build and the final stage are the same Debian release. A
+# glibc-linked binary needs the glibc it was BUILT against or newer. golang:1.27 is Debian trixie (glibc 2.41)
+# and debian:12-slim is bookworm (glibc 2.36), which is how the first version of this file was paired. It
+# happened to start, because this binary uses only old glibc symbols. The first call into anything added after
+# 2.36 would fail at startup with "version `GLIBC_2.38' not found". Build on the runtime's release.
+FROM golang:1.27-bookworm AS build
 
 WORKDIR /src
 

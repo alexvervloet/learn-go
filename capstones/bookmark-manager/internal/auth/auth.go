@@ -24,7 +24,6 @@ package auth
 import (
 	"crypto/rand"
 	"crypto/sha256"
-	"crypto/subtle"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -224,6 +223,15 @@ func NewRefreshToken() (token string, hash []byte, err error) {
 }
 
 // HashRefreshToken recomputes the hash for a lookup.
+//
+// # Why the lookup needs no constant-time comparison
+//
+// The database compares hashes, in an index lookup, and the attacker controls the TOKEN, not the hash. A timing
+// leak there would tell them how many leading bytes of SHA-256(guess) match a stored hash, and that does not
+// shorten anything: extending the match by a byte means finding a new input whose hash has that longer prefix,
+// which is a fresh brute-force search each time. The byte-at-a-time attack that makes constant-time comparison
+// matter for a password or an HMAC does not work through a hash. What protects the token is its 256 random
+// bits, and storing only the hash means a database leak does not leak live tokens.
 func HashRefreshToken(token string) ([]byte, error) {
 	raw, err := base64.RawURLEncoding.DecodeString(token)
 	if err != nil {
@@ -237,20 +245,6 @@ func HashRefreshToken(token string) ([]byte, error) {
 	sum := sha256.Sum256(raw)
 
 	return sum[:], nil
-}
-
-// EqualHash compares two hashes in constant time.
-//
-// # Why constant time for a hash
-//
-// The lookup is by hash, so an attacker who can measure how long a comparison takes learns how many leading
-// bytes they guessed right, and can then extend the guess one byte at a time. That reduces a 2^256 search to
-// 32 searches of 256.
-//
-// Whether that timing is measurable across a network is arguable and it costs one function call not to have
-// the argument. bytes.Equal is the wrong tool here for the same reason == is the wrong tool for a password.
-func EqualHash(a, b []byte) bool {
-	return subtle.ConstantTimeCompare(a, b) == 1
 }
 
 // randomID returns a short random identifier for a jti.

@@ -45,7 +45,7 @@ func TestTheTokenIsNotRecoverableFromTheHash(t *testing.T) {
 	// And the hash is reproducible from the token, which is what makes the lookup work.
 	again, err := HashRefreshToken(token)
 	require.NoError(t, err)
-	require.True(t, EqualHash(hash, again))
+	require.Equal(t, hash, again)
 }
 
 // TestHashRefreshTokenRejectsJunk covers the input validation on the refresh path.
@@ -59,20 +59,6 @@ func TestHashRefreshTokenRejectsJunk(t *testing.T) {
 		_, err := HashRefreshToken(token)
 		require.ErrorIs(t, err, ErrInvalidToken, "token %q", token)
 	}
-}
-
-// TestEqualHashIsConstantTime is a claim about which function is called.
-//
-// Timing cannot be asserted reliably in a unit test, so this asserts the BEHAVIOUR that matters: the comparison
-// is correct, including for inputs of different lengths, which is where a naive loop indexes out of range.
-func TestEqualHashIsConstantTime(t *testing.T) {
-	a := []byte{1, 2, 3, 4}
-
-	require.True(t, EqualHash(a, []byte{1, 2, 3, 4}))
-	require.False(t, EqualHash(a, []byte{1, 2, 3, 5}))
-	require.False(t, EqualHash(a, []byte{1, 2, 3}), "different lengths must not panic")
-	require.False(t, EqualHash(a, nil))
-	require.True(t, EqualHash(nil, nil))
 }
 
 // TestAccessTokenRoundTrip is the happy path.

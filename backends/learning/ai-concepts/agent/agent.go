@@ -187,7 +187,13 @@ func Run(ctx context.Context, client anthropic.Client, registry Registry, questi
 
 		// Usage is per request, so a loop's total is the sum. This is the number that makes a runaway loop
 		// visible, and it grows superlinearly because each turn re-sends the whole transcript.
+		//
+		// InputTokens is only the uncached part. Tokens written to or read from the prompt cache are counted
+		// separately and billed at their own rates, so a total that leaves them out undercounts a cached loop
+		// by most of its input.
 		result.Usage.InputTokens += msg.Usage.InputTokens
+		result.Usage.CacheCreationInputTokens += msg.Usage.CacheCreationInputTokens
+		result.Usage.CacheReadInputTokens += msg.Usage.CacheReadInputTokens
 		result.Usage.OutputTokens += msg.Usage.OutputTokens
 
 		// ToParam keeps every block, including the tool_use ones. Rebuilding the assistant turn from its text

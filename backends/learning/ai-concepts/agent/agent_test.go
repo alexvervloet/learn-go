@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"testing"
 	"time"
 
@@ -421,4 +422,36 @@ func TestPauseTurnIsResent(t *testing.T) {
 
 	require.NoError(t, json.Unmarshal(second[1], &last))
 	require.Equal(t, "assistant", last.Role)
+}
+
+// TestUsageIncludesCachedTokens adds up all four counts. input_tokens excludes cached tokens, so summing only
+// input and output reports a loop with a warm cache as nearly free.
+func TestUsageIncludesCachedTokens(t *testing.T) {
+	var n int
+
+	registry, err := NewRegistry(weather(&n))
+	require.NoError(t, err)
+
+	cached := func(stop, content string, write, read int) fake.Response {
+		return fake.Response{Body: `{
+  "id": "msg_cached", "type": "message", "role": "assistant", "model": "claude-haiku-4-5-20251001",
+  "content": ` + content + `,
+  "stop_reason": "` + stop + `", "stop_sequence": null,
+  "usage": {"input_tokens": 10, "output_tokens": 5,
+    "cache_creation_input_tokens": ` + strconv.Itoa(write) + `, "cache_read_input_tokens": ` + strconv.Itoa(read) + `}
+}`}
+	}
+
+	c, _ := client(t,
+		cached("tool_use", `[{"type":"tool_use","id":"toolu_1","name":"get_weather","input":{"city":"Lisbon"}}]`, 2000, 0),
+		cached("end_turn", `[{"type":"text","text":"18C."}]`, 30, 2000),
+	)
+
+	res, err := Run(context.Background(), c, registry, "weather in Lisbon?", opts())
+	require.NoError(t, err)
+
+	require.Equal(t, int64(20), res.Usage.InputTokens)
+	require.Equal(t, int64(10), res.Usage.OutputTokens)
+	require.Equal(t, int64(2030), res.Usage.CacheCreationInputTokens)
+	require.Equal(t, int64(2000), res.Usage.CacheReadInputTokens)
 }

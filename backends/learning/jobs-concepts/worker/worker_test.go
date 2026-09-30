@@ -572,12 +572,14 @@ func TestQueueWeighting(t *testing.T) {
 
 	srv := worker.NewServer(jobtest.RedisOpt(), cfg, jobtest.DiscardLogger(), nil)
 
-	jobtest.RunServer(t, srv, h.Mux())
-
 	client := jobtest.Client(t)
 
-	// Fill both queues before the worker can drain either.
-	const each = 30
+	// Fill both queues before the worker starts, so every pick is a choice between two non-empty queues.
+	//
+	// The sample size is the test's reliability. Each pick takes the low queue with probability 1/7, so the
+	// chance that none of the first n picks does is (6/7)^n: about 1% at n=30, which failed in CI, and about
+	// 2 in 10 million at n=100.
+	const each = 100
 
 	for i := range each {
 		task, err := tasks.NewEmailWelcome(tasks.EmailWelcomePayload{
@@ -603,7 +605,9 @@ func TestQueueWeighting(t *testing.T) {
 		}
 	}
 
-	jobtest.WaitFor(t, 30*time.Second, "both queues to drain", func() bool {
+	jobtest.RunServer(t, srv, h.Mux())
+
+	jobtest.WaitFor(t, 60*time.Second, "both queues to drain", func() bool {
 		succeeded, _, _ := rec.Counts()
 		return succeeded >= each*2
 	})

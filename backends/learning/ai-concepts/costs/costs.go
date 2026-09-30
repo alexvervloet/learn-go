@@ -29,9 +29,14 @@ import (
 // RATIOS can be demonstrated, and those are stable: output is several times input, a cache write is a premium
 // over input, a cache read is a large discount.
 type Price struct {
-	Input         float64
-	Output        float64
-	CacheWrite    float64
+	Input  float64
+	Output float64
+
+	// CacheWrite is the default five-minute TTL, 1.25x input. CacheWrite1h is the one-hour TTL, 2x input: the
+	// entry survives a longer gap between requests, and the write costs more to buy that.
+	CacheWrite   float64
+	CacheWrite1h float64
+
 	CacheRead     float64
 	ContextWindow int
 }
@@ -42,13 +47,13 @@ type Price struct {
 // demonstrates improves with a more expensive model.
 var Prices = map[anthropic.Model]Price{
 	anthropic.ModelClaudeHaiku4_5_20251001: {
-		Input: 1.00, Output: 5.00, CacheWrite: 1.25, CacheRead: 0.10, ContextWindow: 200_000,
+		Input: 1.00, Output: 5.00, CacheWrite: 1.25, CacheWrite1h: 2.00, CacheRead: 0.10, ContextWindow: 200_000,
 	},
 	anthropic.ModelClaudeHaiku4_5: {
-		Input: 1.00, Output: 5.00, CacheWrite: 1.25, CacheRead: 0.10, ContextWindow: 200_000,
+		Input: 1.00, Output: 5.00, CacheWrite: 1.25, CacheWrite1h: 2.00, CacheRead: 0.10, ContextWindow: 200_000,
 	},
 	anthropic.ModelClaudeSonnet4_5_20250929: {
-		Input: 3.00, Output: 15.00, CacheWrite: 3.75, CacheRead: 0.30, ContextWindow: 200_000,
+		Input: 3.00, Output: 15.00, CacheWrite: 3.75, CacheWrite1h: 6.00, CacheRead: 0.30, ContextWindow: 200_000,
 	},
 }
 
@@ -80,11 +85,18 @@ func Of(model anthropic.Model, usage anthropic.Usage) (Breakdown, error) {
 
 	const perMillion = 1_000_000.0
 
+	// cache_creation_input_tokens is the sum over both TTLs, and usage.cache_creation splits it. Pricing the
+	// whole sum at the five-minute rate undercharges every one-hour write by a third. Taking the one-hour part
+	// out and treating the rest as five-minute also prices a response with no breakdown the old way.
+	oneHour := usage.CacheCreation.Ephemeral1hInputTokens
+	fiveMinute := usage.CacheCreationInputTokens - oneHour
+
 	return Breakdown{
-		Input:      float64(usage.InputTokens) / perMillion * price.Input,
-		Output:     float64(usage.OutputTokens) / perMillion * price.Output,
-		CacheWrite: float64(usage.CacheCreationInputTokens) / perMillion * price.CacheWrite,
-		CacheRead:  float64(usage.CacheReadInputTokens) / perMillion * price.CacheRead,
+		Input:  float64(usage.InputTokens) / perMillion * price.Input,
+		Output: float64(usage.OutputTokens) / perMillion * price.Output,
+		CacheWrite: float64(fiveMinute)/perMillion*price.CacheWrite +
+			float64(oneHour)/perMillion*price.CacheWrite1h,
+		CacheRead: float64(usage.CacheReadInputTokens) / perMillion * price.CacheRead,
 	}, nil
 }
 

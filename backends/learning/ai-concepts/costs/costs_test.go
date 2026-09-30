@@ -149,3 +149,29 @@ func TestBreakdownTotalsItsParts(t *testing.T) {
 	require.InDelta(t, 0.10, b.CacheRead, 1e-9)
 	require.InDelta(t, 7.35, b.Total(), 1e-9)
 }
+
+// TestOneHourCacheWritesCostMore splits cache_creation_input_tokens by TTL. The total is 1M tokens, 400k of them
+// written with the one-hour TTL at 2x input and the rest at 1.25x.
+func TestOneHourCacheWritesCostMore(t *testing.T) {
+	b, err := Of(model, anthropic.Usage{
+		CacheCreationInputTokens: 1_000_000,
+		CacheCreation: anthropic.CacheCreation{
+			Ephemeral5mInputTokens: 600_000,
+			Ephemeral1hInputTokens: 400_000,
+		},
+	})
+	require.NoError(t, err)
+
+	require.InDelta(t, 0.6*1.25+0.4*2.00, b.CacheWrite, 1e-9)
+}
+
+// TestEveryPriceFollowsTheCacheMultipliers checks the table against the published multipliers, so a row typed
+// in by hand cannot drift from them.
+func TestEveryPriceFollowsTheCacheMultipliers(t *testing.T) {
+	for name, price := range Prices {
+		t.Run(name, func(t *testing.T) {
+			require.InDelta(t, 1.25*price.Input, price.CacheWrite, 1e-9)
+			require.InDelta(t, 2.00*price.Input, price.CacheWrite1h, 1e-9)
+		})
+	}
+}

@@ -95,8 +95,8 @@ func run() error {
 	}
 
 	mux := tasks.Mux(st, st, func(err error) bool {
-		// Both shapes count as "this task can never succeed": the row is gone, or the foreign key refuses
-		// because the row is gone.
+		// "This task can never succeed": the URL is gone. RecordClick checks for the row before it inserts
+		// the click, so a deleted URL arrives here as ErrNotFound and not as a foreign-key error.
 		return errors.Is(err, store.ErrNotFound)
 	}, func(msg string, args ...any) { log.Info(msg, args...) })
 

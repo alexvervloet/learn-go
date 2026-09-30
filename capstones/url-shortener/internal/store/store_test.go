@@ -194,16 +194,15 @@ func TestConcurrentClicksAllCount(t *testing.T) {
 	require.Equal(t, int64(clicks), actual)
 }
 
-// TestAClickForAMissingURLIsNotFound is what tells the worker to drop a task.
+// TestAClickForAMissingURLIsNotFound is what tells the worker to drop a task. A click is recorded
+// asynchronously, so the URL can be deleted between the redirect and the worker. The worker drops the task only
+// on ErrNotFound, so a foreign-key error here (which is what inserting the click first produced) would be
+// retried until it was archived.
 func TestAClickForAMissingURLIsNotFound(t *testing.T) {
 	s, ctx := newStore(t)
 
 	err := s.RecordClick(ctx, 999_999, "", "")
-	require.Error(t, err)
-
-	// A foreign key violation rather than ErrNotFound, because the INSERT into clicks fails before the UPDATE
-	// is reached. Either way the worker must not retry it, and the worker's notFound predicate covers both.
-	require.Contains(t, err.Error(), "clicks_url_id_fkey")
+	require.ErrorIs(t, err, store.ErrNotFound)
 }
 
 // TestAnEmptyReferrerIsNULL is the distinction the analytics needs.

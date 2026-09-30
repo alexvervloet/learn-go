@@ -320,6 +320,14 @@ func (s *Store) DeleteURL(ctx context.Context, userID int64, slug string) error 
 // It is two writes. A redirect that waits for them is a redirect that is slower than it needs to be and that
 // fails when the database is busy, for the sake of a number nobody is watching in real time. The worker does
 // this, and the redirect returns as soon as it knows the target.
+//
+// # Why the UPDATE comes first
+//
+// Because the URL can be gone by the time the worker gets here: it was deleted between the redirect and the
+// task. Updating first finds that as zero rows, which is ErrNotFound, and the worker drops the task. Inserting
+// first finds it as a foreign-key violation (23503) instead, which the worker cannot tell from a real failure,
+// so it retries a task that will never succeed. The update also locks the URL row, so a DELETE that arrives
+// between the two statements waits for this transaction rather than removing the row under the insert.
 func (s *Store) RecordClick(ctx context.Context, urlID int64, referrer, userAgent string) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -327,13 +335,6 @@ func (s *Store) RecordClick(ctx context.Context, urlID int64, referrer, userAgen
 	}
 
 	defer func() { _ = tx.Rollback(ctx) }()
-
-	if _, err := tx.Exec(ctx,
-		`INSERT INTO clicks (url_id, referrer, user_agent) VALUES ($1, $2, $3)`,
-		urlID, nullIfEmpty(referrer), nullIfEmpty(userAgent),
-	); err != nil {
-		return err
-	}
 
 	// click_count = click_count + 1, not a read-then-write. The increment happens in the database, so two
 	// concurrent clicks both count. Reading the value into Go and writing it back is the classic lost update.
@@ -344,6 +345,13 @@ func (s *Store) RecordClick(ctx context.Context, urlID int64, referrer, userAgen
 
 	if tag.RowsAffected() == 0 {
 		return fmt.Errorf("%w: url %d", ErrNotFound, urlID)
+	}
+
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO clicks (url_id, referrer, user_agent) VALUES ($1, $2, $3)`,
+		urlID, nullIfEmpty(referrer), nullIfEmpty(userAgent),
+	); err != nil {
+		return err
 	}
 
 	return tx.Commit(ctx)

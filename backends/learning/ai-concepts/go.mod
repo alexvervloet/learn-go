@@ -3,7 +3,7 @@ module github.com/alexvervloet/learn-go/backends/learning/ai-concepts
 go 1.27
 
 require (
-	github.com/anthropics/anthropic-sdk-go v1.75.0
+	github.com/anthropics/anthropic-sdk-go v1.76.0
 	github.com/stretchr/testify v1.12.1
 )
 

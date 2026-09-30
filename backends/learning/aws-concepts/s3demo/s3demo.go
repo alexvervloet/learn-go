@@ -453,12 +453,25 @@ func DeleteBucket(ctx context.Context, client *s3.Client, bucket string) error {
 		}
 
 		// Quiet suppresses the per-key success list in the response, which for 1000 keys is most of the
-		// payload. The errors still come back.
-		if _, err := client.DeleteObjects(ctx, &s3.DeleteObjectsInput{
+		// payload. The errors still come back, and they come back in the BODY: a batch where some keys failed
+		// is a 200 with a nil error. Checking only err reports success, and the DeleteBucket below then fails
+		// with BucketNotEmpty and no mention of why.
+		deleted, err := client.DeleteObjects(ctx, &s3.DeleteObjectsInput{
 			Bucket: aws.String(bucket),
 			Delete: &types.Delete{Objects: ids, Quiet: aws.Bool(true)},
-		}); err != nil {
+		})
+		if err != nil {
 			return err
+		}
+
+		if len(deleted.Errors) > 0 {
+			errs := make([]error, 0, len(deleted.Errors))
+			for _, e := range deleted.Errors {
+				errs = append(errs, fmt.Errorf("delete %s: %s: %s",
+					aws.ToString(e.Key), aws.ToString(e.Code), aws.ToString(e.Message)))
+			}
+
+			return errors.Join(errs...)
 		}
 	}
 

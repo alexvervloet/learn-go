@@ -8,6 +8,7 @@ package stack
 
 import (
 	"fmt"
+	"iter"
 	"slices"
 	"strings"
 )
@@ -63,6 +64,21 @@ func (s *Stack[T]) Peek() (T, bool) {
 		return zero, false
 	}
 	return s.items[len(s.items)-1], true
+}
+
+// All iterates from the top down, the order Pop would return them, without
+// removing anything.
+//
+// iter.Seq (Go 1.23) rather than a slice: a caller looking for one element
+// should not pay for a copy of the stack, and `break` stops the walk.
+func (s *Stack[T]) All() iter.Seq[T] {
+	return func(yield func(T) bool) {
+		for i := len(s.items) - 1; i >= 0; i-- {
+			if !yield(s.items[i]) {
+				return
+			}
+		}
+	}
 }
 
 // Slice returns the elements bottom to top, as a copy.

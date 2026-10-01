@@ -148,3 +148,25 @@ func BenchmarkPushPopPresized(b *testing.B) {
 		}
 	}
 }
+
+// TestAllWalksTopDownAndStopsOnBreak: All is Pop order, removes nothing, and honours break.
+func TestAllWalksTopDownAndStopsOnBreak(t *testing.T) {
+	var s Stack[int]
+	for _, v := range []int{1, 2, 3} {
+		s.Push(v)
+	}
+
+	if got := slices.Collect(s.All()); !slices.Equal(got, []int{3, 2, 1}) {
+		t.Errorf("All = %v, want [3 2 1]", got)
+	}
+
+	var seen []int
+	for v := range s.All() {
+		seen = append(seen, v)
+		break
+	}
+
+	if !slices.Equal(seen, []int{3}) || s.Len() != 3 {
+		t.Errorf("break: saw %v and Len is %d; want [3] and 3", seen, s.Len())
+	}
+}

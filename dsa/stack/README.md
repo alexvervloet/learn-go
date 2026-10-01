@@ -33,6 +33,7 @@ simplification, it is the right implementation.
 | `Pop()` | Remove and return the top | O(1) |
 | `Peek()` | Return the top without removing | O(1) |
 | `Len()` | Element count | O(1) |
+| `All()` | An iterator, top down, removing nothing | O(n) |
 
 There is no "find and remove": a stack you can reach into the middle of is not a
 stack. Code that needs one wants a different structure, or a slice and

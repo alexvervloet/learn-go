@@ -4,8 +4,7 @@
 //
 // In SQLAlchemy the N+1 is invisible. You load a list of authors, you touch author.books in a loop,
 // and the ORM issues a query per author behind an attribute access. Nothing in the source says
-// "query". That is why the Python mirror of this module spends its first file just making the
-// queries visible with echo=True.
+// "query". Seeing the queries at all takes turning on the engine's echo=True.
 //
 // pgx has no lazy loading, so the equivalent Go code contains a literal loop with a literal Query
 // call inside it. You can see it. And people still write it, constantly, because the loop is usually

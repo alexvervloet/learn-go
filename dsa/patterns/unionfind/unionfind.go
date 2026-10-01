@@ -80,14 +80,28 @@ func (s *Sets[T]) Add(x T) bool {
 	return true
 }
 
-// Find returns the representative of x's set, adding x if it is unknown.
+// Find returns the representative of x's set, and false if x is unknown.
+//
+// Comma-ok, like a map lookup, and it adds nothing. An earlier version added an unknown x
+// as a set of its own, the way a Python defaultdict does, so asking Connected("a", "z")
+// about a "z" nobody had mentioned quietly grew Count by one. A question should not change
+// the answer to the next one. Union is the operation that adds, because it is already a
+// write.
 //
 // The representative is an arbitrary member, not a meaningful one: it changes as sets merge.
 // Code that stores a Find result and compares it later is a bug, because the same set can
 // have a different representative after any Union.
-func (s *Sets[T]) Find(x T) T {
-	s.Add(x)
+func (s *Sets[T]) Find(x T) (T, bool) {
+	if _, known := s.parent[x]; !known {
+		var zero T
+		return zero, false
+	}
 
+	return s.root(x), true
+}
+
+// root walks a KNOWN element to its root, compressing the path on the way back.
+func (s *Sets[T]) root(x T) T {
 	// Walk to the root, remembering the path.
 	root := x
 	var path []T
@@ -110,8 +124,14 @@ func (s *Sets[T]) Find(x T) T {
 //
 // The false return is what makes cycle detection one line: an edge whose endpoints are
 // already connected closes a cycle.
+//
+// Union adds x and y if they are unknown, so a caller can feed edges without declaring
+// vertices first.
 func (s *Sets[T]) Union(x, y T) bool {
-	rootX, rootY := s.Find(x), s.Find(y)
+	s.Add(x)
+	s.Add(y)
+
+	rootX, rootY := s.root(x), s.root(y)
 	if rootX == rootY {
 		return false
 	}
@@ -129,8 +149,14 @@ func (s *Sets[T]) Union(x, y T) bool {
 	return true
 }
 
-// Connected reports whether x and y are in the same set.
-func (s *Sets[T]) Connected(x, y T) bool { return s.Find(x) == s.Find(y) }
+// Connected reports whether x and y are in the same set. An unknown element is in no set,
+// so it is connected to nothing, itself included.
+func (s *Sets[T]) Connected(x, y T) bool {
+	rootX, okX := s.Find(x)
+	rootY, okY := s.Find(y)
+
+	return okX && okY && rootX == rootY
+}
 
 // Count returns the number of distinct sets.
 func (s *Sets[T]) Count() int { return s.count }
@@ -138,8 +164,15 @@ func (s *Sets[T]) Count() int { return s.count }
 // Len returns the number of known elements.
 func (s *Sets[T]) Len() int { return len(s.parent) }
 
-// SizeOf returns how many elements are in x's set.
-func (s *Sets[T]) SizeOf(x T) int { return s.size[s.Find(x)] }
+// SizeOf returns how many elements are in x's set, and 0 if x is unknown.
+func (s *Sets[T]) SizeOf(x T) int {
+	root, ok := s.Find(x)
+	if !ok {
+		return 0
+	}
+
+	return s.size[root]
+}
 
 // FindSteps returns the total number of parent pointers followed across every Find so far.
 //
@@ -158,7 +191,7 @@ func (s *Sets[T]) Groups(compare func(a, b T) int) [][]T {
 	byRoot := make(map[T][]T, s.count)
 
 	for x := range s.parent {
-		root := s.Find(x)
+		root := s.root(x)
 		byRoot[root] = append(byRoot[root], x)
 	}
 
@@ -310,7 +343,7 @@ func MergeAccounts(records map[string][]string) [][]string {
 
 	byRoot := make(map[string][]string)
 	for name := range records {
-		root := s.Find(name)
+		root := s.root(name)
 		byRoot[root] = append(byRoot[root], name)
 	}
 

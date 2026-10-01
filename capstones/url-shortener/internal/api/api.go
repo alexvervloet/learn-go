@@ -24,6 +24,7 @@ import (
 
 	"github.com/alexvervloet/learn-go/capstones/url-shortener/internal/auth"
 	"github.com/alexvervloet/learn-go/capstones/url-shortener/internal/cache"
+	"github.com/alexvervloet/learn-go/capstones/url-shortener/internal/ratelimit"
 	"github.com/alexvervloet/learn-go/capstones/url-shortener/internal/shortener"
 	"github.com/alexvervloet/learn-go/capstones/url-shortener/internal/store"
 	"github.com/alexvervloet/learn-go/capstones/url-shortener/internal/tasks"
@@ -47,6 +48,9 @@ type Server struct {
 	enqueuer Enqueuer
 	log      *slog.Logger
 
+	limiter        *ratelimit.Limiter
+	accountLimiter *ratelimit.Limiter
+
 	secret   []byte
 	tokenTTL time.Duration
 	baseURL  string
@@ -63,6 +67,11 @@ type Options struct {
 	Cache    *cache.Cache
 	Enqueuer Enqueuer
 	Logger   *slog.Logger
+
+	// Limiter caps register and login as a whole; AccountLimiter caps attempts per email. See rateLimited.
+	// Either may be nil, which turns that limit off.
+	Limiter        *ratelimit.Limiter
+	AccountLimiter *ratelimit.Limiter
 
 	Secret   []byte
 	TokenTTL time.Duration
@@ -89,6 +98,10 @@ func New(opts Options) *Server {
 		cache:    opts.Cache,
 		enqueuer: opts.Enqueuer,
 		log:      opts.Logger,
+
+		limiter:        opts.Limiter,
+		accountLimiter: opts.AccountLimiter,
+
 		secret:   opts.Secret,
 		tokenTTL: opts.TokenTTL,
 		baseURL:  strings.TrimSuffix(opts.BaseURL, "/"),
@@ -112,8 +125,9 @@ func (s *Server) Routes() http.Handler {
 
 	mux.HandleFunc("GET /healthz", s.handleHealth)
 
-	mux.HandleFunc("POST /api/v1/register", s.handleRegister)
-	mux.HandleFunc("POST /api/v1/login", s.handleLogin)
+	// The credential endpoints carry the rate limits; nothing else does. See rateLimited.
+	mux.Handle("POST /api/v1/register", s.rateLimited(s.handleRegister))
+	mux.Handle("POST /api/v1/login", s.rateLimited(s.handleLogin))
 
 	mux.Handle("POST /api/v1/urls", s.authenticated(s.handleCreateURL))
 	mux.Handle("GET /api/v1/urls", s.authenticated(s.handleListURLs))
@@ -348,6 +362,11 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	email := strings.TrimSpace(body.Email)
+
+	if !s.limitAccount(w, r, email) {
+		return
+	}
+
 	if !strings.Contains(email, "@") || len(email) > 254 {
 		// Deliberately not a regex. The only correct way to validate an email address is to send one, and
 		// every regex that tries rejects valid addresses. The length limit is the RFC 5321 maximum.
@@ -398,7 +417,13 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := s.store.UserByEmail(r.Context(), strings.TrimSpace(body.Email))
+	email := strings.TrimSpace(body.Email)
+
+	if !s.limitAccount(w, r, email) {
+		return
+	}
+
+	user, err := s.store.UserByEmail(r.Context(), email)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			// The same response as a wrong password, and the same amount of work is NOT done, which is a
@@ -421,6 +446,8 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 		return
 	}
+
+	s.clearAccount(r, email)
 
 	s.issueToken(w, r, user, http.StatusOK)
 }

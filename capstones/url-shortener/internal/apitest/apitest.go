@@ -39,6 +39,7 @@ import (
 	"github.com/alexvervloet/learn-go/capstones/url-shortener/internal/api"
 	"github.com/alexvervloet/learn-go/capstones/url-shortener/internal/auth"
 	"github.com/alexvervloet/learn-go/capstones/url-shortener/internal/cache"
+	"github.com/alexvervloet/learn-go/capstones/url-shortener/internal/ratelimit"
 	"github.com/alexvervloet/learn-go/capstones/url-shortener/internal/store"
 	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -510,6 +511,11 @@ type HarnessOptions struct {
 	CacheTTL    time.Duration
 	NegativeTTL time.Duration
 	TokenTTL    time.Duration
+
+	// LoginLimit and AccountLimit, when set, attach the Redis-backed limiters with a one-minute window. Zero
+	// leaves that limit off, so a test that is not about rate limiting needs no Redis for it.
+	LoginLimit   int
+	AccountLimit int
 }
 
 // New starts the service.
@@ -536,10 +542,25 @@ func New(t *testing.T, opts HarnessOptions) *Harness {
 		opts.TokenTTL = time.Hour
 	}
 
+	limiter := func(limit int, prefix string) *ratelimit.Limiter {
+		if limit == 0 {
+			return nil
+		}
+
+		l, err := ratelimit.New(RedisClient(t), ratelimit.Options{Limit: limit, Window: time.Minute, Prefix: prefix})
+		if err != nil {
+			t.Fatalf("build %s limiter: %v", prefix, err)
+		}
+
+		return l
+	}
+
 	srv := api.New(api.Options{
-		Store:    st,
-		Cache:    h.Cache,
-		Enqueuer: h.Enqueuer,
+		Limiter:        limiter(opts.LoginLimit, "login"),
+		AccountLimiter: limiter(opts.AccountLimit, "account"),
+		Store:          st,
+		Cache:          h.Cache,
+		Enqueuer:       h.Enqueuer,
 		// Discard, not os.Stderr. A passing test prints nothing, and a handler logging to stderr from a
 		// goroutine after the test ends is a data race the detector finds.
 		Logger:   slog.New(slog.NewTextHandler(io.Discard, nil)),

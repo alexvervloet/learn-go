@@ -103,6 +103,20 @@ if errors.As(err, &verr) {
 }
 ```
 
+Go 1.26 added **`errors.AsType`**, which takes the type as a type parameter and
+returns the match, so there is no target to declare and no pointer to a pointer
+to get wrong, and a non-error type is a compile error rather than a panic:
+
+```go
+if verr, ok := errors.AsType[*ValidationError](err); ok {
+    log.Printf("field %s was invalid", verr.Field)
+}
+```
+
+Existing code is full of `errors.As`, so it is worth reading fluently; new code
+can write `AsType`. `custom.go` uses one of each, and `TestAsTypeAgreesWithAs`
+checks they find the same error.
+
 ## Joining
 
 `errors.Join(errs...)` combines several failures into one error, and `errors.Is`

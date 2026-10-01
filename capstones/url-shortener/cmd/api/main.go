@@ -20,6 +20,7 @@ import (
 	"github.com/alexvervloet/learn-go/capstones/url-shortener/internal/api"
 	"github.com/alexvervloet/learn-go/capstones/url-shortener/internal/cache"
 	"github.com/alexvervloet/learn-go/capstones/url-shortener/internal/config"
+	"github.com/alexvervloet/learn-go/capstones/url-shortener/internal/ratelimit"
 	"github.com/alexvervloet/learn-go/capstones/url-shortener/internal/store"
 	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -81,14 +82,33 @@ func run() error {
 	enqueuer := asynq.NewClient(asynq.RedisClientOpt{Addr: cfg.RedisAddr})
 	defer func() { _ = enqueuer.Close() }()
 
+	// The limiters share the cache's Redis. Startup does not require Redis, because redirects work without it
+	// (the cache falls through to Postgres); register and login fail closed instead, with a 503, until it is
+	// back. See api.rateLimited.
+	limiter, err := ratelimit.New(redisClient, ratelimit.Options{
+		Limit: cfg.LoginLimit, Window: cfg.LoginWindow, Prefix: "login",
+	})
+	if err != nil {
+		return err
+	}
+
+	accountLimiter, err := ratelimit.New(redisClient, ratelimit.Options{
+		Limit: cfg.AccountLimit, Window: cfg.AccountWindow, Prefix: "account",
+	})
+	if err != nil {
+		return err
+	}
+
 	srv := api.New(api.Options{
-		Store:    store.New(pool),
-		Cache:    cache.New(redisClient, cache.Options{TTL: cfg.CacheTTL}),
-		Enqueuer: enqueuer,
-		Logger:   log,
-		Secret:   cfg.JWTSecret,
-		TokenTTL: cfg.TokenTTL,
-		BaseURL:  cfg.BaseURL,
+		Limiter:        limiter,
+		AccountLimiter: accountLimiter,
+		Store:          store.New(pool),
+		Cache:          cache.New(redisClient, cache.Options{TTL: cfg.CacheTTL}),
+		Enqueuer:       enqueuer,
+		Logger:         log,
+		Secret:         cfg.JWTSecret,
+		TokenTTL:       cfg.TokenTTL,
+		BaseURL:        cfg.BaseURL,
 	})
 
 	httpServer := &http.Server{

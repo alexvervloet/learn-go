@@ -14,17 +14,17 @@ func TestZeroValueIsUsable(t *testing.T) {
 		t.Errorf("Len = %d, want 0 for a fresh list", l.Len())
 	}
 
-	l.AddToTail(1)
+	l.PushBack(1)
 	if l.Len() != 1 {
 		t.Errorf("Len = %d after one append, want 1", l.Len())
 	}
 }
 
-func TestAddToHead(t *testing.T) {
+func TestPushFront(t *testing.T) {
 	var l LinkedList[int]
 
 	for _, v := range []int{1, 2, 3} {
-		l.AddToHead(v)
+		l.PushFront(v)
 	}
 
 	// Adding at the head reverses the insertion order.
@@ -36,26 +36,26 @@ func TestAddToHead(t *testing.T) {
 	}
 
 	// The tail must have been set by the first insertion and never moved.
-	if tail, ok := l.Tail(); !ok || tail != 1 {
-		t.Errorf("Tail = %d, %t; want 1, true", tail, ok)
+	if tail, ok := l.Back(); !ok || tail != 1 {
+		t.Errorf("Back = %d, %t; want 1, true", tail, ok)
 	}
 }
 
-func TestAddToTail(t *testing.T) {
+func TestPushBack(t *testing.T) {
 	var l LinkedList[string]
 
 	for _, v := range []string{"a", "b", "c"} {
-		l.AddToTail(v)
+		l.PushBack(v)
 	}
 
 	if got, want := l.Slice(), []string{"a", "b", "c"}; !slices.Equal(got, want) {
 		t.Errorf("got %v, want %v", got, want)
 	}
-	if head, ok := l.Head(); !ok || head != "a" {
-		t.Errorf("Head = %q, %t; want a, true", head, ok)
+	if head, ok := l.Front(); !ok || head != "a" {
+		t.Errorf("Front = %q, %t; want a, true", head, ok)
 	}
-	if tail, ok := l.Tail(); !ok || tail != "c" {
-		t.Errorf("Tail = %q, %t; want c, true", tail, ok)
+	if tail, ok := l.Back(); !ok || tail != "c" {
+		t.Errorf("Back = %q, %t; want c, true", tail, ok)
 	}
 }
 
@@ -64,10 +64,10 @@ func TestAddToTail(t *testing.T) {
 func TestMixedInsertion(t *testing.T) {
 	var l LinkedList[int]
 
-	l.AddToTail(2) // [2]
-	l.AddToHead(1) // [1 2]
-	l.AddToTail(3) // [1 2 3]
-	l.AddToHead(0) // [0 1 2 3]
+	l.PushBack(2)  // [2]
+	l.PushFront(1) // [1 2]
+	l.PushBack(3)  // [1 2 3]
+	l.PushFront(0) // [0 1 2 3]
 
 	if got, want := l.Slice(), []int{0, 1, 2, 3}; !slices.Equal(got, want) {
 		t.Errorf("got %v, want %v", got, want)
@@ -77,16 +77,16 @@ func TestMixedInsertion(t *testing.T) {
 	}
 }
 
-func TestRemoveFromHead(t *testing.T) {
+func TestPopFront(t *testing.T) {
 	var l LinkedList[int]
 	for _, v := range []int{1, 2, 3} {
-		l.AddToTail(v)
+		l.PushBack(v)
 	}
 
 	for want := 1; want <= 3; want++ {
-		got, ok := l.RemoveFromHead()
+		got, ok := l.PopFront()
 		if !ok {
-			t.Fatalf("RemoveFromHead reported empty with %d elements left", l.Len())
+			t.Fatalf("PopFront reported empty with %d elements left", l.Len())
 		}
 		if got != want {
 			t.Errorf("got %d, want %d", got, want)
@@ -98,21 +98,21 @@ func TestRemoveFromHead(t *testing.T) {
 	}
 
 	// And on an empty list.
-	if _, ok := l.RemoveFromHead(); ok {
-		t.Error("RemoveFromHead on an empty list should report false")
+	if _, ok := l.PopFront(); ok {
+		t.Error("PopFront on an empty list should report false")
 	}
 }
 
-func TestRemoveFromTail(t *testing.T) {
+func TestPopBack(t *testing.T) {
 	var l LinkedList[int]
 	for _, v := range []int{1, 2, 3} {
-		l.AddToTail(v)
+		l.PushBack(v)
 	}
 
 	for want := 3; want >= 1; want-- {
-		got, ok := l.RemoveFromTail()
+		got, ok := l.PopBack()
 		if !ok {
-			t.Fatalf("RemoveFromTail reported empty with %d elements left", l.Len())
+			t.Fatalf("PopBack reported empty with %d elements left", l.Len())
 		}
 		if got != want {
 			t.Errorf("got %d, want %d", got, want)
@@ -122,8 +122,8 @@ func TestRemoveFromTail(t *testing.T) {
 	if l.Len() != 0 {
 		t.Errorf("list should be empty, Len = %d", l.Len())
 	}
-	if _, ok := l.RemoveFromTail(); ok {
-		t.Error("RemoveFromTail on an empty list should report false")
+	if _, ok := l.PopBack(); ok {
+		t.Error("PopBack on an empty list should report false")
 	}
 }
 
@@ -132,31 +132,31 @@ func TestRemoveFromTail(t *testing.T) {
 func TestSingleElementRemoval(t *testing.T) {
 	t.Run("from the head", func(t *testing.T) {
 		var l LinkedList[int]
-		l.AddToTail(42)
+		l.PushBack(42)
 
-		if got, ok := l.RemoveFromHead(); !ok || got != 42 {
+		if got, ok := l.PopFront(); !ok || got != 42 {
 			t.Fatalf("got %d, %t", got, ok)
 		}
-		if _, ok := l.Head(); ok {
-			t.Error("Head should report empty")
+		if _, ok := l.Front(); ok {
+			t.Error("Front should report empty")
 		}
-		if _, ok := l.Tail(); ok {
-			t.Error("Tail should report empty — it was left dangling")
+		if _, ok := l.Back(); ok {
+			t.Error("Back should report empty — it was left dangling")
 		}
 	})
 
 	t.Run("from the tail", func(t *testing.T) {
 		var l LinkedList[int]
-		l.AddToTail(42)
+		l.PushBack(42)
 
-		if got, ok := l.RemoveFromTail(); !ok || got != 42 {
+		if got, ok := l.PopBack(); !ok || got != 42 {
 			t.Fatalf("got %d, %t", got, ok)
 		}
-		if _, ok := l.Head(); ok {
-			t.Error("Head should report empty — it was left dangling")
+		if _, ok := l.Front(); ok {
+			t.Error("Front should report empty — it was left dangling")
 		}
-		if _, ok := l.Tail(); ok {
-			t.Error("Tail should report empty")
+		if _, ok := l.Back(); ok {
+			t.Error("Back should report empty")
 		}
 	})
 }
@@ -166,15 +166,15 @@ func TestSingleElementRemoval(t *testing.T) {
 func TestTailPointerSurvivesEmptying(t *testing.T) {
 	var l LinkedList[int]
 
-	l.AddToTail(1)
-	l.RemoveFromHead()
-	l.AddToTail(2)
+	l.PushBack(1)
+	l.PopFront()
+	l.PushBack(2)
 
 	if got, want := l.Slice(), []int{2}; !slices.Equal(got, want) {
 		t.Errorf("got %v, want %v", got, want)
 	}
-	if tail, ok := l.Tail(); !ok || tail != 2 {
-		t.Errorf("Tail = %d, %t; want 2, true", tail, ok)
+	if tail, ok := l.Back(); !ok || tail != 2 {
+		t.Errorf("Back = %d, %t; want 2, true", tail, ok)
 	}
 }
 
@@ -187,11 +187,11 @@ func TestTailPointerSurvivesEmptying(t *testing.T) {
 func TestRemoveDoesNotCorruptTheRest(t *testing.T) {
 	var l LinkedList[int]
 	for i := 1; i <= 100; i++ {
-		l.AddToTail(i)
+		l.PushBack(i)
 	}
 
 	for i := range 50 {
-		if _, ok := l.RemoveFromHead(); !ok {
+		if _, ok := l.PopFront(); !ok {
 			t.Fatalf("removal %d failed", i)
 		}
 	}
@@ -208,7 +208,7 @@ func TestRemoveDoesNotCorruptTheRest(t *testing.T) {
 func TestAllIterator(t *testing.T) {
 	var l LinkedList[int]
 	for _, v := range []int{1, 2, 3, 4, 5} {
-		l.AddToTail(v)
+		l.PushBack(v)
 	}
 
 	var got []int
@@ -227,7 +227,7 @@ func TestAllIterator(t *testing.T) {
 func TestAllIteratorStopsOnBreak(t *testing.T) {
 	var l LinkedList[int]
 	for i := 1; i <= 1000; i++ {
-		l.AddToTail(i)
+		l.PushBack(i)
 	}
 
 	visited := 0
@@ -258,11 +258,11 @@ func TestString(t *testing.T) {
 		want  string
 	}{
 		{"empty", func(*LinkedList[int]) {}, "(empty)"},
-		{"one", func(l *LinkedList[int]) { l.AddToTail(1) }, "1"},
+		{"one", func(l *LinkedList[int]) { l.PushBack(1) }, "1"},
 		{"three", func(l *LinkedList[int]) {
-			l.AddToTail(10)
-			l.AddToTail(20)
-			l.AddToTail(30)
+			l.PushBack(10)
+			l.PushBack(20)
+			l.PushBack(30)
 		}, "10 -> 20 -> 30"},
 	}
 
@@ -294,7 +294,7 @@ func TestReverse(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var l LinkedList[int]
 			for _, v := range tt.in {
-				l.AddToTail(v)
+				l.PushBack(v)
 			}
 
 			l.Reverse()
@@ -304,13 +304,13 @@ func TestReverse(t *testing.T) {
 			}
 
 			// The head and tail pointers must have swapped, or a later
-			// AddToTail appends in the wrong place.
+			// PushBack appends in the wrong place.
 			if len(tt.want) > 0 {
-				if head, _ := l.Head(); head != tt.want[0] {
-					t.Errorf("Head = %d, want %d", head, tt.want[0])
+				if head, _ := l.Front(); head != tt.want[0] {
+					t.Errorf("Front = %d, want %d", head, tt.want[0])
 				}
-				if tail, _ := l.Tail(); tail != tt.want[len(tt.want)-1] {
-					t.Errorf("Tail = %d, want %d", tail, tt.want[len(tt.want)-1])
+				if tail, _ := l.Back(); tail != tt.want[len(tt.want)-1] {
+					t.Errorf("Back = %d, want %d", tail, tt.want[len(tt.want)-1])
 				}
 			}
 		})
@@ -322,22 +322,22 @@ func TestReverse(t *testing.T) {
 func TestReverseThenAppend(t *testing.T) {
 	var l LinkedList[int]
 	for _, v := range []int{1, 2, 3} {
-		l.AddToTail(v)
+		l.PushBack(v)
 	}
 
 	l.Reverse()
-	l.AddToTail(0)
+	l.PushBack(0)
 
 	if got, want := l.Slice(), []int{3, 2, 1, 0}; !slices.Equal(got, want) {
 		t.Errorf("got %v, want %v — the tail pointer was not updated", got, want)
 	}
 }
 
-func BenchmarkAddToTail(b *testing.B) {
+func BenchmarkPushBack(b *testing.B) {
 	for b.Loop() {
 		var l LinkedList[int]
 		for i := range 1000 {
-			l.AddToTail(i)
+			l.PushBack(i)
 		}
 	}
 }
@@ -359,7 +359,7 @@ func BenchmarkListPrepend(b *testing.B) {
 	for b.Loop() {
 		var l LinkedList[int]
 		for i := range 1000 {
-			l.AddToHead(i)
+			l.PushFront(i)
 		}
 	}
 }

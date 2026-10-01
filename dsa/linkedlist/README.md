@@ -14,7 +14,7 @@ head                                          tail
 ```
 
 This one keeps a **tail pointer** as well as a head, which is what makes
-`AddToTail` O(1) instead of O(n). Without it, appending means walking the whole
+`PushBack` O(1) instead of O(n). Without it, appending means walking the whole
 chain to find the end.
 
 ## What it is actually for
@@ -57,15 +57,15 @@ would write today.
 
 | Method | What it does | Time |
 |---|---|---|
-| `AddToHead(v)` | Insert at the front | O(1) |
-| `AddToTail(v)` | Append | O(1) |
-| `RemoveFromHead()` | Remove and return the front | O(1) |
-| `RemoveFromTail()` | Remove and return the back | **O(n)** |
+| `PushFront(v)` | Insert at the front | O(1) |
+| `PushBack(v)` | Append | O(1) |
+| `PopFront()` | Remove and return the front | O(1) |
+| `PopBack()` | Remove and return the back | **O(n)** |
 | `Len()` | Element count | O(1) |
 | `All()` | An iterator over the values | O(n) |
 | `String()` | `10 -> 20 -> 30` | O(n) |
 
-`RemoveFromTail` is O(n) and that is not an oversight: removing the last node
+`PopBack` is O(n) and that is not an oversight: removing the last node
 requires the one before it, and a singly linked list cannot walk backwards. Fix
 it by making the list doubly linked, at the cost of a second pointer per node.
 The asymmetry is the lesson.
@@ -88,6 +88,6 @@ problem, in a different shape.
 
 ```bash
 go test ./linkedlist
-go test -v -run TestRemoveFromHead ./linkedlist
+go test -v -run TestPopFront ./linkedlist
 go doc -all ./linkedlist
 ```

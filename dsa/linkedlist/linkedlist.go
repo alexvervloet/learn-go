@@ -1,7 +1,7 @@
 // Package linkedlist implements a singly linked list with head and tail
 // pointers.
 //
-// The tail pointer is what makes AddToTail O(1). Without it, appending means
+// The tail pointer is what makes PushBack O(1). Without it, appending means
 // walking the chain to find the end, which is the difference between a usable
 // queue and an accidentally quadratic one.
 //
@@ -36,8 +36,8 @@ type LinkedList[T any] struct {
 // counted, so it is O(1).
 func (l *LinkedList[T]) Len() int { return l.size }
 
-// AddToHead inserts v at the front, in O(1).
-func (l *LinkedList[T]) AddToHead(v T) {
+// PushFront inserts v at the front, in O(1).
+func (l *LinkedList[T]) PushFront(v T) {
 	n := &node[T]{value: v, next: l.head}
 
 	l.head = n
@@ -48,8 +48,8 @@ func (l *LinkedList[T]) AddToHead(v T) {
 	l.size++
 }
 
-// AddToTail appends v, in O(1) thanks to the tail pointer.
-func (l *LinkedList[T]) AddToTail(v T) {
+// PushBack appends v, in O(1) thanks to the tail pointer.
+func (l *LinkedList[T]) PushBack(v T) {
 	n := &node[T]{value: v}
 
 	if l.tail == nil {
@@ -63,13 +63,13 @@ func (l *LinkedList[T]) AddToTail(v T) {
 	l.size++
 }
 
-// RemoveFromHead removes and returns the front element, reporting whether
+// PopFront removes and returns the front element, reporting whether
 // there was one. O(1).
 //
 // The comma-ok result rather than a zero value alone: T may have a meaningful
 // zero, so "empty" and "held the zero value" must be distinguishable. Same
 // reasoning as a map lookup.
-func (l *LinkedList[T]) RemoveFromHead() (T, bool) {
+func (l *LinkedList[T]) PopFront() (T, bool) {
 	if l.head == nil {
 		var zero T
 		return zero, false
@@ -92,14 +92,14 @@ func (l *LinkedList[T]) RemoveFromHead() (T, bool) {
 	return removed.value, true
 }
 
-// RemoveFromTail removes and returns the back element, reporting whether there
+// PopBack removes and returns the back element, reporting whether there
 // was one.
 //
 // O(n), and deliberately so. Removing the last node needs the one before it,
 // and a singly linked list cannot walk backwards. Making the list doubly linked
 // fixes it at the cost of a second pointer per node; the asymmetry between this
-// and AddToTail is worth feeling rather than reading about.
-func (l *LinkedList[T]) RemoveFromTail() (T, bool) {
+// and PushBack is worth feeling rather than reading about.
+func (l *LinkedList[T]) PopBack() (T, bool) {
 	if l.head == nil {
 		var zero T
 		return zero, false
@@ -127,8 +127,8 @@ func (l *LinkedList[T]) RemoveFromTail() (T, bool) {
 	return removed.value, true
 }
 
-// Head returns the front value without removing it.
-func (l *LinkedList[T]) Head() (T, bool) {
+// Front returns the front value without removing it.
+func (l *LinkedList[T]) Front() (T, bool) {
 	if l.head == nil {
 		var zero T
 		return zero, false
@@ -136,9 +136,9 @@ func (l *LinkedList[T]) Head() (T, bool) {
 	return l.head.value, true
 }
 
-// Tail returns the back value without removing it. O(1), because of the tail
+// Back returns the back value without removing it. O(1), because of the tail
 // pointer: reading the last element is cheap even though removing it is not.
-func (l *LinkedList[T]) Tail() (T, bool) {
+func (l *LinkedList[T]) Back() (T, bool) {
 	if l.tail == nil {
 		var zero T
 		return zero, false

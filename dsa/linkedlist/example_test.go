@@ -16,9 +16,9 @@ import (
 func ExampleLinkedList() {
 	var l linkedlist.LinkedList[int]
 
-	l.AddToTail(20)
-	l.AddToTail(30)
-	l.AddToHead(10)
+	l.PushBack(20)
+	l.PushBack(30)
+	l.PushFront(10)
 
 	fmt.Println(l.String())
 	fmt.Println("length:", l.Len())
@@ -28,18 +28,18 @@ func ExampleLinkedList() {
 	// length: 3
 }
 
-func ExampleLinkedList_RemoveFromHead() {
+func ExampleLinkedList_PopFront() {
 	var l linkedlist.LinkedList[string]
-	l.AddToTail("first")
-	l.AddToTail("second")
+	l.PushBack("first")
+	l.PushBack("second")
 
-	v, ok := l.RemoveFromHead()
+	v, ok := l.PopFront()
 	fmt.Printf("%q, ok=%t\n", v, ok)
 	fmt.Println("remaining:", l.String())
 
 	// An empty list reports false rather than panicking.
 	var empty linkedlist.LinkedList[string]
-	_, ok = empty.RemoveFromHead()
+	_, ok = empty.PopFront()
 	fmt.Println("empty list ok:", ok)
 
 	// Output:
@@ -51,7 +51,7 @@ func ExampleLinkedList_RemoveFromHead() {
 func ExampleLinkedList_All() {
 	var l linkedlist.LinkedList[int]
 	for _, v := range []int{1, 2, 3, 4, 5} {
-		l.AddToTail(v)
+		l.PushBack(v)
 	}
 
 	// range over an iter.Seq, and break works.
@@ -70,14 +70,14 @@ func ExampleLinkedList_All() {
 func ExampleLinkedList_Reverse() {
 	var l linkedlist.LinkedList[int]
 	for _, v := range []int{1, 2, 3} {
-		l.AddToTail(v)
+		l.PushBack(v)
 	}
 
 	l.Reverse()
 	fmt.Println(l.String())
 
 	// The tail pointer moved too, so appending still works.
-	l.AddToTail(0)
+	l.PushBack(0)
 	fmt.Println(l.String())
 
 	// Output:

@@ -4,8 +4,8 @@ GraphQL with gqlgen: the N+1 problem it creates by construction, the dataloader 
 that has no REST equivalent, and the denial-of-service vector that comes with letting clients write queries.
 7,840 lines, of which 4,781 are generated.
 
-The Python mirror is `backends/learning/graphql-concepts`, which uses Strawberry. The libraries sit on opposite
-sides of the same decision and that difference is the first thing below.
+GraphQL libraries split on one decision, schema-first or code-first, and gqlgen's side of it is the first thing
+below.
 
 ## Running it
 

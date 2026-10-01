@@ -1,4 +1,4 @@
-# golangci-lint configuration — the analogue of the Python repo's ruff.toml.
+# golangci-lint configuration: which linters run, and why each suppression exists.
 #
 # Run:  make lint
 # Fix:  make lint-fix

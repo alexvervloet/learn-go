@@ -12,8 +12,7 @@
 // agrees on it, which is why chi's middleware works with the stdlib's router and with gin's
 // and with anything else.
 //
-// Compare FastAPI, where middleware is a decorator on the app object and the framework owns
-// the ordering. Here you own it, because a chain is just nested function calls.
+// There is no framework owning the order: a chain is nested function calls, so you own it.
 //
 // # Ordering
 //

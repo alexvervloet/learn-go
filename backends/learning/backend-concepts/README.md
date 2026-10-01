@@ -156,6 +156,11 @@ but a map key closes the third.
 **A token with no `exp` claim is valid forever by default.** jwt/v5 validates expiry when it is present and does
 not require it. `WithExpirationRequired` turns that into a rejection and it is not the default.
 
+**Issuer and audience are required, not optional.** Two services sharing an HS256 secret, which is what a
+shared secret invites, accept each other's tokens unless each checks `aud`. `TestAudienceStopsCrossServiceReplay`
+is that replay. The first version only checked a field that was set, so forgetting one was silent; now `Mint`
+and `Verify` return `ErrUnconfigured` until both are, and `TestAnUnconfiguredIssuerRefuses` holds it there.
+
 ### OAuth 2.1
 
 The attacks are carried out rather than described. A stolen authorization code exchanged with the attacker's own

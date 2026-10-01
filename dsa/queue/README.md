@@ -114,8 +114,8 @@ its pointer.
 
 ## Matchmaking
 
-`Matchmake` is the Python version's example, kept because it shows what a queue
-is for and that a real one is rarely a plain FIFO. Players join the back, and
+`Matchmake` shows what a queue is for, and that a real one is rarely a plain
+FIFO. Players join the back, and
 the matchmaker pairs the front player with the first *compatible* player behind
 them, who may not be the second in line.
 

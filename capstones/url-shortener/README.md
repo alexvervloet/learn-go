@@ -29,6 +29,7 @@ internal/
   auth        bcrypt and JWT
   store       every query, with the SQL written out
   cache       cache-aside on Redis, with singleflight
+  ratelimit   a sliding window in Lua, for register and login
   tasks       the asynq task types and handlers
   api         routing, middleware, handlers
   apitest     the test harness
@@ -132,6 +133,23 @@ Login failures are byte-identical whether the email is unknown or the password i
 `TestLoginFailuresAreIndistinguishable` compares the two bodies. The timing still differs, because the
 unknown-email path does no bcrypt work, and the README says so rather than leaving the reader to wonder.
 
+### Two rate limits on register and login
+
+Both endpoints run bcrypt, so both are limited and nothing else is. There are two buckets:
+
+- **One shared bucket** for the endpoints together, `LOGIN_LIMIT` per `LOGIN_WINDOW` (120 a minute). It protects
+  the CPU: at cost 12 that is about half a core. Every user is in it, so it is sized to the machine, not to a
+  person; at 20 a minute, which bookmark-manager once had, one script on a loop locks everyone out. Register and
+  login share it so an attacker told "login is full" cannot move to register.
+- **One bucket per email**, `ACCOUNT_LIMIT` per `ACCOUNT_WINDOW` (10 per 15 minutes), lower-cased so a change of
+  case is not a fresh budget. It stops guessing one person's password and touches nobody else. A successful
+  login clears it, because it counts guesses.
+
+It is keyed on the email, not the client address, because this service trusts no proxy header (below), so it
+has no address worth keying on. Both limits **fail closed**: Redis down means 503 on these endpoints and nothing
+else, since redirects only lose their cache. The limiter is bookmark-manager's, copied rather than shared: each
+capstone builds and deploys on its own.
+
 ### Tokens
 
 HS256, with `jwt.WithValidMethods` pinning the algorithm. That one option is the whole defence against the
@@ -180,7 +198,8 @@ Two queues with a 6:1 weighting, so a two-minute expiry sweep cannot starve clic
 | `tasks` | nothing | SkipRetry against retry, queue weights, the mux |
 | `store` | Postgres | constraints, cascades, concurrent increments, keyset ties |
 | `cache` | Postgres + Redis | TTL asymmetry, stampede collapse, invalidation on write |
-| `api` | Postgres | the whole surface, through a real HTTP server |
+| `ratelimit` | Redis | the exact limit under 500 goroutines, the sliding window, unique members |
+| `api` | Postgres, and Redis for the rate-limit tests | the whole surface, through a real HTTP server |
 
 The harness gives each test binary **its own database**, named from `os.Args[0]`, and truncates between tests.
 `go test ./...` runs packages concurrently, and two packages truncating one database is a deadlock in one and a

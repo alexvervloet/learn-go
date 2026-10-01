@@ -20,8 +20,10 @@ import (
 // and the runtime decides how much parallelism to apply, which is why the same
 // code scales without being rewritten.
 //
-// Python's threading gives concurrency without parallelism for CPU work,
-// permanently, because of the GIL. That is the difference that matters here.
+// Default CPython's threading gives concurrency without parallelism for CPU
+// work, because of the GIL; only its optional free-threaded build runs Python
+// threads in parallel. Go's goroutines always can. That is the difference that
+// matters here.
 
 // cpuBound is deliberately expensive and calls nothing, so it also exercises
 // asynchronous preemption: before Go 1.14 a loop like this could not be

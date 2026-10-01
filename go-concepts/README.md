@@ -20,9 +20,10 @@ If you arrive from Python knowing what a decorator, a context manager and an
 | `with` | `defer` | Roughly, but `defer` is function-scoped, not block-scoped. |
 | GIL | no GIL | No. Go runs goroutines in parallel, so data races are real. |
 
-That last row is the one that costs people the most. In Python, the GIL makes
-many sloppy concurrent programs accidentally correct. In Go they are races, and
-a race is undefined behaviour rather than a slightly wrong number.
+That last row is the one that costs people the most. In default CPython, the GIL
+makes many sloppy concurrent programs accidentally correct. In Go they are races,
+and a race is undefined behaviour rather than a slightly wrong number. (CPython's
+optional free-threaded build, supported since 3.14, removes that safety net too.)
 
 ## The lessons
 

@@ -28,10 +28,13 @@ unit of work and let the runtime deal with it.
 This is the difference that catches Python developers, and it catches them
 silently.
 
-CPython's global interpreter lock means only one thread executes bytecode at a
-time. That makes threading useless for CPU work, and it also makes a lot of
-sloppy concurrent code accidentally correct: `counter += 1` from ten threads
-usually produces the right answer, because the lock serialises the interpreter.
+In the default CPython build, the global interpreter lock means only one thread
+executes bytecode at a time. That makes threading useless for CPU work, and it
+also makes a lot of sloppy concurrent code accidentally correct: `counter += 1`
+from ten threads usually produces the right answer, because the lock serialises
+the interpreter. Python 3.13 added an optional free-threaded build without the
+GIL, officially supported from 3.14, and on it that same code races, as it does
+in Go.
 
 Go has no GIL. Goroutines run genuinely in parallel across cores. `counter++`
 from ten goroutines is a **data race**, which in Go is undefined behaviour, not

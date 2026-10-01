@@ -32,9 +32,10 @@ value neither goroutine ever computed.
 
 ## Coming from Python
 
-CPython's GIL means only one thread runs bytecode at a time, so `counter += 1`
-from ten threads usually gives the right answer. The habits that survive are
-wrong in Go, where there is no GIL and goroutines genuinely run in parallel.
+In the default CPython build the GIL means only one thread runs bytecode at a
+time, so `counter += 1` from ten threads usually gives the right answer. The
+habits that survive are wrong in Go, where there is no GIL and goroutines
+genuinely run in parallel. They are wrong on CPython's free-threaded build too.
 
 There is no Go equivalent of "it works because of the GIL". There is only
 synchronised or racy.

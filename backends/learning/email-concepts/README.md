@@ -3,8 +3,8 @@
 Building, sending and testing email with nothing but the standard library, and the reason every Go project either
 writes this or imports a library that has. 2,915 lines.
 
-The Python mirror is `backends/learning/email-concepts`, which uses `smtplib`, `email.message` and `imaplib`. The
-Python standard library has a message BUILDER and Go does not, which is the difference that shapes this module.
+Go's standard library sends mail and parses it, and has no message BUILDER (Python's `email.message` is one).
+That gap is what shapes this module.
 
 ## Running it
 

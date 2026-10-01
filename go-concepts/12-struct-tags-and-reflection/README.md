@@ -64,6 +64,24 @@ which is never "empty", so `time.Time{}` has always been marshalled as
 zero value, works on structs, and consults an `IsZero() bool` method if the type
 has one.
 
+### `encoding/json/v2` reads the same tags differently
+
+Go 1.27 ships `encoding/json/v2` beside `encoding/json`, which is now built on it
+but keeps v1's behaviour. Measured, they disagree in five places, and in each one
+v1's default was hiding a mistake:
+
+| | v1 | v2 |
+|---|---|---|
+| `{"NAME":"ada"}` into `json:"name"` | fills it: names match case-insensitively | leaves it empty: exact match |
+| `{"name":"a","name":"b"}` | `"b"`, silently | error: duplicate member name |
+| a nil slice | `null` | `[]` |
+| `omitempty` on an `int` that is `0` | omitted | kept: v2's `omitempty` means empty JSON (`null`, `""`, `[]`, `{}`) |
+| invalid UTF-8 in a string | replaced with U+FFFD | error |
+
+So `omitzero` is the tag that means "leave out the zero value" in both, and
+moving a service to v2 changes its API, not just an import.
+`TestJSONv2Differences` pins every row.
+
 ## reflect, in three types
 
 ```go
@@ -155,6 +173,7 @@ per row.** Reproduce with `go test -bench . -benchmem -run '^$'
 |---|---|
 | `tags.go` | Tag syntax, parsing with `StructTag`, the `vet` check, exported-only |
 | `jsontags.go` | Every JSON tag option, `omitempty` vs `omitzero`, custom marshalling |
+| `jsonv2.go` | `encoding/json` against `encoding/json/v2`, the five differences measured |
 | `basics.go` | `Type`, `Value`, `Kind`, walking a struct, `Type` vs `Kind` |
 | `settability.go` | Addressability, `CanSet`, why `Unmarshal` takes a pointer |
 | `validator.go` | A tag-driven validator in about 100 lines, the real-world use |

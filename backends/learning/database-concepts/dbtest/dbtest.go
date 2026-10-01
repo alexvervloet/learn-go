@@ -10,8 +10,7 @@
 // set, and make CI set it.
 //
 // FOR ISOLATION, ROLL BACK. Each test gets a transaction that is never committed, so every row it
-// writes disappears when it ends. This is the technique the Python mirror uses too, and in Go it is
-// four lines because t.Cleanup exists.
+// writes disappears when it ends. In Go it is four lines, because t.Cleanup exists.
 //
 // # What rollback isolation cannot do
 //

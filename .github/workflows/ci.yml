@@ -1,8 +1,8 @@
 name: CI
 
-# Runs on every push to main and every pull request. Unlike the Python repo's
-# workflow, this one is not path-scoped: Go builds the whole workspace in
-# seconds, so filtering would add configuration without saving time.
+# Runs on every push to main and every pull request. Not path-scoped: Go builds
+# the whole workspace in seconds, so filtering would add configuration without
+# saving time.
 on:
   push:
     branches: [main]

@@ -2,9 +2,6 @@
 
 > 📚 [Repository root](../../../README.md) · **Core path · step 1 of 4** · Next: [testing-concepts ➡](../testing-concepts/)
 
-The mirror of the Python repo's `fast-api-tutorial/`, and the module where the two languages
-differ most.
-
 FastAPI reads your function signature, derives a schema, validates the request, coerces the
 types, and returns a 422 with field-by-field detail before your handler runs. Go has none of
 that. What it has instead is `net/http`, which since **Go 1.22** does enough routing that the

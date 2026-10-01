@@ -2,8 +2,8 @@
 
 > 📚 [Repository root](../../../README.md) · **Core path · step 2 of 4** · [⬅ http-tutorial](../http-tutorial/) · Next: [database-concepts ➡](../database-concepts/)
 
-The mirror of the Python repo's `testing-concepts/`. Same four subjects, and three of the four have
-a different answer in Go.
+Five subjects. The one where Go differs most from dynamic languages is fakes: a dependency is swapped through an
+interface the code already accepts, never by patching a module at runtime.
 
 ```
 basics/       table-driven tests, subtests, TestMain, t.Cleanup, t.Parallel

@@ -58,9 +58,8 @@ module with its own dependencies, and a root [`go.work`](go.work) ties them into
 one workspace so `make test` covers everything and an editor resolves imports
 across module boundaries.
 
-This mirrors the Python repo's per-folder `requirements.txt` rule, and for the
-same reason: the capstone that needs pgx, Redis and asynq should not force those
-downloads on someone working through the language lessons. It also means
+The reason is weight: the capstone that needs pgx, Redis and asynq should not
+force those downloads on someone working through the language lessons. It also means
 `go-concepts/` and `dsa/` have **zero third-party dependencies**, so they run on
 a fresh clone with no network.
 

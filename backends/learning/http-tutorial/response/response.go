@@ -88,8 +88,7 @@ type Problem struct {
 	Detail   string `json:"detail,omitempty"`
 	Instance string `json:"instance,omitempty"`
 
-	// Errors carries per-field problems, which RFC 9457 allows as an extension and which
-	// is what FastAPI's 422 body provides out of the box.
+	// Errors carries per-field problems, which RFC 9457 allows as an extension.
 	Errors []FieldError `json:"errors,omitempty"`
 }
 
@@ -137,7 +136,7 @@ func WriteProblem(w http.ResponseWriter, log *slog.Logger, p Problem) {
 	}
 }
 
-// WriteValidationError sends a 422 with per-field detail, which is what FastAPI does for free.
+// WriteValidationError sends a 422 with per-field detail.
 //
 // 422 rather than 400: 400 means the request was malformed and 422 means it parsed but failed
 // validation. Clients can tell "retry with different data" from "your serialiser is broken".

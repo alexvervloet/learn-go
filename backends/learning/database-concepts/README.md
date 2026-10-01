@@ -3,10 +3,6 @@
 Postgres from Go, with pgx. Eleven packages, 9,068 lines, and every number in this file was measured on
 the machine that wrote it rather than looked up.
 
-The Python mirror of this module is `backends/learning/database-concepts` in the Python repo, which covers
-the same ground with SQLAlchemy and psycopg. Two of its sub-modules have no Go equivalent and one Go
-package has no Python equivalent, which is explained under [what did not translate](#what-did-not-translate).
-
 ## Running it
 
 ```sh
@@ -351,22 +347,20 @@ What rollback isolation cannot do, which is why `transactions` and `migrate` tru
 `SELECT pid, state, wait_event_type, wait_event, query FROM pg_stat_activity` named the culprit in one
 query, and is the first thing to run when a database test hangs.
 
-## What did not translate
+## Choices in this module
 
-**`async-sqlalchemy` has no Go equivalent.** Five Python files about async sessions, sessionmakers and
-event loops. A goroutine blocking on a socket costs nothing and there is no loop to starve, so the async
-half of that module simply does not exist here. What survives is the part that caused the outages: the
-pool. That is `pgxdemo`.
+**There is no async layer.** A goroutine blocked on a socket costs nothing and there is no event loop to
+starve, so a Go database module has no async half. What is left is the part that causes outages: the pool.
+That is `pgxdemo`.
 
-**`pgvector-demo` needed a different fixture.** The Python version calls an embedding model. `vectors`
-uses a hashed bag of words instead, because a test suite that needs an API key or a 90 MB download is a
-test suite nobody runs. It is deterministic and offline, and it demonstrates every mechanical property of
-vector search and nothing about embedding quality. Being clear about which half of a subject a fixture
-covers is the point.
+**`vectors` uses a hashed bag of words, not an embedding model.** A test suite that needs an API key or a
+90 MB download is a test suite nobody runs. This one is deterministic and offline, and it demonstrates every
+mechanical property of vector search and nothing about embedding quality. Being clear about which half of a
+subject a fixture covers is the point.
 
-**`migrate` has no Python equivalent** in the same shape. Alembic's autogenerate does something goose
-deliberately does not, and goose's `NO TRANSACTION` annotation has no Alembic counterpart because Alembic
-manages the transaction itself. The transactional-DDL measurement is the same lesson either way.
+**`migrate` writes every migration by hand.** goose does not generate migrations from models, so each one is
+SQL someone read before it ran. Its `NO TRANSACTION` annotation exists because Postgres refuses some DDL,
+`CREATE INDEX CONCURRENTLY` among it, inside a transaction.
 
 ## Things worth stealing from here
 

@@ -8,7 +8,7 @@ CREATE EXTENSION IF NOT EXISTS citext;
 
 -- The normalised schema every other package in this module queries.
 --
--- Normalisation, briefly, because the Python mirror has a whole folder on it:
+-- Normalisation, briefly:
 --
 --   1NF  every column holds one value. No comma-separated lists, no array standing in for
 --        a relationship.

@@ -897,3 +897,49 @@ func TestRecorderPassesTheStatusAfterEarlyHints(t *testing.T) {
 		t.Errorf("status %d after a 103, want 201: the recorder swallowed the real status", resp.StatusCode)
 	}
 }
+
+// TestCrossOriginRefusesCrossSiteWrites is CSRF protection without tokens. Each case is a request a browser
+// (or something that is not one) would send, and what http.CrossOriginProtection makes of it.
+func TestCrossOriginRefusesCrossSiteWrites(t *testing.T) {
+	protect, err := CrossOrigin("https://partner.example")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ok := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+	h := protect(ok)
+
+	for _, tc := range []struct {
+		name    string
+		method  string
+		headers map[string]string
+		want    int
+	}{
+		{"cross-site POST", http.MethodPost, map[string]string{"Sec-Fetch-Site": "cross-site"}, http.StatusForbidden},
+		{"cross-site DELETE", http.MethodDelete, map[string]string{"Sec-Fetch-Site": "cross-site"}, http.StatusForbidden},
+		{"same-origin POST", http.MethodPost, map[string]string{"Sec-Fetch-Site": "same-origin"}, http.StatusOK},
+		{"cross-site GET, which must not change state", http.MethodGet, map[string]string{"Sec-Fetch-Site": "cross-site"}, http.StatusOK},
+		{"no browser headers: curl or a service", http.MethodPost, nil, http.StatusOK},
+		{"old browser, Origin is another host", http.MethodPost, map[string]string{"Origin": "https://evil.example"}, http.StatusForbidden},
+		{"old browser, Origin is this host", http.MethodPost, map[string]string{"Origin": "http://api.example"}, http.StatusOK},
+		{"a trusted origin", http.MethodPost, map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": "https://partner.example"}, http.StatusOK},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := httptest.NewRequest(tc.method, "http://api.example/things", nil)
+			for k, v := range tc.headers {
+				r.Header.Set(k, v)
+			}
+
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, r)
+
+			if w.Code != tc.want {
+				t.Errorf("got %d, want %d", w.Code, tc.want)
+			}
+		})
+	}
+
+	if _, err := CrossOrigin("not a url"); err == nil {
+		t.Error("a malformed trusted origin should be refused at construction")
+	}
+}

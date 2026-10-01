@@ -344,6 +344,35 @@ func SecureHeaders(next http.Handler) http.Handler {
 	})
 }
 
+// CrossOrigin rejects state-changing requests a browser sent from another site: CSRF protection with no
+// tokens, using http.CrossOriginProtection (Go 1.25).
+//
+// # How it decides, and what it lets through
+//
+// Browsers since 2023 send Sec-Fetch-Site on every request, saying whether it came from the same origin, the
+// same site, or a different one. A POST, PUT, PATCH or DELETE marked cross-site is refused with a 403. Without
+// that header it falls back to comparing Origin with Host. GET, HEAD and OPTIONS always pass, which is why a
+// handler must never change state on a GET. A request with neither header passes too, because it is either
+// same-origin from an old browser or not from a browser at all (curl, another service), and CSRF is an attack
+// on browsers: it borrows the victim's cookies.
+//
+// Which is also when it matters. An API authenticated only by a bearer token in a header is not exposed to
+// CSRF, because a forged cross-site request has no way to attach the token. A cookie-authenticated one is,
+// and adding this is one line instead of a token in every form.
+//
+// trusted lists origins allowed to make cross-origin requests anyway, as "https://app.example.com".
+func CrossOrigin(trusted ...string) (Middleware, error) {
+	protection := http.NewCrossOriginProtection()
+
+	for _, origin := range trusted {
+		if err := protection.AddTrustedOrigin(origin); err != nil {
+			return nil, fmt.Errorf("middleware: trusted origin %q: %w", origin, err)
+		}
+	}
+
+	return protection.Handler, nil
+}
+
 // MaxBody rejects requests whose body is longer than n bytes.
 //
 // http.MaxBytesReader is the important part, and it is not the same as checking

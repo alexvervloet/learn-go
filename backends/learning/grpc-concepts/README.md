@@ -3,9 +3,6 @@
 The four RPC patterns, the three things gRPC does that HTTP does not, and the mistakes each one invites.
 4,610 lines, and every number here was measured.
 
-The Python mirror is `backends/learning/grpc-concepts`, which covers the same ground with grpcio. The `.proto`
-files are the same four services, deliberately, so the two can be read side by side.
-
 ## Running it
 
 ```sh

@@ -27,5 +27,8 @@ func main() {
 	section(6, "What reflection costs")
 	demoCosts()
 
+	section(7, "encoding/json/v2: the same tags, five different answers")
+	demoJSONv2()
+
 	fmt.Println("\nRun `go test ./12-struct-tags-and-reflection` to see each claim verified.")
 }

@@ -188,7 +188,7 @@ func Collect(ctx context.Context, in <-chan int) ([]int, error) {
 }
 
 // ---------------------------------------------------------------------------
-// An ETL pipeline over records, which is the shape the Python original had
+// An ETL pipeline over records: extract, transform in stages, load
 // ---------------------------------------------------------------------------
 
 // Record is one row moving through the pipeline.

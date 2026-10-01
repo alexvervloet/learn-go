@@ -126,6 +126,7 @@ the index below groups them by topic.
 - [The modernize analyzer rewrote a loop into one that stops a step short](#the-modernize-analyzer-rewrote-a-loop-into-one-that-stops-a-step-short)
 - [A randomised test that fails 1% of the time is a flaky test](#a-randomised-test-that-fails-1-of-the-time-is-a-flaky-test)
 - [My fix for wasted work broke a test that assumed the work would start](#my-fix-for-wasted-work-broke-a-test-that-assumed-the-work-would-start)
+- [A test that skips prints `ok`, and I believed it](#a-test-that-skips-prints-ok-and-i-believed-it)
 
 ## 2026-09-25 — Two pieces of escape-analysis folklore, both wrong
 
@@ -2588,4 +2589,16 @@ the property is that the slow source does not hold up the answer, and the test n
 
 **Next time.** A change that adds an early return to concurrent code changes which interleavings are possible.
 Run the package's tests a few hundred times with `-count`, not three, before calling it green.
+
+## A test that skips prints `ok`, and I believed it
+
+**Expected.** A new rate-limit test with a deliberately wrong final assertion would fail. It passed, and so did a
+mutant that removed the code under test.
+
+**What happened.** The test had been skipped. The scratch Redis the tests pointed at had died overnight, the
+harness skips when Redis is unreachable, and `go test` without `-v` reports a package whose tests all skipped as
+`ok`. Two "passing" runs, a passing mutation check, and none of it had executed.
+
+**Next time.** A mutation check that passes is a red flag, not a shrug. When a test depends on a service, confirm
+it ran: `go test -v` and look for `--- SKIP`, or count them, before trusting either a pass or a mutant's survival.
 

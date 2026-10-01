@@ -2,25 +2,20 @@
 
 > 📚 [Repository root](../README.md) · [⬅ go-concepts](../go-concepts/) · Next: `backends/learning/`
 
-The mirror of [learning-python-backends'
-`d-structs-algos/`](https://github.com/alexvervloet/learning-python-backends/tree/main/d-structs-algos):
-the structures built from scratch, the classic algorithms, the theory of
-computational hardness, and the eleven interview-pattern families.
+The structures built from scratch, the classic algorithms, the theory of
+computational hardness, and the eleven interview-pattern families, written the
+way Go's type system allows: one generic `Stack[T]` rather than a stack of
+strings copied per type.
 
-Same material, rewritten where Go's type system makes a better answer available.
-Generics are the main difference: the Python version writes `list[int]` and the
-Go version writes `[]T` with a constraint, so one `Stack[T]` replaces the stack
-of strings you would otherwise copy-paste per type.
-
-## How this differs from the Python version
+## How this is put together
 
 **Generics throughout.** `Stack[T any]`, `HashMap[K comparable, V any]`,
 `bst.Tree[K cmp.Ordered, V any]`. Before Go 1.18 this material would have been a choice
 between `any` with type assertions everywhere or one copy per type; see
 [go-concepts/11-generics](../go-concepts/11-generics/) for what that costs.
 
-**Tests are the interface.** The Python repo has a `run_tests.py` script and a
-custom assertion harness. Go has `go test`, so there is nothing to write:
+**Tests are the interface.** `go test` is the harness, so there is nothing to
+write:
 
 ```bash
 go test ./...                    # every package
@@ -38,14 +33,12 @@ go doc -all ./stack              # the API plus the examples
 go test -run Example ./...       # verify every example's output
 ```
 
-**One `sorting` package, not six.** The Python version has a folder per
-algorithm. Go convention is one package per concern, and putting all six sorts
-together means they can be benchmarked against each other in one file, which is
-the more interesting comparison anyway.
+**One `sorting` package, not six.** Go convention is one package per concern,
+and putting all six sorts together means they can be benchmarked against each
+other in one file, which is the more interesting comparison anyway.
 
-**Table-driven tests.** The Go idiom, and a better fit for this material than
-the Python repo's `test(func, args, expected)` harness: one slice of cases, one
-loop, one `t.Run` per case so failures name themselves.
+**Table-driven tests.** The Go idiom: one slice of cases, one loop, one `t.Run`
+per case so failures name themselves.
 
 ## Structures
 

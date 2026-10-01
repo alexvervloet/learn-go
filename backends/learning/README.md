@@ -1,24 +1,22 @@
 # backends/learning
 
-Thirteen modules, one per concept, each a Go module of its own with its own `go.mod`. They mirror the
-Python repo's `backends/learning/` directory, and where a Python module has no sensible Go equivalent the
-mapping is stated rather than forced.
+Thirteen modules, one per concept, each a Go module of its own with its own `go.mod`.
 
-| module | status | mirrors | what it covers |
-| --- | --- | --- | --- |
-| [http-tutorial/](http-tutorial/) | done | `fast-api-tutorial` | `net/http` with Go 1.22 routing, middleware, request decoding, RFC 9457 errors, graceful shutdown |
-| [testing-concepts/](testing-concepts/) | done | `testing-concepts` | table-driven tests, `testing/synctest`, golden files, fuzzing, the race detector |
-| [database-concepts/](database-concepts/) | done | `database-concepts` | pgx, indexes, N+1, transactions, window functions, full text, pgvector, goose |
-| [backend-concepts/](backend-concepts/) | done | `backend-concepts` | pagination, rate limiting, caching, webhooks, JWT, OAuth, observability, WebSockets, Kafka |
-| [grpc-concepts/](grpc-concepts/) | done | `grpc-concepts` | the four RPC patterns, status codes, metadata, interceptors |
-| [graphql-concepts/](graphql-concepts/) | done | `graphql-concepts` | gqlgen, the N+1 and dataloaders, error models, complexity limiting |
-| [jobs-concepts/](jobs-concepts/) | done | `celery-concepts` | asynq, retries, timeouts, scheduling, idempotency, inspection |
-| [email-concepts/](email-concepts/) | done | `email-concepts` | MIME building, SMTP with TLS, two template packages, a mail catcher |
-| [docker-concepts/](docker-concepts/) | done | `docker-concepts` | seven Dockerfiles measured, signals, scratch, ldflags, runtime limits |
-| [aws-concepts/](aws-concepts/) | done | `aws-concepts` | S3, DynamoDB, SQS, SNS against LocalStack, with the request counts measured |
-| [github-actions/](github-actions/) | done | `github-actions` | a workflow checker in Go, pointed at this repo's own CI |
-| [makefile-concepts/](makefile-concepts/) | done | `makefile-concepts` | rules are files, expansion, the traps, and Makefiles in a Go workspace |
-| [ai-concepts/](ai-concepts/) | done | `ai-concepts` | the request shape, the tool loop, streaming, retrieval, and the cost of each |
+| module | what it covers |
+| --- | --- |
+| [http-tutorial/](http-tutorial/) | `net/http` with Go 1.22 routing, middleware, request decoding, RFC 9457 errors, graceful shutdown |
+| [testing-concepts/](testing-concepts/) | table-driven tests, `testing/synctest`, golden files, fuzzing, the race detector |
+| [database-concepts/](database-concepts/) | pgx, indexes, N+1, transactions, window functions, full text, pgvector, goose |
+| [backend-concepts/](backend-concepts/) | pagination, rate limiting, caching, webhooks, JWT, OAuth, observability, WebSockets, Kafka |
+| [grpc-concepts/](grpc-concepts/) | the four RPC patterns, status codes, metadata, interceptors |
+| [graphql-concepts/](graphql-concepts/) | gqlgen, the N+1 and dataloaders, error models, complexity limiting |
+| [jobs-concepts/](jobs-concepts/) | asynq, retries, timeouts, scheduling, idempotency, inspection |
+| [email-concepts/](email-concepts/) | MIME building, SMTP with TLS, two template packages, a mail catcher |
+| [docker-concepts/](docker-concepts/) | seven Dockerfiles measured, signals, scratch, ldflags, runtime limits |
+| [aws-concepts/](aws-concepts/) | S3, DynamoDB, SQS, SNS against LocalStack, with the request counts measured |
+| [github-actions/](github-actions/) | a workflow checker in Go, pointed at this repo's own CI |
+| [makefile-concepts/](makefile-concepts/) | rules are files, expansion, the traps, and Makefiles in a Go workspace |
+| [ai-concepts/](ai-concepts/) | the request shape, the tool loop, streaming, retrieval, and the cost of each |
 
 ## What every module here has
 

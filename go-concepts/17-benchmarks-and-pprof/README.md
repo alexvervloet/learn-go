@@ -170,6 +170,23 @@ costs **745** allocations, not 1000. The runtime keeps a static array of small
 integers (0-255), so boxing those allocates nothing. Exactly the sort of thing
 you learn from `-benchmem` and would never guess.
 
+## The flight recorder
+
+A profile says where time went on average. An execution trace says what every
+goroutine did, moment by moment, which is what the one slow request in a
+thousand needs, and the problem was always when to start it: too costly to
+leave on, too late once the slow request has happened.
+
+`runtime/trace.FlightRecorder` (Go 1.25) keeps tracing into a ring buffer of
+the last few seconds. When a request runs past its budget, `WriteTo` snapshots
+that window, so the trace starts *before* the problem. `flight.go` triggers a
+snapshot from one slow call among fast ones, and `TestASlowCallProducesATrace`
+checks it is a real trace (its header names the trace format version, which in
+Go 1.27 is "go 1.26 trace"). Only one recorder runs at a time, and a stopped one
+cannot snapshot; `TestOnlyOneFlightRecorderRuns` holds both. In a service, start
+one at startup, snapshot at most once a minute, and open the file with
+`go tool trace`.
+
 ## What the files cover
 
 | File | What it teaches |
@@ -179,6 +196,7 @@ you learn from `-benchmem` and would never guess.
 | `allocations.go` | Where allocations come from, and the fixes, measured |
 | `profiling.go` | Writing profiles from code, reading them, `flat` vs `cum` |
 | `httppprof.go` | `net/http/pprof`, and how to expose it safely |
+| `flight.go` | `trace.FlightRecorder`: a trace of the seconds before a slow call |
 | `main.go` | Runs every demo in order |
 | `*_test.go` | The benchmarks themselves, plus tests keeping the pairs honest |
 

@@ -141,6 +141,19 @@ rather than making it. The first version of `Production` called `RealIP(true)`, 
 `cmd/server`, run directly on a laptop, let any client choose the address it logged.
 `cmd/server` trusts the headers only when `TRUST_PROXY_HEADERS=true`.
 
+### CSRF without tokens
+
+Go 1.25 added `http.CrossOriginProtection`, and `middleware.CrossOrigin` wraps it. Browsers send
+`Sec-Fetch-Site` on every request, so a POST, PUT, PATCH or DELETE that a page on another site
+caused is refused with a 403; older browsers fall back to comparing `Origin` with `Host`. GET and
+HEAD always pass, which is why a GET must never change state. A request with neither header, from
+curl or another service, passes too, because CSRF is an attack that borrows a browser's cookies.
+
+That is also when it matters: an API that only accepts a bearer token in a header cannot be forged
+this way, since the forged request has no token to send, while one authenticated by cookie can.
+`Production` includes it, after the logger, so a refused request is still a logged line.
+`TestCrossOriginRefusesCrossSiteWrites` runs eight cases through it.
+
 ### What it all costs
 
 Measured against a null `ResponseWriter`, because `httptest.NewRecorder` allocates 1,010 bytes

@@ -130,6 +130,28 @@ func Publish(ctx context.Context, client *sns.Client, topicARN, body string, att
 	return aws.ToString(out.MessageId), nil
 }
 
+// policyDocument is the IAM policy JSON, as types. A misspelt "Efect" in a map is a policy AWS rejects at
+// runtime, or worse, accepts and ignores; as a struct field it does not compile.
+type policyDocument struct {
+	Version   string            `json:"Version"`
+	Statement []policyStatement `json:"Statement"`
+}
+
+type policyStatement struct {
+	Effect    string          `json:"Effect"`
+	Principal policyPrincipal `json:"Principal"`
+	Action    string          `json:"Action"`
+	Resource  string          `json:"Resource"`
+
+	// Condition stays a map: its keys are condition operators (ArnEquals, StringLike, ...) and their keys
+	// are condition keys, both open-ended sets that a struct would have to enumerate.
+	Condition map[string]map[string]string `json:"Condition,omitempty"`
+}
+
+type policyPrincipal struct {
+	Service string `json:"Service"`
+}
+
 // AllowTopicToSendToQueue gives a topic permission to write to a queue.
 //
 // # The step everyone forgets
@@ -141,17 +163,17 @@ func Publish(ctx context.Context, client *sns.Client, topicARN, body string, att
 // LocalStack's IAM is permissive enough that this is not strictly required there, which is exactly the kind of
 // difference that makes a thing work locally and vanish in production. It is set here for that reason.
 func AllowTopicToSendToQueue(ctx context.Context, client *sqs.Client, queueURL, queueARN, topicARN string) error {
-	policy := map[string]any{
-		"Version": "2012-10-17",
-		"Statement": []any{map[string]any{
-			"Effect":    "Allow",
-			"Principal": map[string]any{"Service": "sns.amazonaws.com"},
-			"Action":    "sqs:SendMessage",
-			"Resource":  queueARN,
+	policy := policyDocument{
+		Version: "2012-10-17",
+		Statement: []policyStatement{{
+			Effect:    "Allow",
+			Principal: policyPrincipal{Service: "sns.amazonaws.com"},
+			Action:    "sqs:SendMessage",
+			Resource:  queueARN,
 			// Without the condition, ANY topic could write to this queue. The condition is what scopes the
 			// grant, and leaving it out is a real finding in a real audit.
-			"Condition": map[string]any{
-				"ArnEquals": map[string]any{"aws:SourceArn": topicARN},
+			Condition: map[string]map[string]string{
+				"ArnEquals": {"aws:SourceArn": topicARN},
 			},
 		}},
 	}

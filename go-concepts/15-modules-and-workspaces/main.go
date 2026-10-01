@@ -21,5 +21,8 @@ func main() {
 	section(4, "The commands, grouped by what they change")
 	demoCommands()
 
+	section(5, "The tool directive")
+	demoTools()
+
 	fmt.Println("\nRun `go test ./15-modules-and-workspaces` to see each claim verified.")
 }

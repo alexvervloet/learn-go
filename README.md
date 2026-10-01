@@ -209,6 +209,8 @@ What a 2026 Go backend uses that this repo does not teach, and where each would 
 - **Running on Kubernetes.** Probes, `preStop`, resource limits and how `GOMAXPROCS` reads them.
 - **Resilience patterns.** Circuit breakers, the transactional outbox, feature flags.
 - **MCP servers** in `ai-concepts`, which covers calling a model and the tool loop.
+- **`weak`, `unique` and `runtime.AddCleanup`** (Go 1.23 and 1.24) in `go-concepts/18`, which covers
+  escape analysis and the stack but not weak pointers, interning, or the finalizer's replacement.
 
 ## Also here
 

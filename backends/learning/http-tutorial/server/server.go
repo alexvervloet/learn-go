@@ -13,8 +13,8 @@
 // descriptors, having served nothing. That is Slowloris, it is twenty years old, and the Go
 // default is still vulnerable to it.
 //
-// The Python comparison is worth making: uvicorn and gunicorn ship with timeouts on, so a
-// FastAPI service is protected by its runtime and a Go service has to ask.
+// Not every runtime is like this: uvicorn and gunicorn ship with timeouts on, so a Python
+// service behind them is protected by default and a Go service has to ask.
 //
 // # Which timeout does what
 //

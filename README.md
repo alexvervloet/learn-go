@@ -121,7 +121,7 @@ explains the mechanics, rather than reaching for a framework that hides them.
 | Database | `pgx/v5`, SQL written by hand | GORM generates SQL you cannot see. Here every query is in the source, scanned with pgx's generic row helpers. sqlc, which generates Go from SQL you wrote, is the usual next step and is not covered yet |
 | Migrations | `goose` | Plain SQL files, same model as Alembic's, without the Python |
 | Testing | stdlib `testing`, `testify/require` in the backend modules | `go-concepts/` and `dsa/` stay dependency-free on purpose |
-| Background jobs | `asynq` | The Celery analogue, Redis-backed |
+| Background jobs | `asynq` | The Celery analogue, Redis-backed. River, a Postgres-backed queue that can enqueue in the same transaction as the write that caused the job, is the more Go-native choice and is not covered yet |
 | GraphQL | `gqlgen` | Schema-first with generated resolvers |
 | gRPC | `grpc-go` | Go is the reference implementation |
 | Linting | `golangci-lint` | The ruff analogue; config in [.golangci.yml](.golangci.yml) |
@@ -189,6 +189,26 @@ make test DIR=./go-concepts/04-errors/...
 - **Suppressions state a reason.** A bare `//nolint` is never correct here; see
   [LESSONS.md](LESSONS.md) for why the linter keeps catching the deliberately
   broken examples.
+
+## Not covered yet
+
+What a 2026 Go backend uses that this repo does not teach, and where each would go:
+
+- **OpenTelemetry.** `backend-concepts/observability` writes W3C trace context by hand, so the
+  mechanism is visible. The SDK (`otelhttp`, `otelpgx`, the slog bridge) is what a real service uses.
+- **Spec-first OpenAPI** (oapi-codegen or ogen) and API versioning. `http-tutorial` decodes and
+  validates by hand.
+- **sqlc**, which generates typed Go from SQL you wrote. `database-concepts` scans rows with pgx.
+- **River.** A Postgres job queue with transactional enqueue, the natural partner to
+  `database-concepts`' `SKIP LOCKED` lesson. `jobs-concepts` uses asynq on Redis.
+- **testcontainers-go.** The tests here expect a database from docker compose and skip without one.
+- **connect-go and buf.** `grpc-concepts` uses protoc and grpc-go.
+- **Profile-guided optimisation** (`default.pgo`). Lesson 17 profiles and stops there.
+- **The rest of a security pass.** CSRF (`http.CrossOriginProtection`), `os.Root`, JWT pitfalls and
+  vulnerability scanning are here; CORS, TLS configuration and secrets management are not.
+- **Running on Kubernetes.** Probes, `preStop`, resource limits and how `GOMAXPROCS` reads them.
+- **Resilience patterns.** Circuit breakers, the transactional outbox, feature flags.
+- **MCP servers** in `ai-concepts`, which covers calling a model and the tool loop.
 
 ## Also here
 

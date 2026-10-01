@@ -1,5 +1,5 @@
-# Root Makefile. The analogue of the Python repo's per-folder pytest/ruff
-# invocations, collapsed into one place because Go's tooling is uniform.
+# Root Makefile. One place for every test, lint and check, because Go's tooling
+# is the same in every module.
 #
 # Every target works across the whole workspace. To scope one to a single
 # module, pass DIR:

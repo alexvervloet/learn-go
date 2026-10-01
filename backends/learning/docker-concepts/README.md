@@ -3,9 +3,8 @@
 Seven Dockerfiles for the same Go service, built and run by a test suite that measures what each one costs and what
 each one breaks. 1,731 lines.
 
-The Python mirror is `backends/learning/docker-concepts`, which covers multi-stage builds, security, debugging, a
-reverse proxy and CI. The Go story is shorter and has a bigger payoff, because a static Go binary can ship in an
-image with literally nothing else in it, and a Python service cannot.
+Go's story here is short and has a big payoff: a static Go binary can ship in an image with literally nothing else
+in it, which a service that needs an interpreter cannot.
 
 ## Running it
 

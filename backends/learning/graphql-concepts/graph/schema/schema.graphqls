@@ -3,8 +3,8 @@
 # # Schema-first against code-first
 #
 # gqlgen is SCHEMA-FIRST: you write this file, run a generator, and implement the interfaces it produces. The
-# Python mirror uses Strawberry, which is CODE-FIRST: you write Python classes with type annotations and the
-# schema is derived.
+# other approach is CODE-FIRST (graphql-go/graphql in Go, Strawberry in Python): you build the types in code and
+# the schema is derived from them.
 #
 # The trade is real and it is not about taste. Schema-first means the schema is a reviewable artefact that a
 # frontend team can read and a breaking change is a diff in this file. Code-first means no generator and no

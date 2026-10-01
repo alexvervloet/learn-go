@@ -4,8 +4,8 @@ Background jobs with [asynq](https://github.com/hibiken/asynq): retries, timeout
 the inspection API a dashboard is built on. 1,844 lines, and three of the findings below came from a test
 failing rather than from the documentation.
 
-The Python mirror is `backends/learning/celery-concepts`. The two libraries make one decision very differently
-and it is the first thing below.
+asynq and Celery, the library many people arrive from, make one decision very differently, and it is the first
+thing below.
 
 ## Running it
 

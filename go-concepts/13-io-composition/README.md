@@ -161,6 +161,16 @@ whoever is sending it. Use `http.MaxBytesReader` on a server, or
 `io.LimitReader` anywhere else, and treat the limit as a requirement rather
 than a nicety.
 
+A file NAME from outside is untrusted input too. `filepath.Join(dir, name)`
+lets `../secret` walk out of `dir`. `filepath.IsLocal` refuses that, and it is
+still not enough, because it checks the string and not the disk: `link` is a
+local name, and if it is a symlink to `../secret`, opening it reads the secret.
+`os.Root` (Go 1.24) resolves every component inside the directory as it opens,
+so it refuses both. The demo prints all three readers side by side, and
+`TestASymlinkBeatsTheLexicalCheck` asserts the case the string check misses.
+It confines names to a tree; it does not stop a path into another mounted
+filesystem or a device file inside the tree.
+
 ## What the files cover
 
 | File | What it teaches |
@@ -171,6 +181,7 @@ than a nicety.
 | `buffered.go` | `bufio` Reader/Writer/Scanner, the 64KB token limit |
 | `pipes.go` | `io.Pipe`, closing, `CloseWithError`, feeding a Reader from a Writer |
 | `custom.go` | Writing your own Reader and Writer, and the contracts to honour |
+| `root.go` | `os.Root`: a file name from outside cannot leave its directory, symlinks included |
 | `main.go` | Runs every demo in order |
 | `*_test.go` | Tests including the lost-last-chunk bug, asserted |
 

@@ -140,7 +140,7 @@ func negotiatedHandler(store *routing.Store, log *slog.Logger) http.Handler {
 }
 
 // validatedHandler shows the whole request-decoding path: size limit, strict JSON, per-field
-// validation, and a 422 with the detail FastAPI gives for free.
+// validation, and a 422 with per-field detail.
 func validatedHandler(log *slog.Logger) http.Handler {
 	type payload struct {
 		Name  string `json:"name"`

@@ -1,30 +1,10 @@
-// Package basics's tests are the point of the file. They cover what pytest's first section
-// covers, and where Go's answer is different.
+// Package basics's tests are the point of the file: discovery, tables, helpers, cleanup, TestMain and
+// -short, and where Go's answer differs from a fixture-driven framework.
 //
-// # The mapping from pytest
-//
-//	pytest                        go test
-//	----------------------------  ------------------------------------------------
-//	test discovery by name        files named *_test.go, funcs named TestXxx
-//	@pytest.mark.parametrize      a table and a loop
-//	fixtures                      ordinary functions, plus t.Cleanup
-//	fixture scope="module"        TestMain, or a package-level sync.Once
-//	yield fixtures                t.Cleanup, or defer in a helper returning a closure
-//	@pytest.mark.slow + -m        testing.Short() and -short, or a build tag
-//	conftest.py                   nothing; there is no implicit sharing
-//	assert a == b                 if a != b { t.Errorf(...) }
-//	pytest -k                     go test -run
-//	pytest -x                     go test -failfast
-//
-// # There is no fixture injection, and that is mostly a relief
-//
-// pytest's fixtures are resolved by parameter NAME, which is powerful and invisible: a test's
-// dependencies are declared by spelling, and finding where one comes from means searching every
-// conftest.py up the tree. Go has no such mechanism. A test that needs a cart calls newCart(t),
-// and the definition is one jump away.
-//
-// What is genuinely lost: fixture caching across tests in a scope, and the automatic teardown
-// ordering that comes with it. t.Cleanup covers the teardown; the caching has to be written.
+// The README has the mapping from pytest, row by row. The one difference worth repeating here is fixture
+// injection: Go has none. A test that needs a cart calls newCart(t), and the definition is one jump away rather
+// than somewhere in a conftest.py up the tree, resolved by parameter name. What is lost is fixture caching
+// across a scope; t.Cleanup covers the teardown, and the caching has to be written.
 package basics
 
 import (

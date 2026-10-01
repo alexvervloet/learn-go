@@ -257,7 +257,7 @@ func TestQueryHasDistinguishesEmptyFromAbsent(t *testing.T) {
 }
 
 // TestQueryAccumulatesErrors is the design decision: a client sending three bad parameters
-// should learn about all three, which is what FastAPI's 422 body does.
+// should learn about all three.
 func TestQueryAccumulatesErrors(t *testing.T) {
 	r := httptest.NewRequest("GET", "/?count=abc&limit=99999&mode=sideways&flag=maybe", nil)
 

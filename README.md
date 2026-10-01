@@ -163,6 +163,7 @@ make help          # every target
 
 make tidy-check    # fail if any go.mod or go.sum is stale
 make isolated-check # build each module with GOWORK=off, as a consumer would
+make vuln          # govulncheck every module; fails on anything reachable not in .govulncheck-allow
 ```
 
 Scope any target to one module with `DIR`:

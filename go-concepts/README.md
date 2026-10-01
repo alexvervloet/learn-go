@@ -29,7 +29,9 @@ a race is undefined behaviour rather than a slightly wrong number.
 ## The lessons
 
 Work them in order. Each one assumes the ones before it. All eighteen build,
-vet, lint and test clean on Go 1.27, and every claim in a README has a test.
+vet, lint and test clean on Go 1.27, and every claim about behaviour has a test.
+The summary lists some demos print (the functions returning `[]string`) are prose,
+and their tests only check that they exist.
 
 | # | Lesson | Covers |
 |---|---|---|

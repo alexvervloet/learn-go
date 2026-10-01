@@ -182,8 +182,11 @@ make test DIR=./go-concepts/04-errors/...
   every demo in order.
 - **"The why" lives in `README.md`.** Code files carry a package doc comment for
   "the what", plus ASCII diagrams where a picture is quicker than a paragraph.
-- **Every claim in a README has a test.** If the prose says a nil map write
-  panics, there is a test that recovers from it.
+- **Every claim about behaviour has a test.** If the prose says a nil map write
+  panics, there is a test that recovers from it. The exception is the summary
+  lists some go-concepts demos print, functions returning `[]string` of prose:
+  those are text, their tests only check they are there, and a sentence in one
+  is only as good as the code next to it that shows the behaviour.
 - **Suppressions state a reason.** A bare `//nolint` is never correct here; see
   [LESSONS.md](LESSONS.md) for why the linter keeps catching the deliberately
   broken examples.

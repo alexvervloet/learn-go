@@ -26,6 +26,7 @@ concurrency/  -race, testing/synctest, goroutine leaks
 | `conftest.py` | nothing; there is no implicit sharing |
 | `assert a == b` | `if a != b { t.Errorf(...) }` |
 | `pytest -k` | `go test -run` |
+| `pytest -x` | `go test -failfast` |
 | `unittest.mock.patch` | an interface parameter |
 | `pytest-asyncio` | nothing needed; plus `testing/synctest` |
 | `pytest-cov` | `go test -cover`, built in |

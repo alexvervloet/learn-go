@@ -240,8 +240,7 @@ rest are dropped with no error.
 using it alone rejects its own form.
 
 `Query` accumulates errors rather than returning on the first, because a client sending three
-bad parameters should learn about all three — which is what FastAPI's 422 does and what an
-early return does not. It also errors on an out-of-range value rather than clamping: a client
+bad parameters should learn about all three, which an early return cannot tell them. It also errors on an out-of-range value rather than clamping: a client
 asking for `limit=100000` should be told, not quietly given 100 and left wondering why the next
 page never comes.
 
@@ -301,8 +300,8 @@ file descriptor forever.
 | `ReadHeaderTimeout: 0` (the default) | the connection is still held after 500 ms |
 
 That is Slowloris. It is twenty years old and the Go default is still vulnerable. Worth noting
-that uvicorn and gunicorn ship with timeouts on, so the FastAPI version of this module is
-protected by its runtime and the Go version has to ask.
+that uvicorn and gunicorn ship with timeouts on, so a Python service behind them is protected
+by its runtime and a Go service has to ask.
 
 | | |
 |---|---|
@@ -367,7 +366,7 @@ go test -v -run FilenameIsPartlySanitised ./request
 
 ## What Go does not have
 
-Honestly, because the FastAPI version gets all of this for free:
+What a framework like FastAPI gives you for free, and what you write here instead:
 
 | | |
 |---|---|

@@ -1,14 +1,10 @@
 // Package pgxdemo is the connection pool: how it is configured, how it runs out, and the four ways pgx
 // can send a query.
 //
-// # What this mirrors
+// # Why there is no async layer
 //
-// The Python side of this repo has async-sqlalchemy, five files about async sessions, sessionmakers,
-// pool configuration and pool exhaustion. Go needs none of the async machinery, because a goroutine
-// blocking on a socket costs nothing and there is no event loop to starve. So the async half of that
-// module has no Go equivalent at all.
-//
-// What survives the translation is the part that actually caused the outages: the pool. Its size, what
+// Go needs no async database machinery: a goroutine blocking on a socket costs nothing and there is no
+// event loop to starve. What matters is the part that actually causes outages: the pool. Its size, what
 // happens when it is empty, and the fact that "concurrent" in Go is bounded by MaxConns and not by
 // GOMAXPROCS.
 //

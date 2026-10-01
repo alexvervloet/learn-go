@@ -24,5 +24,8 @@ func main() {
 	section(5, "net/http/pprof, and exposing it safely")
 	demoHTTPPprof()
 
+	section(6, "The flight recorder: a trace of the moment before")
+	demoFlight()
+
 	fmt.Println("\nRun `go test -bench . -benchmem -run '^$' ./17-benchmarks-and-pprof` for the numbers.")
 }

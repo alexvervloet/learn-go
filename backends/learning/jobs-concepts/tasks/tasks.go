@@ -2,7 +2,7 @@
 //
 // # What asynq is, against Celery
 //
-// The Python mirror of this module uses Celery, which is a framework: a decorator makes a function a task, a
+// Celery, the queue many people arrive from, is a framework: a decorator makes a function a task, a
 // separate process runs the worker, and the result comes back through a "result backend". asynq is a library:
 // a task is a name and a JSON payload, and a worker is a `asynq.Server` you start in your own binary. asynq can
 // store a result (Task.ResultWriter, kept for the task's Retention), but it has no blocking wait for one.

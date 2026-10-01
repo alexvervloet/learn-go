@@ -120,12 +120,9 @@ check: fmt-check vet lint tidy-check isolated-check test
 # workspace would raise shared dependency versions for every module.
 GOVULNCHECK_VERSION := v1.8.0
 
-## vuln: report known vulnerabilities in code each module actually calls
+## vuln: fail on known vulnerabilities in code each module calls, except those in .govulncheck-allow
 vuln:
-	@status=0; for mod in $$(go list -m -f '{{.Dir}}'); do \
-		echo "govulncheck $$mod"; \
-		(cd $$mod && GOWORK=off go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...) || status=1; \
-	done; exit $$status
+	@scripts/vulncheck.sh $(GOVULNCHECK_VERSION)
 
 ## clean: remove this repo's coverage files, and nothing from the shared Go build cache
 #

@@ -1,0 +1,10 @@
+# Vulnerabilities govulncheck may report without failing the build, one ID per line, with why.
+#
+# Every entry is a decision with an expiry, not a mute button. Remove the line in the same commit that bumps the
+# module to the fixed version; scripts/vulncheck.sh prints allowed findings on every run so they stay visible.
+
+# GO-2026-6443: grpc-go server panics on a request with no :authority or Host header. Fixed only in a
+# v1.85.0 development build so far (as of 2026-10-01). grpc-concepts reaches it through grpctest.Start, the
+# test harness's server on bufconn or 127.0.0.1, so nothing outside the test process can send it a request.
+# Pinning a pre-release grpc into a learning repo is worse than this. Remove when Dependabot bumps to v1.85.0.
+GO-2026-6443

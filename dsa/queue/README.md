@@ -110,7 +110,7 @@ its pointer.
 | `Pop()` | Leave the front | O(1) |
 | `Peek()` | Look at the front | O(1) |
 | `Len()` | Element count | O(1) |
-| `SearchAndRemove(v, equal)` | Find and remove, preserving order | O(n) |
+| `RemoveFunc(match)` | Remove the first match, preserving order | O(n) |
 
 ## Matchmaking
 
@@ -139,9 +139,9 @@ The same problem as lesson 02, and a ring buffer makes it easier to forget than
 a stack does, because the slot is not past `len`. It sits in the middle of a live
 slice and looks like it still belongs to someone.
 
-**`SearchAndRemove` takes an equality function** rather than constraining `T` to
-`comparable`, because constraining it would forbid a `Queue[[]byte]` or a
-`Queue[func()]`. `Comparable[T comparable]` embeds `Queue[T]` and adds `Remove`, so
+**`RemoveFunc` takes a predicate**, as `slices.DeleteFunc` does, rather than
+constraining `T` to `comparable`, because constraining it would forbid a
+`Queue[[]byte]` or a `Queue[func()]`. `Comparable[T comparable]` embeds `Queue[T]` and adds `Remove`, so
 the common case stays short and gets every other method by promotion.
 
 **A full ring buffer has `head == tail`,** so the indices alone cannot tell you

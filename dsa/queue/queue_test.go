@@ -115,7 +115,7 @@ func TestPopZeroesTheVacatedSlot(t *testing.T) {
 	}
 }
 
-func TestSearchAndRemovePreservesOrder(t *testing.T) {
+func TestRemovePreservesOrder(t *testing.T) {
 	tests := []struct {
 		name   string
 		push   []int
@@ -152,10 +152,10 @@ func TestSearchAndRemovePreservesOrder(t *testing.T) {
 	}
 }
 
-// TestSearchAndRemoveOnAWrappedBuffer is the case the straightforward
+// TestRemoveOnAWrappedBuffer is the case the straightforward
 // implementation gets wrong: the shift has to walk logical positions, not
 // array indices.
-func TestSearchAndRemoveOnAWrappedBuffer(t *testing.T) {
+func TestRemoveOnAWrappedBuffer(t *testing.T) {
 	var q Comparable[int]
 	q.Queue = *New[int](4)
 	for i := 1; i <= 4; i++ {

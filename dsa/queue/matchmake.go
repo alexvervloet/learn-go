@@ -12,9 +12,9 @@ import (
 // plain FIFO. Players join the back; the matchmaker pairs the first player with
 // the first COMPATIBLE player behind them, which may not be the second in line.
 //
-// That is why the queue has SearchAndRemove: a player at the front with nobody
-// compatible must wait while pairs are matched around them, rather than
-// blocking the whole queue.
+// That is why the matchmaker removes from the middle of the queue: a player at
+// the front with nobody compatible must wait while pairs are matched around
+// them, rather than blocking the whole queue.
 
 // Player is someone waiting for a match.
 type Player struct {

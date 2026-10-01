@@ -121,19 +121,19 @@ func (q *Queue[T]) String() string {
 	return "front -> [" + strings.Join(parts, " ") + "] <- back"
 }
 
-// SearchAndRemove removes the first element equal to v, preserving the order of
-// the rest, and reports whether it was found. O(n).
+// RemoveFunc removes the first element, from the front, for which match returns
+// true, preserving the order of the rest, and reports whether there was one. O(n).
 //
-// equal is a parameter rather than a `comparable` constraint on T, because
-// constraining the queue would forbid a Queue[[]byte] or a Queue[func()].
-// Comparable below is the convenience wrapper for comparable types.
+// A predicate, like slices.DeleteFunc, rather than a value and a `comparable`
+// constraint on T, because constraining the queue would forbid a Queue[[]byte]
+// or a Queue[func()]. Comparable below is the convenience wrapper for comparable
+// types.
 //
-// This is not a queue operation, and it is what makes Matchmake possible: a
-// player at the front with no compatible partner must be able to wait while a
-// later pair is matched around them.
-func (q *Queue[T]) SearchAndRemove(v T, equal func(a, b T) bool) (T, bool) {
+// This is not a queue operation, and a real queue that needs it is no longer a
+// plain FIFO, which is the point Matchmake makes.
+func (q *Queue[T]) RemoveFunc(match func(T) bool) (T, bool) {
 	for i := range q.count {
-		if equal(q.items[(q.head+i)%len(q.items)], v) {
+		if match(q.items[(q.head+i)%len(q.items)]) {
 			return q.removeAt(i), true
 		}
 	}
@@ -180,5 +180,5 @@ type Comparable[T comparable] struct {
 
 // Remove removes the first element equal to v.
 func (q *Comparable[T]) Remove(v T) (T, bool) {
-	return q.SearchAndRemove(v, func(a, b T) bool { return a == b })
+	return q.RemoveFunc(func(x T) bool { return x == v })
 }

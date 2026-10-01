@@ -17,9 +17,11 @@ type User struct {
 ```
 
 This is how `encoding/json` knows to write `created_at`, how `sqlx` maps a
-column, and how a validator knows a field is required. It is Go's answer to
-Python decorators and Java annotations, and it is deliberately dumber than
-either: a tag is just a string, with a convention about its format.
+column, and how a validator knows a field is required. It is often compared to
+decorators, but a decorator runs code and a tag does nothing at all: it is a
+string that sits there until something reads it by reflection. The nearer
+relatives are Python's `typing.Annotated` and Java's annotations, and a tag is
+deliberately dumber than either, a string with a convention about its format.
 
 ## The tag format
 

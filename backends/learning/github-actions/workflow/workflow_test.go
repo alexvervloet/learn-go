@@ -346,15 +346,26 @@ func TestOwnCIParses(t *testing.T) {
 	t.Logf("%d jobs, triggered by %v", len(w.Jobs), triggers)
 }
 
-// TestOwnCIIsClean runs every rule against the file that actually runs, and requires no findings at all.
+// TestOwnCIIsClean runs every rule against the files that actually run, and requires no findings at all.
 //
 // The TestOwnCI* tests below each check one hand-picked rule, and for a while that was all there was. ci.yml
 // failed the `timeout` rule on every one of its eleven jobs, the README said this module's tests would catch
 // exactly that, and nothing did, because no test asked for the whole list to be empty. A checker that its own
 // repository fails is advice rather than a check.
+//
+// Every workflow, not only ci.yml: a second file added later is exactly the one nobody thinks to point a test at.
 func TestOwnCIIsClean(t *testing.T) {
-	for _, f := range Check(ownCI(t)) {
-		t.Errorf("%v", f)
+	files, err := filepath.Glob(filepath.Join(repoRoot(t), ".github", "workflows", "*.yml"))
+	require.NoError(t, err)
+	require.NotEmpty(t, files)
+
+	for _, file := range files {
+		w, err := Parse(file)
+		require.NoError(t, err, file)
+
+		for _, f := range Check(w) {
+			t.Errorf("%s: %v", filepath.Base(file), f)
+		}
 	}
 }
 

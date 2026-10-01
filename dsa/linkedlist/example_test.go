@@ -11,7 +11,7 @@ import (
 // change the behaviour and the example fails.
 //
 // They appear in `go doc` and on pkg.go.dev, which is why every package in this
-// module has them. The Python repo's docstrings cannot be checked this way.
+// module has them.
 
 func ExampleLinkedList() {
 	var l linkedlist.LinkedList[int]

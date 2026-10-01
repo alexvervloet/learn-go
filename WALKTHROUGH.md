@@ -126,9 +126,9 @@ rather than being emptied.
 |---|---|
 | 1, 2, 3 | `backend-concepts`: caching, ratelimit, redistest |
 | 4, 5 | `jobs-concepts`: worker, jobtest |
-| 6, 7 | `url-shortener`: api, cache |
+| 6, 7, 10 | `url-shortener`: api, cache, ratelimit |
 | 8, 9 | `bookmark-manager`: api, ratelimit |
-| 10 to 15 | a package not in the table, by hash |
+| 11 to 15 | a package not in the table, by hash |
 
 Three files bound 5433 until the day this walkthrough was written. Checking is one line, which prints nothing
 when there's no collision. It skips commented-out services and catches five-digit ports like Kafka's 19092, which

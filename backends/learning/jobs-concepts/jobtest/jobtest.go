@@ -60,8 +60,9 @@ var (
 //	1-3   backend-concepts   caching, ratelimit, redistest
 //	4-5   jobs-concepts      worker, jobtest
 //	6-7   url-shortener      api, cache
+//	10    url-shortener      ratelimit
 //	8-9   bookmark-manager   api, ratelimit
-//	10-15 anything unlisted, by hash
+//	11-15 anything unlisted, by hash
 //
 // `make test` runs every package of every module at once against the same default Redis, so two binaries
 // sharing a database flush each other's keys mid-test. The first version hashed the binary name into 15
@@ -78,7 +79,7 @@ func database() int {
 	h := fnv.New32a()
 	_, _ = h.Write([]byte("jobs-concepts-" + base))
 
-	return int(h.Sum32()%6) + 10
+	return int(h.Sum32()%5) + 11
 }
 
 // databases is this module's share of the table above.

@@ -36,9 +36,6 @@ type LinkedList[T any] struct {
 // counted, so it is O(1).
 func (l *LinkedList[T]) Len() int { return l.size }
 
-// IsEmpty reports whether the list has no elements.
-func (l *LinkedList[T]) IsEmpty() bool { return l.size == 0 }
-
 // AddToHead inserts v at the front, in O(1).
 func (l *LinkedList[T]) AddToHead(v T) {
 	n := &node[T]{value: v, next: l.head}

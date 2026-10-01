@@ -58,7 +58,7 @@ func IsBalanced(s string) bool {
 	}
 
 	// Anything left open is unbalanced.
-	return open.IsEmpty()
+	return open.Len() == 0
 }
 
 // LongestBalancedPrefix returns the length of the longest prefix of s that is
@@ -92,7 +92,7 @@ func LongestBalancedPrefix(s string) int {
 		// Everything up to and including this rune is balanced, provided
 		// nothing is still open. RuneLen rather than len(string(c)), which
 		// would allocate a string per closer just to measure it.
-		if open.IsEmpty() {
+		if open.Len() == 0 {
 			longest = i + utf8.RuneLen(c)
 		}
 	}

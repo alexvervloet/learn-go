@@ -8,7 +8,7 @@ import (
 func TestZeroValueIsUsable(t *testing.T) {
 	var s Stack[int]
 
-	if !s.IsEmpty() {
+	if s.Len() != 0 {
 		t.Error("a fresh stack should be empty")
 	}
 	if _, ok := s.Pop(); ok {
@@ -41,7 +41,7 @@ func TestPushPopIsLIFO(t *testing.T) {
 		}
 	}
 
-	if !s.IsEmpty() {
+	if s.Len() != 0 {
 		t.Errorf("Len = %d after draining, want 0", s.Len())
 	}
 }

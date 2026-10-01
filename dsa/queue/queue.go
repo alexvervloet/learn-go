@@ -38,9 +38,6 @@ func New[T any](capacity int) *Queue[T] {
 // Len reports the number of elements.
 func (q *Queue[T]) Len() int { return q.count }
 
-// IsEmpty reports whether the queue has no elements.
-func (q *Queue[T]) IsEmpty() bool { return q.count == 0 }
-
 // Push adds v to the back.
 func (q *Queue[T]) Push(v T) {
 	if q.count == len(q.items) {

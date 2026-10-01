@@ -10,11 +10,8 @@ import (
 func TestZeroValueIsUsable(t *testing.T) {
 	var l LinkedList[int]
 
-	if !l.IsEmpty() {
-		t.Error("a fresh list should be empty")
-	}
 	if l.Len() != 0 {
-		t.Errorf("Len = %d, want 0", l.Len())
+		t.Errorf("Len = %d, want 0 for a fresh list", l.Len())
 	}
 
 	l.AddToTail(1)
@@ -96,7 +93,7 @@ func TestRemoveFromHead(t *testing.T) {
 		}
 	}
 
-	if !l.IsEmpty() {
+	if l.Len() != 0 {
 		t.Errorf("list should be empty, Len = %d", l.Len())
 	}
 
@@ -122,7 +119,7 @@ func TestRemoveFromTail(t *testing.T) {
 		}
 	}
 
-	if !l.IsEmpty() {
+	if l.Len() != 0 {
 		t.Errorf("list should be empty, Len = %d", l.Len())
 	}
 	if _, ok := l.RemoveFromTail(); ok {

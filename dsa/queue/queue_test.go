@@ -9,7 +9,7 @@ import (
 func TestZeroValueIsUsable(t *testing.T) {
 	var q Queue[int] // no New, no make
 
-	if !q.IsEmpty() {
+	if q.Len() != 0 {
 		t.Error("zero value should be empty")
 	}
 	if _, ok := q.Pop(); ok {

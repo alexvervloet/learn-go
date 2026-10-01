@@ -28,9 +28,6 @@ func New[T any](capacity int) *Stack[T] {
 // Len reports the number of elements.
 func (s *Stack[T]) Len() int { return len(s.items) }
 
-// IsEmpty reports whether the stack has no elements.
-func (s *Stack[T]) IsEmpty() bool { return len(s.items) == 0 }
-
 // Push adds v to the top.
 func (s *Stack[T]) Push(v T) { s.items = append(s.items, v) }
 

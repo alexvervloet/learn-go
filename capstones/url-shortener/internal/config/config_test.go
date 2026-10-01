@@ -17,7 +17,8 @@ import (
 func set(t *testing.T, kv map[string]string) {
 	t.Helper()
 
-	for _, key := range []string{"ADDR", "DATABASE_URL", "REDIS_ADDR", "JWT_SECRET", "TOKEN_TTL", "CACHE_TTL", "BASE_URL"} {
+	for _, key := range []string{"ADDR", "DATABASE_URL", "REDIS_ADDR", "JWT_SECRET", "TOKEN_TTL", "CACHE_TTL", "BASE_URL",
+		"LOGIN_LIMIT", "LOGIN_WINDOW", "ACCOUNT_LIMIT", "ACCOUNT_WINDOW"} {
 		t.Setenv(key, "")
 	}
 
@@ -77,6 +78,20 @@ func TestDefaultsApplyWhereTheyAreSafe(t *testing.T) {
 	require.Equal(t, "http://localhost:8080", cfg.BaseURL)
 	require.Equal(t, time.Hour, cfg.TokenTTL)
 	require.Equal(t, 5*time.Minute, cfg.CacheTTL)
+	require.Equal(t, 120, cfg.LoginLimit)
+	require.Equal(t, time.Minute, cfg.LoginWindow)
+	require.Equal(t, 10, cfg.AccountLimit)
+	require.Equal(t, 15*time.Minute, cfg.AccountWindow)
+}
+
+// TestANonPositiveLimitIsRefused rather than meaning "no limit" or falling back.
+func TestANonPositiveLimitIsRefused(t *testing.T) {
+	for _, raw := range []string{"0", "-1", "lots"} {
+		set(t, map[string]string{"DATABASE_URL": "postgres:///db", "JWT_SECRET": goodSecret, "ACCOUNT_LIMIT": raw})
+
+		_, err := config.Load()
+		require.ErrorContains(t, err, "ACCOUNT_LIMIT", "ACCOUNT_LIMIT=%q", raw)
+	}
 }
 
 // TestDurationsAcceptBothForms is the compose-file-from-somewhere-else case.

@@ -36,6 +36,17 @@ type Config struct {
 	TokenTTL time.Duration
 	CacheTTL time.Duration
 
+	// LoginLimit and LoginWindow cap register and login as a whole. Every user shares this bucket, so it is
+	// sized to what bcrypt can afford, not to one person: 120 a minute is two hashes a second, about half a
+	// core at auth.Cost on the laptop this was measured on.
+	LoginLimit  int
+	LoginWindow time.Duration
+
+	// AccountLimit and AccountWindow cap attempts on one email, which is what stops password guessing against
+	// an account without locking anyone else out.
+	AccountLimit  int
+	AccountWindow time.Duration
+
 	// BaseURL is what a short link looks like to the outside world. It cannot be derived from the request,
 	// because behind a proxy the request's Host is whatever the proxy sends and the scheme is http even when
 	// the client used https.
@@ -84,6 +95,22 @@ func Load() (*Config, error) {
 		problems = append(problems, err.Error())
 	}
 
+	if cfg.LoginLimit, err = intOr("LOGIN_LIMIT", 120); err != nil {
+		problems = append(problems, err.Error())
+	}
+
+	if cfg.LoginWindow, err = durationOr("LOGIN_WINDOW", time.Minute); err != nil {
+		problems = append(problems, err.Error())
+	}
+
+	if cfg.AccountLimit, err = intOr("ACCOUNT_LIMIT", 10); err != nil {
+		problems = append(problems, err.Error())
+	}
+
+	if cfg.AccountWindow, err = durationOr("ACCOUNT_WINDOW", 15*time.Minute); err != nil {
+		problems = append(problems, err.Error())
+	}
+
 	if len(problems) > 0 {
 		return nil, fmt.Errorf("%w: %s", ErrMissing, strings.Join(problems, ", "))
 	}
@@ -129,4 +156,20 @@ func durationOr(key string, fallback time.Duration) (time.Duration, error) {
 	}
 
 	return d, nil
+}
+
+// intOr parses a positive whole number. Unset is the fallback; anything else that is not a positive number is a
+// problem reported at startup, not a silent default.
+func intOr(key string, fallback int) (int, error) {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return fallback, nil
+	}
+
+	n, err := strconv.Atoi(raw)
+	if err != nil || n <= 0 {
+		return 0, fmt.Errorf("%s=%q must be a positive number", key, raw)
+	}
+
+	return n, nil
 }

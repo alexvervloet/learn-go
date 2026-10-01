@@ -197,7 +197,7 @@ func (l *Limiter) Allow(ctx context.Context, key string) (Decision, error) {
 	}, nil
 }
 
-// Reset clears a key, which is what a successful login does to its own failure counter.
+// Reset clears a key, which is what a successful login does to the per-account bucket.
 func (l *Limiter) Reset(ctx context.Context, key string) error {
 	return l.client.Del(ctx, l.prefix+":"+key).Err()
 }

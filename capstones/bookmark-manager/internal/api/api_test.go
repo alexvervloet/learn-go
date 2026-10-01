@@ -328,6 +328,33 @@ func TestOneAccountsLimitDoesNotLockOutAnother(t *testing.T) {
 	require.Equal(t, http.StatusOK, other.Status, "another account is not affected")
 }
 
+// TestASuccessfulLoginClearsTheAccountsBucket is what the bucket is for: counting guesses. Two typos and a
+// success leave the account with its full budget, not one attempt from a lockout.
+func TestASuccessfulLoginClearsTheAccountsBucket(t *testing.T) {
+	h := apitest.New(t, apitest.HarnessOptions{AccountLimit: 3, AccountWindow: time.Minute})
+
+	h.Register(t, "alex@example.com", goodPassword)
+
+	attempt := func(password string) int {
+		return h.Do(t, http.MethodPost, "/api/v1/login", "", map[string]string{
+			"email": "alex@example.com", "password": password,
+		}).Status
+	}
+
+	// Registration and one typo use two of three; the success uses the third and then clears the bucket.
+	require.Equal(t, http.StatusUnauthorized, attempt("not-the-password"))
+	require.Equal(t, http.StatusOK, attempt(goodPassword))
+
+	// A fresh budget of three, which there would not be if the bucket had kept counting: without the reset the
+	// next attempt is the fourth and is refused.
+	require.Equal(t, http.StatusUnauthorized, attempt("not-the-password"))
+	require.Equal(t, http.StatusUnauthorized, attempt("not-the-password"))
+	require.Equal(t, http.StatusUnauthorized, attempt("not-the-password"))
+
+	// And guesses still run out.
+	require.Equal(t, http.StatusTooManyRequests, attempt(goodPassword), "three wrong guesses fill the bucket")
+}
+
 // TestRateLimitHeadersAppearOnSuccessToo is what lets a client pace itself.
 func TestRateLimitHeadersAppearOnSuccessToo(t *testing.T) {
 	h := apitest.New(t, apitest.HarnessOptions{LoginLimit: 10, LoginWindow: time.Minute})

@@ -308,7 +308,7 @@ func (s *Server) limitAccount(w http.ResponseWriter, r *http.Request, email stri
 		return true
 	}
 
-	decision, err := s.accountLimiter.Allow(r.Context(), "account:"+strings.ToLower(email))
+	decision, err := s.accountLimiter.Allow(r.Context(), accountKey(email))
 	if err != nil {
 		s.limiterDown(w, r, err)
 
@@ -323,6 +323,11 @@ func (s *Server) limitAccount(w http.ResponseWriter, r *http.Request, email stri
 	}
 
 	return true
+}
+
+// accountKey is the per-account bucket's key. Lower-cased, so VICTIM@example.com is not a fresh budget.
+func accountKey(email string) string {
+	return "account:" + strings.ToLower(email)
 }
 
 // setRateHeaders writes the draft RFC headers. RateLimit-Reset is a number of SECONDS from now rather than a
@@ -479,6 +484,16 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		s.problem(w, r, http.StatusUnauthorized, TypeUnauthorized, "Unauthorized", "Email or password is wrong.")
 
 		return
+	}
+
+	// A successful login clears the account's bucket. The bucket counts guesses, and the person who just
+	// proved they know the password is not guessing: without this, two typos followed by a success leave them
+	// two attempts closer to a lockout, and a script that logs in on a schedule locks itself out. A failure to
+	// clear is logged and not fatal, because the login itself succeeded.
+	if s.accountLimiter != nil {
+		if err := s.accountLimiter.Reset(r.Context(), accountKey(email)); err != nil {
+			s.log.WarnContext(r.Context(), "reset account rate limit", "error", err)
+		}
 	}
 
 	s.issuePair(w, r, user, "", http.StatusOK)

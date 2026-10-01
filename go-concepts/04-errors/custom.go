@@ -129,9 +129,14 @@ func fieldFromError(err error) (field string, ok bool) {
 // retryDelayFrom digs a RetryableError out of a chain and reads its delay.
 // Returns 0 and false when the error is not retryable, which is the signal to
 // give up rather than loop.
+//
+// errors.AsType (Go 1.26) here, where fieldFromError above uses errors.As, so
+// both are on the page. AsType takes the type as a type parameter and returns the
+// match: no target variable declared first, no pointer to a pointer to get wrong,
+// and a wrong type is a compile error instead of a panic at run time. errors.As
+// is still everywhere in existing code, so read both; write AsType.
 func retryDelayFrom(err error) (time.Duration, bool) {
-	var rerr *RetryableError
-	if errors.As(err, &rerr) {
+	if rerr, ok := errors.AsType[*RetryableError](err); ok {
 		return rerr.After, true
 	}
 	return 0, false

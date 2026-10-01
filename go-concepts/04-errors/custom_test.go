@@ -176,3 +176,21 @@ func TestRetryableErrorMessage(t *testing.T) {
 		t.Error("Unwrap should reach ErrConflict")
 	}
 }
+
+// TestAsTypeAgreesWithAs is the two spellings on one chain: the same error found, and the same miss.
+func TestAsTypeAgreesWithAs(t *testing.T) {
+	chain := deeplyWrapped()
+
+	var viaAs *ValidationError
+	foundAs := errors.As(chain, &viaAs)
+
+	viaAsType, foundAsType := errors.AsType[*ValidationError](chain)
+
+	if !foundAs || !foundAsType || viaAs != viaAsType {
+		t.Fatalf("As found %v (%v), AsType found %v (%v); want the same error both ways", viaAs, foundAs, viaAsType, foundAsType)
+	}
+
+	if _, ok := errors.AsType[*RetryableError](errors.New("plain")); ok {
+		t.Error("AsType matched a type that is not in the chain")
+	}
+}

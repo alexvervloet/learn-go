@@ -2,10 +2,6 @@
 
 Ten packages, 14,433 lines, and every number in this file was measured on the machine that wrote it.
 
-The Python mirror is `backends/learning/backend-concepts`, which covers the same ground with FastAPI, SlowAPI,
-Redis and confluent-kafka. Two of its sub-modules have no Go equivalent and one Go package covers two of its
-folders, which is set out under [what did not translate](#what-did-not-translate).
-
 ## Running it
 
 ```sh
@@ -280,20 +276,17 @@ The two hundred or so lines of `pgtest` duplicate `dbtest` deliberately. Importi
 one, which works inside the workspace and breaks the moment someone clones one directory: a module path under
 github.com needs a tag, and this repo does not tag sub-modules.
 
-## What did not translate
+## Where things are, and are not
 
-**`kafka-demo` and `celery-concepts` became one package.** `messaging` covers the Kafka half. The task-queue
-half belongs with asynq in the `jobs-concepts` module, because Go's answer to Celery is a job queue library and
-not a Kafka consumer, and putting both here would blur the distinction the Python repo makes clearly.
+**Messaging is Kafka; jobs are elsewhere.** `messaging` is a log of events that several consumers read. A task
+queue, where one worker takes each job, is a different tool, and it lives in `jobs-concepts` with asynq.
 
-**`api-testing` shrank.** Most of what the Python version covers (fixtures, parametrised tests, dependency
-overrides) is in `testing-concepts` and `http-tutorial` here. What was left is the layer above: testing a whole
-service, testing what it SENDS through a fake `RoundTripper`, and writing assertions that survive the code
-changing. That is `apitesting`.
+**`apitesting` is the layer above `testing-concepts`.** Testing a whole service, testing what it SENDS through
+a fake `RoundTripper`, and writing assertions that survive the code changing.
 
-**`observability` grew.** The Python version is structured logging, metrics and tracing with three libraries.
-Here it is slog and Prometheus with the trace context written out by hand, which is more code and less
-dependency, and it makes the mechanism visible rather than configured.
+**`observability` writes the trace context by hand.** slog and Prometheus, with W3C traceparent parsed and
+propagated in plain code, so the mechanism is visible rather than configured. A real service would use the
+OpenTelemetry SDK, which this repo does not cover yet.
 
 ## Things worth stealing from here
 

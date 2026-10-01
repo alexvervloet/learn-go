@@ -246,3 +246,33 @@ func TestStringNeedsAPointer(t *testing.T) {
 		t.Error("expected fmt.Sprint(q) to miss the String method and print fields")
 	}
 }
+
+// TestAllWalksFrontToBackAndStopsOnBreak, including across the wrap of the ring buffer.
+func TestAllWalksFrontToBackAndStopsOnBreak(t *testing.T) {
+	q := New[int](4)
+	for _, v := range []int{1, 2, 3, 4} {
+		q.Push(v)
+	}
+
+	// Two out, two in: the live elements now wrap past the end of the backing array.
+	q.Pop()
+	q.Pop()
+	q.Push(5)
+	q.Push(6)
+
+	if got := slices.Collect(q.All()); !slices.Equal(got, []int{3, 4, 5, 6}) {
+		t.Errorf("All = %v, want [3 4 5 6]", got)
+	}
+
+	var seen []int
+	for v := range q.All() {
+		seen = append(seen, v)
+		if len(seen) == 2 {
+			break
+		}
+	}
+
+	if !slices.Equal(seen, []int{3, 4}) || q.Len() != 4 {
+		t.Errorf("break: saw %v and Len is %d; want [3 4] and 4", seen, q.Len())
+	}
+}

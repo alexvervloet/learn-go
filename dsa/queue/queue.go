@@ -16,6 +16,7 @@ package queue
 
 import (
 	"fmt"
+	"iter"
 	"strings"
 )
 
@@ -94,6 +95,19 @@ func (q *Queue[T]) Peek() (T, bool) {
 		return zero, false
 	}
 	return q.items[q.head], true
+}
+
+// All iterates front to back, the order Pop would return them, without removing
+// anything. iter.Seq rather than a slice, so finding one element copies nothing,
+// and `break` stops the walk.
+func (q *Queue[T]) All() iter.Seq[T] {
+	return func(yield func(T) bool) {
+		for i := range q.count {
+			if !yield(q.items[(q.head+i)%len(q.items)]) {
+				return
+			}
+		}
+	}
 }
 
 // Slice returns the elements front to back, as a copy.

@@ -110,6 +110,7 @@ its pointer.
 | `Pop()` | Leave the front | O(1) |
 | `Peek()` | Look at the front | O(1) |
 | `Len()` | Element count | O(1) |
+| `All()` | An iterator, front to back, removing nothing | O(n) |
 | `RemoveFunc(match)` | Remove the first match, preserving order | O(n) |
 
 ## Matchmaking

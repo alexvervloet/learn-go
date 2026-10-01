@@ -226,8 +226,7 @@ func (r *recorder) Status() int {
 // Logger logs one line per request, with method, path, status, size and duration.
 //
 // slog rather than log: it is in the standard library as of Go 1.21, it does structured
-// output, and a log line with fields is what anything downstream can actually query. The
-// Python version reaches for structlog to get here.
+// output, and a log line with fields is what anything downstream can actually query.
 func Logger(log *slog.Logger) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

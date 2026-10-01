@@ -53,9 +53,6 @@ jobs:
           cache-dependency-path: |
             **/go.sum
             go.work.sum
-          CACHEPATH_DONE: |
-            **/go.sum
-            go.work.sum
 
       # gofmt is not a style preference in Go, it is the format. There is one
       # correct output per file, so this is a hard failure rather than advice.

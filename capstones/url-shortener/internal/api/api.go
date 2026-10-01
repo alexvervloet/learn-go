@@ -340,7 +340,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.writeJSON(w, r, http.StatusOK, map[string]string{"status": "ok"})
+	s.writeJSON(w, r, http.StatusOK, healthResponse{Status: "ok"})
 }
 
 type credentials struct {
@@ -470,6 +470,17 @@ type createURLRequest struct {
 	Target    string     `json:"target"`
 	Slug      string     `json:"slug,omitempty"`
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+}
+
+// listResponse is a page of URLs. A struct rather than a map[string]any, so the shape of the response is a
+// type the compiler checks and a reader can find.
+type listResponse struct {
+	Items []urlResponse `json:"items"`
+	Next  string        `json:"next,omitempty"`
+}
+
+type healthResponse struct {
+	Status string `json:"status"`
 }
 
 type urlResponse struct {
@@ -642,13 +653,13 @@ func (s *Server) handleListURLs(w http.ResponseWriter, r *http.Request) {
 		items = append(items, s.toResponse(&urls[i]))
 	}
 
-	resp := map[string]any{"items": items}
+	resp := listResponse{Items: items}
 
 	// A cursor only when a next page might exist. Returning one for a short page makes a client fetch an
 	// empty page to find out it is done.
 	if len(urls) == limit {
 		last := urls[len(urls)-1]
-		resp["next"] = formatCursor(last.CreatedAt, last.ID)
+		resp.Next = formatCursor(last.CreatedAt, last.ID)
 	}
 
 	s.writeJSON(w, r, http.StatusOK, resp)

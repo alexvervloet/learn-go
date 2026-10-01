@@ -2,10 +2,8 @@
 
 > 📚 [Repository root](../README.md) · **Start here**
 
-The part of this repo with no Python counterpart. Everything else mirrors
-[learning-python-backends](https://github.com/alexvervloet/learning-python-backends)
-module for module; this folder exists because the language underneath is
-different in ways that do not survive translation.
+The language itself, before any backend work: the parts of Go that differ from
+other languages in ways that do not survive translation.
 
 If you arrive from Python knowing what a decorator, a context manager and an
 `async def` are, the useful thing to know is which of those intuitions transfer:
@@ -57,8 +55,7 @@ and their tests only check that they exist.
 ## How these are laid out
 
 Go allows one package per directory, so a lesson cannot be a folder of
-standalone scripts the way the Python repo's numbered files are. Each lesson is
-one `package main` split across topic files:
+standalone scripts. Each lesson is one `package main` split across topic files:
 
 ```
 04-errors/

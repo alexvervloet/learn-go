@@ -67,16 +67,19 @@ import (
 //  2. RequestID     before logging, so the line has an ID
 //  3. Logger        outside Recovery, so a panicking request still gets a request line
 //  4. Recovery      outside the handler
-//  5. CleanPath     before routing, since it changes the path the router sees
-//  6. SecureHeaders anywhere before the handler writes
-//  7. Compress      innermost of the response-touching ones, so it wraps the smallest set
-//  8. Timeout       innermost, so it bounds only the handler
+//  5. CrossOrigin   after logging, so a refused cross-site POST is still a logged line
+//     with an ID, and before anything that does work for it
+//  6. CleanPath     before routing, since it changes the path the router sees
+//  7. SecureHeaders anywhere before the handler writes
+//  8. Compress      innermost of the response-touching ones, so it wraps the smallest set
+//  9. Timeout       innermost, so it bounds only the handler
 func Production(log *slog.Logger, trustProxyHeaders bool) Middleware {
 	return Chain(
 		RealIP(trustProxyHeaders),
 		RequestID,
 		Logger(log),
 		Recovery(log),
+		http.NewCrossOriginProtection().Handler, // CrossOrigin with no trusted origins, which cannot fail
 		CleanPath,
 		SecureHeaders,
 		chimw.Compress(5),

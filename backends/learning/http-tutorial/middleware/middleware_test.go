@@ -943,3 +943,19 @@ func TestCrossOriginRefusesCrossSiteWrites(t *testing.T) {
 		t.Error("a malformed trusted origin should be refused at construction")
 	}
 }
+
+// TestProductionRefusesCrossSiteWrites is the chain, not the middleware: the one a real service runs has it.
+func TestProductionRefusesCrossSiteWrites(t *testing.T) {
+	ok := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+	h := Production(slog.New(slog.NewTextHandler(io.Discard, nil)), false)(ok)
+
+	r := httptest.NewRequest(http.MethodPost, "http://api.example/things", nil)
+	r.Header.Set("Sec-Fetch-Site", "cross-site")
+
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("a cross-site POST through Production got %d, want 403", w.Code)
+	}
+}

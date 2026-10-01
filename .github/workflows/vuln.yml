@@ -1,0 +1,38 @@
+name: Vulnerabilities
+
+# govulncheck on every push to main, every pull request, and weekly. The schedule is the reason this is its own
+# workflow: new advisories are published against code that has not changed, so a scan that only runs on a push
+# finds them at the next unrelated commit. A weekly trigger on ci.yml would rerun every test for nothing.
+#
+# The job fails on any vulnerability the code can reach, except those in .govulncheck-allow, each of which says
+# why and when it comes out. `make vuln` runs the same script locally.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "23 6 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  govulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.27"
+          cache: true
+          cache-dependency-path: |
+            **/go.sum
+            go.work.sum
+
+      # jq ships on the ubuntu runner image; the script reads govulncheck's JSON with it.
+      - name: govulncheck
+        run: make vuln

@@ -465,9 +465,8 @@ func (s *slowCheckout) Run(ctx context.Context, orderID string) (Result, error) 
 // goroutine in the bubble is blocked. So a test of exponential backoff with 1s, 2s and 4s waits
 // runs instantly and deterministically.
 //
-// The alternative is what this repo's Python mirror does: make the backoff configurable, set it
-// to a millisecond in tests, and accept that the test is timing-dependent and occasionally flaky
-// on a loaded CI runner. Seven seconds of sleep becomes microseconds here, with no
+// The usual alternative is to make the backoff configurable, set it to a millisecond in tests,
+// and accept that the test is timing-dependent and occasionally flaky on a loaded CI runner. Seven seconds of sleep becomes microseconds here, with no
 // millisecond-tuning and no flake.
 func TestRetryWithSynctest(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {

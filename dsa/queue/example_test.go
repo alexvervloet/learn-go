@@ -89,10 +89,10 @@ func ExampleComparable() {
 func ExampleMatchAll() {
 	q := queue.New[queue.Player](4)
 	for _, p := range []queue.Player{
-		{Name: "Ada", Rank: "gold"},
-		{Name: "Bo", Rank: "bronze"},
-		{Name: "Cy", Rank: "gold"},
-		{Name: "Di", Rank: "silver"},
+		{Name: "Ada", Rank: queue.Gold},
+		{Name: "Bo", Rank: queue.Bronze},
+		{Name: "Cy", Rank: queue.Gold},
+		{Name: "Di", Rank: queue.Silver},
 	} {
 		q.Push(p)
 	}

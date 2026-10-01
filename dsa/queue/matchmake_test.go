@@ -24,9 +24,9 @@ func names(ps []Player) []string {
 
 func TestMatchmakeSkipsPastAnIncompatiblePlayer(t *testing.T) {
 	q := players(t,
-		Player{Name: "Ada", Rank: "gold"},
-		Player{Name: "Bo", Rank: "bronze"},
-		Player{Name: "Cy", Rank: "gold"},
+		Player{Name: "Ada", Rank: Gold},
+		Player{Name: "Bo", Rank: Bronze},
+		Player{Name: "Cy", Rank: Gold},
 	)
 
 	match, ok := Matchmake(q)
@@ -46,9 +46,9 @@ func TestMatchmakeSkipsPastAnIncompatiblePlayer(t *testing.T) {
 // would never reach the front again.
 func TestUnmatchedFrontKeepsItsPlace(t *testing.T) {
 	q := players(t,
-		Player{Name: "Ada", Rank: "gold"},
-		Player{Name: "Bo", Rank: "bronze"},
-		Player{Name: "Cy", Rank: "silver"},
+		Player{Name: "Ada", Rank: Gold},
+		Player{Name: "Bo", Rank: Bronze},
+		Player{Name: "Cy", Rank: Silver},
 	)
 
 	if _, ok := Matchmake(q); ok {
@@ -67,7 +67,7 @@ func TestMatchmakeOnAnEmptyQueue(t *testing.T) {
 }
 
 func TestMatchmakeWithOnePlayer(t *testing.T) {
-	q := players(t, Player{Name: "Ada", Rank: "gold"})
+	q := players(t, Player{Name: "Ada", Rank: Gold})
 
 	if _, ok := Matchmake(q); ok {
 		t.Error("one player cannot be matched")
@@ -87,16 +87,16 @@ func TestMatchAll(t *testing.T) {
 		{
 			name: "everyone pairs",
 			queue: []Player{
-				{Name: "Ada", Rank: "gold"}, {Name: "Bo", Rank: "gold"},
-				{Name: "Cy", Rank: "bronze"}, {Name: "Di", Rank: "bronze"},
+				{Name: "Ada", Rank: Gold}, {Name: "Bo", Rank: Gold},
+				{Name: "Cy", Rank: Bronze}, {Name: "Di", Rank: Bronze},
 			},
 			wantMatches: []string{"Ada(gold) vs Bo(gold)", "Cy(bronze) vs Di(bronze)"},
 		},
 		{
 			name: "one left over",
 			queue: []Player{
-				{Name: "Ada", Rank: "gold"}, {Name: "Bo", Rank: "bronze"},
-				{Name: "Cy", Rank: "gold"},
+				{Name: "Ada", Rank: Gold}, {Name: "Bo", Rank: Bronze},
+				{Name: "Cy", Rank: Gold},
 			},
 			wantMatches: []string{"Ada(gold) vs Cy(gold)"},
 			wantWaiting: 1,
@@ -104,7 +104,7 @@ func TestMatchAll(t *testing.T) {
 		{
 			name: "nobody pairs",
 			queue: []Player{
-				{Name: "Ada", Rank: "gold"}, {Name: "Bo", Rank: "bronze"},
+				{Name: "Ada", Rank: Gold}, {Name: "Bo", Rank: Bronze},
 			},
 			wantWaiting: 2,
 		},
@@ -145,9 +145,9 @@ func TestMatchAll(t *testing.T) {
 // is why it is worth its own case.
 func TestMatchAllTerminates(t *testing.T) {
 	q := players(t,
-		Player{Name: "A", Rank: "gold"},
-		Player{Name: "B", Rank: "silver"},
-		Player{Name: "C", Rank: "bronze"},
+		Player{Name: "A", Rank: Gold},
+		Player{Name: "B", Rank: Silver},
+		Player{Name: "C", Rank: Bronze},
 	)
 
 	matches, waiting := MatchAll(q)
@@ -165,18 +165,18 @@ func TestMatchAllTerminates(t *testing.T) {
 // matched against the incompatible one and the compatible one was left waiting.
 func TestMatchmakeRemovesThePlayerItMatched(t *testing.T) {
 	q := New[Player](4)
-	q.Push(Player{Name: "Ana", Rank: "gold"})
-	q.Push(Player{Name: "Bo", Rank: "silver"})
-	q.Push(Player{Name: "Bo", Rank: "gold"})
+	q.Push(Player{Name: "Ana", Rank: Gold})
+	q.Push(Player{Name: "Bo", Rank: Silver})
+	q.Push(Player{Name: "Bo", Rank: Gold})
 
 	m, ok := Matchmake(q)
 	if !ok {
 		t.Fatal("no match made")
 	}
-	if m.B.Rank != "gold" {
+	if m.B.Rank != Gold {
 		t.Errorf("matched %v; the gold Bo was the compatible one", m)
 	}
-	if left := q.Slice(); len(left) != 1 || left[0].Rank != "silver" {
+	if left := q.Slice(); len(left) != 1 || left[0].Rank != Silver {
 		t.Errorf("left waiting: %v, want the silver Bo", left)
 	}
 }

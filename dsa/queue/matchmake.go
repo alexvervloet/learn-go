@@ -16,10 +16,38 @@ import (
 // the front with nobody compatible must wait while pairs are matched around
 // them, rather than blocking the whole queue.
 
+// Rank is a player's tier.
+//
+// A type rather than a string, so "Gold", "gold " and "golden" are compile errors at the call site instead of
+// three players nobody can ever match. It starts at 1 so that a Player with no rank set is visibly unranked,
+// not silently bronze.
+type Rank int
+
+// The tiers, lowest first.
+const (
+	Bronze Rank = iota + 1
+	Silver
+	Gold
+)
+
+// String renders a rank, so a Player prints as Ada(gold).
+func (r Rank) String() string {
+	switch r {
+	case Bronze:
+		return "bronze"
+	case Silver:
+		return "silver"
+	case Gold:
+		return "gold"
+	default:
+		return "unranked"
+	}
+}
+
 // Player is someone waiting for a match.
 type Player struct {
 	Name string
-	Rank string // "bronze", "silver", "gold"
+	Rank Rank
 }
 
 // String makes Player print readably.

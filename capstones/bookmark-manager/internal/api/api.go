@@ -386,7 +386,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.writeJSON(w, r, http.StatusOK, map[string]string{"status": "ok"})
+	s.writeJSON(w, r, http.StatusOK, healthResponse{Status: "ok"})
 }
 
 type credentials struct {
@@ -685,6 +685,29 @@ type bookmarkRequest struct {
 	Tags        []string `json:"tags,omitempty"`
 }
 
+// page is every list response: the items, and a cursor for the next page when there is one. A struct rather
+// than a map[string]any, so the shape of the response is a type the compiler checks and a reader can find,
+// and "items" is spelled once.
+type page[T any] struct {
+	Items []T    `json:"items"`
+	Next  string `json:"next,omitempty"`
+}
+
+type healthResponse struct {
+	Status string `json:"status"`
+}
+
+type categoryResponse struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
+type tagResponse struct {
+	ID    int64  `json:"id"`
+	Name  string `json:"name"`
+	Count int64  `json:"count"`
+}
+
 type bookmarkResponse struct {
 	ID          int64     `json:"id"`
 	URL         string    `json:"url"`
@@ -866,12 +889,7 @@ func (s *Server) writeList(w http.ResponseWriter, r *http.Request, bookmarks []s
 		items = append(items, toResponse(&bookmarks[i]))
 	}
 
-	body := map[string]any{"items": items}
-	if next != "" {
-		body["next"] = next
-	}
-
-	s.writeJSON(w, r, http.StatusOK, body)
+	s.writeJSON(w, r, http.StatusOK, page[bookmarkResponse]{Items: items, Next: next})
 }
 
 // encodeCursor makes a cursor opaque: base64url of "<unix microseconds>.<id>". Microseconds because that is
@@ -973,7 +991,10 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	s.writeJSON(w, r, http.StatusOK, map[string]any{"items": items, "query": query})
+	s.writeJSON(w, r, http.StatusOK, struct {
+		Items []hit  `json:"items"`
+		Query string `json:"query"`
+	}{Items: items, Query: query})
 }
 
 // ---------------------------------------------------------------------------
@@ -1015,7 +1036,7 @@ func (s *Server) handleCreateCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.writeJSON(w, r, http.StatusCreated, map[string]any{"id": category.ID, "name": category.Name})
+	s.writeJSON(w, r, http.StatusCreated, categoryResponse{ID: category.ID, Name: category.Name})
 }
 
 func (s *Server) handleListCategories(w http.ResponseWriter, r *http.Request) {
@@ -1031,12 +1052,12 @@ func (s *Server) handleListCategories(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	items := make([]map[string]any, 0, len(categories))
+	items := make([]categoryResponse, 0, len(categories))
 	for _, c := range categories {
-		items = append(items, map[string]any{"id": c.ID, "name": c.Name})
+		items = append(items, categoryResponse{ID: c.ID, Name: c.Name})
 	}
 
-	s.writeJSON(w, r, http.StatusOK, map[string]any{"items": items})
+	s.writeJSON(w, r, http.StatusOK, page[categoryResponse]{Items: items})
 }
 
 func (s *Server) handleDeleteCategory(w http.ResponseWriter, r *http.Request) {
@@ -1080,10 +1101,10 @@ func (s *Server) handleListTags(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	items := make([]map[string]any, 0, len(tags))
+	items := make([]tagResponse, 0, len(tags))
 	for _, t := range tags {
-		items = append(items, map[string]any{"id": t.ID, "name": t.Name, "count": t.Count})
+		items = append(items, tagResponse{ID: t.ID, Name: t.Name, Count: t.Count})
 	}
 
-	s.writeJSON(w, r, http.StatusOK, map[string]any{"items": items})
+	s.writeJSON(w, r, http.StatusOK, page[tagResponse]{Items: items})
 }

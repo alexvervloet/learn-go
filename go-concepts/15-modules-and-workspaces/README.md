@@ -8,9 +8,8 @@ How Go decides which version of which dependency you get, and how several
 modules in one repository work together.
 
 This repo is the example. It is a **workspace** of independent modules, one per
-area, which is the direct analogue of the Python repo's per-folder
-`requirements.txt`: someone working through the language lessons should not
-download pgx and Redis clients to do so.
+area, so that someone working through the language lessons does not download
+pgx and Redis clients to do so.
 
 ## `go.mod`
 

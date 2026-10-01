@@ -846,6 +846,8 @@ func TestRotationIsSafeDuringTraffic(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	i.Issuer, i.Audience = "learn-go", "api"
+
 	var wg sync.WaitGroup
 
 	for range 4 {
@@ -874,4 +876,37 @@ func TestRotationIsSafeDuringTraffic(t *testing.T) {
 	})
 
 	wg.Wait()
+}
+
+// TestAnUnconfiguredIssuerRefuses is the check that used to be skipped. With Issuer or Audience empty, a token
+// minted by another service sharing the key would verify here, and nothing would say so.
+func TestAnUnconfiguredIssuerRefuses(t *testing.T) {
+	configured, err := NewHS256(secret, "k1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	configured.Issuer, configured.Audience = "learn-go", "api"
+
+	token, err := configured.Mint("user-1", nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, missing := range []struct{ issuer, audience string }{{"", "api"}, {"learn-go", ""}, {"", ""}} {
+		i, err := NewHS256(secret, "k1")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		i.Issuer, i.Audience = missing.issuer, missing.audience
+
+		if _, err := i.Mint("user-1", nil, ""); !errors.Is(err, ErrUnconfigured) {
+			t.Errorf("Mint with %+v: got %v, want ErrUnconfigured", missing, err)
+		}
+
+		if _, err := i.Verify(token); !errors.Is(err, ErrUnconfigured) {
+			t.Errorf("Verify with %+v: got %v, want ErrUnconfigured", missing, err)
+		}
+	}
 }

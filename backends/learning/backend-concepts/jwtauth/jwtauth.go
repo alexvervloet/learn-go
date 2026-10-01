@@ -76,6 +76,9 @@ var (
 	ErrWrongAudience = errors.New("token was not issued for this audience")
 	ErrUnknownKey    = errors.New("unknown key id")
 	ErrForbidden     = errors.New("insufficient role")
+
+	// ErrUnconfigured is returned by Mint and Verify when Issuer or Audience is empty. See the fields.
+	ErrUnconfigured = errors.New("jwtauth: Issuer and Audience must both be set")
 )
 
 // Claims is what this service puts in a token.
@@ -139,10 +142,13 @@ type Issuer struct {
 	// activeKID names the key new tokens are signed with.
 	activeKID string
 
-	// Issuer and Audience go into minted tokens and are REQUIRED on verify, but only when set:
-	// leave one empty and that check is skipped entirely. The constructors leave both empty, so a
-	// service that shares a signing key with anything else must set them, or a token minted for
-	// another audience verifies here too.
+	// Issuer and Audience go into every minted token and are checked on every verify. Both are
+	// required: Mint and Verify return ErrUnconfigured while either is empty.
+	//
+	// The first version skipped a check whose field was empty, which made forgetting them silent. A
+	// service that shares a signing key with another (common with HS256, where the key is a shared
+	// secret) then accepted the other's tokens, and nothing failed. Requiring them costs one line per
+	// service and turns the mistake into an error at the first request.
 	Issuer   string
 	Audience string
 	TTL      time.Duration
@@ -289,8 +295,21 @@ func (i *Issuer) now() time.Time {
 	return i.Now()
 }
 
+// configured reports whether Issuer and Audience are both set.
+func (i *Issuer) configured() error {
+	if i.Issuer == "" || i.Audience == "" {
+		return ErrUnconfigured
+	}
+
+	return nil
+}
+
 // Mint issues a token.
 func (i *Issuer) Mint(subject string, roles []string, email string) (string, error) {
+	if err := i.configured(); err != nil {
+		return "", err
+	}
+
 	now := i.now()
 
 	claims := Claims{
@@ -312,9 +331,7 @@ func (i *Issuer) Mint(subject string, roles []string, email string) (string, err
 		Email: email,
 	}
 
-	if i.Audience != "" {
-		claims.Audience = jwt.ClaimStrings{i.Audience}
-	}
+	claims.Audience = jwt.ClaimStrings{i.Audience}
 
 	token := jwt.NewWithClaims(i.Method, claims)
 
@@ -352,17 +369,16 @@ func (i *Issuer) Mint(subject string, roles []string, email string) (string, err
 func (i *Issuer) Verify(token string) (Claims, error) {
 	var claims Claims
 
+	if err := i.configured(); err != nil {
+		return claims, err
+	}
+
 	opts := []jwt.ParserOption{
 		jwt.WithValidMethods([]string{i.Method.Alg()}),
 		jwt.WithExpirationRequired(),
 		jwt.WithTimeFunc(i.now),
-	}
-
-	if i.Issuer != "" {
-		opts = append(opts, jwt.WithIssuer(i.Issuer))
-	}
-	if i.Audience != "" {
-		opts = append(opts, jwt.WithAudience(i.Audience))
+		jwt.WithIssuer(i.Issuer),
+		jwt.WithAudience(i.Audience),
 	}
 
 	parsed, err := jwt.ParseWithClaims(token, &claims, i.keyFunc, opts...)

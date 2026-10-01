@@ -169,6 +169,23 @@ of code that is not yours in every code review.
 Most projects do not need it. The module proxy already provides availability,
 and `go.sum` already provides integrity.
 
+## The `tool` directive
+
+Before Go 1.24, a project pinned its tools (a linter, a generator) with a
+`tools.go` file behind a build tag that blank-imported each one. Go 1.24 made
+it a directive: `go get -tool golang.org/x/tools/cmd/stringer@v0.30.0` adds
+`tool golang.org/x/tools/cmd/stringer` to `go.mod`, and `go tool stringer`
+builds it at that version, checks it against `go.sum`, caches the build and
+runs it. Nobody installs anything but Go. `TestToolDirectiveRunsAPinnedTool`
+does it end to end, offline, with a local module.
+
+**This repository does not use it, on purpose.** A tool's requirements are
+ordinary requirements, and a workspace resolves every module's requirements
+together, so a golangci-lint tool directive in one module would raise shared
+dependencies for all eighteen lessons. The Makefile runs tools with
+`go run pkg@version` instead, which pins a version without touching any
+`go.mod`. In a single-module project, the directive is the better answer.
+
 ## What the files cover
 
 | File | What it teaches |
@@ -177,6 +194,7 @@ and `go.sum` already provides integrity.
 | `selection.go` | Minimal version selection, worked through, against the newest-wins alternative |
 | `workspace.go` | Reading this repo's own `go.work`, the `./...` trap, isolation |
 | `commands.go` | The commands worth knowing, and what each actually changes |
+| `tools.go` | The `tool` directive, run end to end, and why a workspace avoids it |
 | `main.go` | Runs every demo in order |
 | `*_test.go` | Tests, including MVS against a table of scenarios |
 

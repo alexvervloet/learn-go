@@ -3,8 +3,8 @@
 //
 // # There is no pydantic
 //
-// This is the biggest difference from the FastAPI version, and it is worth being clear about
-// what is lost and what is gained.
+// This is the biggest difference from a framework like FastAPI, and it is worth being clear
+// about what is lost and what is gained.
 //
 // FastAPI reads a function signature, derives a schema from the type annotations, validates the
 // request against it, coerces the types, and returns a 422 with a field-by-field error report
@@ -188,8 +188,8 @@ func StatusFor(err error) int {
 // fifteen lines of strconv and error checks, which is where this type earns itself.
 //
 // The design decision: errors ACCUMULATE rather than returning early. A client sending three
-// bad parameters should learn about all three, which is what FastAPI's 422 body does and what
-// a Go handler returning on the first error does not.
+// bad parameters should learn about all three, which a handler returning on the first error
+// cannot tell them.
 type Query struct {
 	values map[string][]string
 	errs   []string

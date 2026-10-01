@@ -3,9 +3,6 @@
 Four example Makefiles and a Go test suite that runs them, because a claim about make in a comment is either true
 of the make on your machine or it is not.
 
-The Python mirror is `backends/learning/makefile-concepts`. The traps are the same in both languages; the
-workspace problem at the end is Go's alone.
-
 ## Running it
 
 ```sh

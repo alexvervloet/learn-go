@@ -27,5 +27,8 @@ func main() {
 	section(6, "Writing your own Reader and Writer")
 	demoCustom()
 
+	section(7, "Untrusted paths: os.Root")
+	demoRoot()
+
 	fmt.Println("\nRun `go test ./13-io-composition` to see each claim verified.")
 }

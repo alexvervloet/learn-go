@@ -89,35 +89,3 @@ func (s *Stack[T]) String() string {
 	}
 	return "[" + strings.Join(parts, " ") + "] <- top"
 }
-
-// SearchAndRemove removes the topmost occurrence of v and returns it, reporting
-// whether it was found. O(n).
-//
-// This is NOT a stack operation. A structure you can reach into the middle of
-// is not a stack, and adding this method means callers can no longer rely on
-// LIFO ordering. It is here because the Python version has it, and it is worth
-// knowing that the compromise exists rather than pretending it does not.
-//
-// The search runs from the top down, so "topmost occurrence" means the one a
-// sequence of Pops would reach first.
-func (s *Stack[T]) SearchAndRemove(v T, equal func(a, b T) bool) (T, bool) {
-	for i := len(s.items) - 1; i >= 0; i-- {
-		if !equal(s.items[i], v) {
-			continue
-		}
-
-		found := s.items[i]
-
-		// Shift the elements above it down, then zero the vacated tail.
-		copy(s.items[i:], s.items[i+1:])
-
-		var zero T
-		s.items[len(s.items)-1] = zero
-		s.items = s.items[:len(s.items)-1]
-
-		return found, true
-	}
-
-	var zero T
-	return zero, false
-}

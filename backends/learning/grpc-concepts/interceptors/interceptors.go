@@ -30,6 +30,7 @@ package interceptors
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"runtime"
@@ -433,3 +434,10 @@ func stack() []byte {
 
 	return buf[:n]
 }
+
+// ErrNoStream was documented as returned by the stream interceptor when it could not open a stream. Nothing
+// ever returned it.
+//
+// Deprecated: nothing in this package returns it, so a check for it is always false. Kept so code that
+// refers to it compiles.
+var ErrNoStream = errors.New("no stream")

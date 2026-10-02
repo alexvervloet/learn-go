@@ -170,9 +170,10 @@ decoration.
 **A state the app really did issue is the harder case, and the first version got it wrong.** The attacker starts a
 login of their own, which gets them a genuine state, authorizes as themselves, and sends that callback URL to the
 victim. A state checked only against a server-side store is valid, so the victim's browser finishes the attacker's
-login and ends up in the attacker's account. State has to be bound to the browser that started the flow: `Start`
-sets it in a `__Host-` cookie with `SameSite=Lax`, and `Callback` requires the cookie and the query parameter to
-match before it touches the store. `Lax` and not `Strict`, because the provider's redirect back is a cross-site
+login and ends up in the attacker's account. State has to be bound to the browser that started the flow: `StartBound`
+sets it in a `__Host-` cookie with `SameSite=Lax`, and `CallbackBound` requires the cookie and the query parameter
+to match before it touches the store. The first version's `Start` and `Callback`, which check the store only, are
+still there so older callers compile, marked `Deprecated` because they leave this attack open. `Lax` and not `Strict`, because the provider's redirect back is a cross-site
 navigation and `Strict` withholds the cookie from exactly that request. `TestStateIsBoundToTheBrowser` carries
 out the attack.
 

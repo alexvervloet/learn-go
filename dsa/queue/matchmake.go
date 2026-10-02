@@ -18,31 +18,18 @@ import (
 
 // Rank is a player's tier.
 //
-// A type rather than a string, so "Gold", "gold " and "golden" are compile errors at the call site instead of
-// three players nobody can ever match. It starts at 1 so that a Player with no rank set is visibly unranked,
-// not silently bronze.
-type Rank int
+// An alias for string, so code written when Rank was a plain string still compiles. The named constants are
+// the part worth using: queue.Gold cannot be misspelt, where "Gold", "gold " and "golden" are three players
+// nobody can ever match. A defined type (type Rank string) would have caught a string VARIABLE, and would
+// have broken every caller that has one.
+type Rank = string
 
-// The tiers, lowest first.
+// The tiers.
 const (
-	Bronze Rank = iota + 1
-	Silver
-	Gold
+	Bronze Rank = "bronze"
+	Silver Rank = "silver"
+	Gold   Rank = "gold"
 )
-
-// String renders a rank, so a Player prints as Ada(gold).
-func (r Rank) String() string {
-	switch r {
-	case Bronze:
-		return "bronze"
-	case Silver:
-		return "silver"
-	case Gold:
-		return "gold"
-	default:
-		return "unranked"
-	}
-}
 
 // Player is someone waiting for a match.
 type Player struct {

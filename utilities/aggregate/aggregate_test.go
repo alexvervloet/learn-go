@@ -372,3 +372,9 @@ func TestFirstErrorDoesNotStartQueuedSourcesAfterAFailure(t *testing.T) {
 	require.ErrorContains(t, err, "down")
 	require.Zero(t, ran.Load(), "a source queued behind the failure ran anyway")
 }
+
+// TestNamesIsStable is for a log line that can be diffed.
+func TestNamesIsStable(t *testing.T) {
+	results := []Result{{Name: "c"}, {Name: "a"}, {Name: "b"}}
+	require.Equal(t, []string{"a", "b", "c"}, Names(results))
+}

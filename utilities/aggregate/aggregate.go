@@ -14,6 +14,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -224,4 +225,19 @@ func FirstError(ctx context.Context, sources []Source, opts Options) (map[string
 	}
 
 	return values, nil
+}
+
+// Names returns the sources' names, sorted, for a stable log line.
+//
+// Deprecated: nothing in this module uses it; slices.Sorted over the names does the same. Kept so code that
+// calls it compiles.
+func Names(results []Result) []string {
+	out := make([]string, 0, len(results))
+	for _, r := range results {
+		out = append(out, r.Name)
+	}
+
+	slices.Sort(out)
+
+	return out
 }

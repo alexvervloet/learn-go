@@ -73,9 +73,9 @@ func ExampleSubsetSumDP() {
 
 // Counting solutions is a different question from finding one, and in general it is
 // harder: counting is #P-complete, a class above NP.
-func ExampleSubsetSumCount() {
+func ExampleCountSubsetSums() {
 	count := func(numbers []int, target int) int {
-		n, err := pvsnp.SubsetSumCount(numbers, target)
+		n, err := pvsnp.CountSubsetSums(numbers, target)
 		if err != nil {
 			panic(err)
 		}

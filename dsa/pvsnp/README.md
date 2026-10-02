@@ -117,7 +117,8 @@ that a single `3` cannot reach `6`.
 
 ### Counting is a different question
 
-`SubsetSumCount` returns how many subsets work. Counting is not easier than finding,
+`CountSubsetSums` returns how many subsets work (`SubsetSumCount`, the first version's
+name, is kept as a deprecated wrapper that panics instead of returning an error). Counting is not easier than finding,
 and in general it is strictly harder: counting solutions is #P-complete, a class above
 NP. Here the same table does it, because sums compose additively. That is a property
 of this problem, not a general fact.

@@ -190,7 +190,7 @@ func TestSubsetSumBruteRefusesHugeInput(t *testing.T) {
 	}
 }
 
-func TestSubsetSumCount(t *testing.T) {
+func TestCountSubsetSums(t *testing.T) {
 	tests := []struct {
 		numbers []int
 		target  int
@@ -206,8 +206,8 @@ func TestSubsetSumCount(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		if got, err := SubsetSumCount(tt.numbers, tt.target); err != nil || got != tt.want {
-			t.Errorf("SubsetSumCount(%v, %d) = %d, want %d", tt.numbers, tt.target, got, tt.want)
+		if got, err := CountSubsetSums(tt.numbers, tt.target); err != nil || got != tt.want {
+			t.Errorf("CountSubsetSums(%v, %d) = %d, want %d", tt.numbers, tt.target, got, tt.want)
 		}
 	}
 }
@@ -239,8 +239,8 @@ func TestCountAgreesWithEnumeration(t *testing.T) {
 			}
 		}
 
-		if got, err := SubsetSumCount(numbers, target); err != nil || got != want {
-			t.Fatalf("SubsetSumCount(%v, %d) = %d, enumeration says %d", numbers, target, got, want)
+		if got, err := CountSubsetSums(numbers, target); err != nil || got != want {
+			t.Fatalf("CountSubsetSums(%v, %d) = %d, enumeration says %d", numbers, target, got, want)
 		}
 	}
 }
@@ -359,18 +359,34 @@ func TestIndicesOf(t *testing.T) {
 	}
 }
 
-// TestSubsetSumCountRejectsWhatItCannotCount: a negative number used to panic with index out of range, and a
+// TestCountSubsetSumsRejectsWhatItCannotCount: a negative number used to panic with index out of range, and a
 // count past MaxInt used to wrap.
-func TestSubsetSumCountRejectsWhatItCannotCount(t *testing.T) {
-	if _, err := SubsetSumCount([]int{3, -1, 2}, 4); err == nil {
+func TestCountSubsetSumsRejectsWhatItCannotCount(t *testing.T) {
+	if _, err := CountSubsetSums([]int{3, -1, 2}, 4); err == nil {
 		t.Error("a negative number was accepted")
 	}
 
 	// n zeros give 2^n subsets summing to 0: 62 fit in an int, 63 do not.
-	if got, err := SubsetSumCount(make([]int, 62), 0); err != nil || got != 1<<62 {
+	if got, err := CountSubsetSums(make([]int, 62), 0); err != nil || got != 1<<62 {
 		t.Errorf("62 zeros: %d, %v; want 2^62", got, err)
 	}
-	if _, err := SubsetSumCount(make([]int, 63), 0); !errors.Is(err, ErrOverflow) {
+	if _, err := CountSubsetSums(make([]int, 63), 0); !errors.Is(err, ErrOverflow) {
 		t.Errorf("63 zeros: err = %v, want ErrOverflow", err)
 	}
+}
+
+// TestSubsetSumCountStillWorks: the deprecated form gives the same counts, and panics where the
+// checked form returns an error.
+func TestSubsetSumCountStillWorks(t *testing.T) {
+	if got := SubsetSumCount([]int{1, 2, 3, 4, 5}, 5); got != 3 {
+		t.Errorf("SubsetSumCount = %d, want 3", got)
+	}
+
+	defer func() {
+		if recover() == nil {
+			t.Error("a negative number should panic, as it did before")
+		}
+	}()
+
+	SubsetSumCount([]int{3, -1}, 2)
 }

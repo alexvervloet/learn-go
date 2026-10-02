@@ -197,7 +197,7 @@ func SubsetSumDP(numbers []int, target int) ([]int, error) {
 // ErrOverflow means a count is too large for an int.
 var ErrOverflow = errors.New("pvsnp: count overflows int")
 
-// SubsetSumCount returns how many subsets sum to target.
+// CountSubsetSums returns how many subsets sum to target.
 //
 // Counting is not easier than finding, and for some problems it is strictly harder:
 // counting solutions is #P-complete, a class above NP. Here the same table does it,
@@ -207,13 +207,13 @@ var ErrOverflow = errors.New("pvsnp: count overflows int")
 // ways[s-v] index past the end of the table, which panicked, while SubsetSumDP returned an
 // error for the same input. And the count itself can outgrow an int: n zeros give 2^n
 // subsets that sum to 0, so 63 zeros wrapped silently to a negative count.
-func SubsetSumCount(numbers []int, target int) (int, error) {
+func CountSubsetSums(numbers []int, target int) (int, error) {
 	if target < 0 {
 		return 0, nil
 	}
 	for _, v := range numbers {
 		if v < 0 {
-			return 0, errors.New("pvsnp: SubsetSumCount requires non-negative numbers")
+			return 0, errors.New("pvsnp: CountSubsetSums requires non-negative numbers")
 		}
 	}
 
@@ -233,4 +233,19 @@ func SubsetSumCount(numbers []int, target int) (int, error) {
 	}
 
 	return ways[target], nil
+}
+
+// SubsetSumCount returns how many subsets sum to target.
+//
+// Deprecated: use CountSubsetSums, which returns an error instead of panicking. Kept so code
+// written against the first version compiles. It panics where CountSubsetSums returns an error:
+// on a negative number, as the first version did, and on a count too large for an int, where
+// the first version silently returned a wrapped, wrong count.
+func SubsetSumCount(numbers []int, target int) int {
+	n, err := CountSubsetSums(numbers, target)
+	if err != nil {
+		panic(err)
+	}
+
+	return n
 }

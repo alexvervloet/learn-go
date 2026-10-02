@@ -102,3 +102,37 @@ func (s *Stack[T]) String() string {
 	}
 	return "[" + strings.Join(parts, " ") + "] <- top"
 }
+
+// IsEmpty reports whether the stack has no elements.
+//
+// Deprecated: use Len() == 0, as Go's own containers do. Kept so existing callers compile.
+func (s *Stack[T]) IsEmpty() bool { return len(s.items) == 0 }
+
+// SearchAndRemove removes the topmost occurrence of v and returns it, reporting
+// whether it was found. O(n).
+//
+// Deprecated: this is not a stack operation. A structure you can reach into the
+// middle of is not a stack, and callers can no longer rely on LIFO ordering. Code
+// that needs it wants a slice and slices.DeleteFunc. Kept so existing callers
+// compile.
+func (s *Stack[T]) SearchAndRemove(v T, equal func(a, b T) bool) (T, bool) {
+	for i := len(s.items) - 1; i >= 0; i-- {
+		if !equal(s.items[i], v) {
+			continue
+		}
+
+		found := s.items[i]
+
+		// Shift the elements above it down, then zero the vacated tail.
+		copy(s.items[i:], s.items[i+1:])
+
+		var zero T
+		s.items[len(s.items)-1] = zero
+		s.items = s.items[:len(s.items)-1]
+
+		return found, true
+	}
+
+	var zero T
+	return zero, false
+}

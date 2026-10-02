@@ -35,9 +35,10 @@ simplification, it is the right implementation.
 | `Len()` | Element count | O(1) |
 | `All()` | An iterator, top down, removing nothing | O(n) |
 
-There is no "find and remove": a stack you can reach into the middle of is not a
-stack. Code that needs one wants a different structure, or a slice and
-`slices.DeleteFunc`.
+There is no "find and remove" in the API to use: a stack you can reach into the
+middle of is not a stack. Code that needs one wants a different structure, or a
+slice and `slices.DeleteFunc`. `SearchAndRemove` and `IsEmpty` still exist,
+marked `Deprecated`, so older callers compile; new code uses `Len() == 0`.
 
 ## The Go-specific parts
 

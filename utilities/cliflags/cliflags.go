@@ -102,7 +102,24 @@ var Commands = []string{"serve", "migrate", "version"}
 //
 // Because flag writes usage to os.Stderr by default, and a test that wants to assert on the usage message
 // cannot capture that without replacing a global.
+//
+// Parse falls back to the default for an environment variable that is set but does not parse, which is what
+// the first version did. ParseWith and StrictEnv refuse instead.
 func Parse(args []string, output io.Writer, getenv func(string) string) (*Config, error) {
+	return ParseWith(args, output, getenv, ParseOptions{})
+}
+
+// ParseOptions changes how Parse treats its input.
+type ParseOptions struct {
+	// StrictEnv makes an environment variable that is set and does not parse an error naming it, the same
+	// as the same value passed as a flag. Without it, TOOL_WORKERS=sixteen silently runs with the default of
+	// 4 workers, and whoever set it finds out from a slow run, if at all. It is the rule the capstones'
+	// config follows; new code should set it.
+	StrictEnv bool
+}
+
+// ParseWith is Parse with options.
+func ParseWith(args []string, output io.Writer, getenv func(string) string, opts ParseOptions) (*Config, error) {
 	if getenv == nil {
 		getenv = os.Getenv
 	}
@@ -144,7 +161,7 @@ func Parse(args []string, output io.Writer, getenv func(string) string) (*Config
 	timeout, timeoutErr := envDuration(getenv, "TOOL_TIMEOUT", 30*time.Second)
 	workers, workersErr := envInt(getenv, "TOOL_WORKERS", 4)
 
-	if err := errors.Join(timeoutErr, workersErr); err != nil {
+	if err := errors.Join(timeoutErr, workersErr); err != nil && opts.StrictEnv {
 		return nil, err
 	}
 
@@ -244,12 +261,8 @@ func envOr(getenv func(string) string, key, fallback string) string {
 	return fallback
 }
 
-// envInt reads an int. Unset is the fallback; set and unparseable is an error.
-//
-// An earlier version fell back on anything unparseable, reasoning that a variable is often set by something
-// other than the person running the command. But TOOL_WORKERS=sixteen then runs with 4 workers and says
-// nothing, and whoever set it finds out from a slow run, if at all. Refusing to start names the variable and
-// the value, which is the same rule the capstones' config follows, and the same rule a bad FLAG gets.
+// envInt reads an int. Unset is the fallback. Set and unparseable is the fallback AND an error, which ParseWith
+// returns under StrictEnv and ignores otherwise.
 func envInt(getenv func(string) string, key string, fallback int) (int, error) {
 	raw := getenv(key)
 	if raw == "" {
@@ -258,7 +271,7 @@ func envInt(getenv func(string) string, key string, fallback int) (int, error) {
 
 	n, err := strconv.Atoi(raw)
 	if err != nil {
-		return 0, fmt.Errorf("cliflags: %s=%q is not a whole number", key, raw)
+		return fallback, fmt.Errorf("cliflags: %s=%q is not a whole number", key, raw)
 	}
 
 	return n, nil
@@ -273,7 +286,7 @@ func envDuration(getenv func(string) string, key string, fallback time.Duration)
 
 	d, err := time.ParseDuration(raw)
 	if err != nil {
-		return 0, fmt.Errorf("cliflags: %s=%q is not a duration like 30s or 2m", key, raw)
+		return fallback, fmt.Errorf("cliflags: %s=%q is not a duration like 30s or 2m", key, raw)
 	}
 
 	return d, nil

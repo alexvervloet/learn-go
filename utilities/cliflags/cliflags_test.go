@@ -81,16 +81,19 @@ func TestAnEmptyRepeatedValueIsRejected(t *testing.T) {
 	require.Contains(t, out.String(), "empty value", "the flag package prints what Set returned")
 }
 
-// TestAnUnparseableEnvironmentValueIsAnError rather than a silent default.
-//
-// A silently ignored variable is a setting nobody knows is not applied, so an unparseable one is an error that
-// names it, the same as the same value passed as a flag.
-func TestAnUnparseableEnvironmentValueIsAnError(t *testing.T) {
+// TestAnUnparseableEnvironmentValue covers both rules. Parse keeps the first version's: a bad value falls back
+// to the default. StrictEnv makes it an error that names the variable, the same as the value as a flag.
+func TestAnUnparseableEnvironmentValue(t *testing.T) {
 	var out bytes.Buffer
 
-	_, err := Parse([]string{"serve"}, &out, env(map[string]string{
-		"TOOL_WORKERS": "lots", "TOOL_TIMEOUT": "a while",
-	}))
+	bad := env(map[string]string{"TOOL_WORKERS": "lots", "TOOL_TIMEOUT": "a while"})
+
+	cfg, err := Parse([]string{"serve"}, &out, bad)
+	require.NoError(t, err)
+	require.Equal(t, 4, cfg.Workers, "Parse falls back to the default, as it always did")
+	require.Equal(t, 30*time.Second, cfg.Timeout)
+
+	_, err = ParseWith([]string{"serve"}, &out, bad, ParseOptions{StrictEnv: true})
 	require.ErrorContains(t, err, "TOOL_WORKERS")
 	require.ErrorContains(t, err, "TOOL_TIMEOUT", "both problems at once, not one per run")
 

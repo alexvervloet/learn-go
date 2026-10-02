@@ -780,7 +780,7 @@ func TestTokenBucketUsesItsClock(t *testing.T) {
 	clock := newFakeClock()
 
 	b := NewTokenBucket(60, time.Minute, 1) // one token a second, burst of one
-	b.Clock = clock.Now
+	b.SetClock(clock.Now)
 
 	if d, _ := b.Allow(ctx, "k"); !d.Allowed {
 		t.Fatal("the first request was refused")
@@ -793,5 +793,15 @@ func TestTokenBucketUsesItsClock(t *testing.T) {
 
 	if d, _ := b.Allow(ctx, "k"); !d.Allowed {
 		t.Error("one second on the Clock did not refill the token; Allow is not reading the Clock")
+	}
+}
+
+// TestTokenBucketIsComparable is a compile-time check as much as a test: TokenBucket was comparable before it
+// had a clock, and callers may compare or use it as a map key. A func-typed field would make this line fail
+// to compile.
+func TestTokenBucketIsComparable(t *testing.T) {
+	a, b := NewTokenBucket(1, time.Second, 1), NewTokenBucket(1, time.Second, 1)
+	if *a == *b {
+		t.Error("two buckets with their own key maps compared equal")
 	}
 }

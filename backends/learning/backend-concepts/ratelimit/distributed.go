@@ -25,9 +25,10 @@ type TokenBucket struct {
 	limit rate.Limit
 	burst int
 
-	// Clock is the time source for Allow's decisions, like the other limiters' Clock fields. The first
-	// version called time.Now directly, so its behaviour over time could only be tested by sleeping.
-	Clock Clock
+	// clock is the time source for Allow's decisions; nil means time.Now. Set it with SetClock. A
+	// pointer rather than a Clock field like the other limiters have, because a func-typed field
+	// makes the struct non-comparable, and TokenBucket was comparable before it had a clock.
+	clock *Clock
 
 	// One limiter per key. A sync.Map is tempting and wrong here: the zero value of a rate.Limiter
 	// does not work, so every lookup needs a construct-if-missing, and LoadOrStore constructs
@@ -48,6 +49,10 @@ func NewTokenBucket(perWindow int, window time.Duration, burst int) *TokenBucket
 	}
 }
 
+// SetClock sets the time source for Allow's decisions, so a test can move time instead of sleeping. The
+// first version called time.Now directly, so its behaviour over time could only be tested by waiting.
+func (t *TokenBucket) SetClock(c Clock) { t.clock = &c }
+
 // Allow implements Limiter.
 func (t *TokenBucket) Allow(_ context.Context, key string) (Decision, error) {
 	if t.burst <= 0 {
@@ -58,7 +63,12 @@ func (t *TokenBucket) Allow(_ context.Context, key string) (Decision, error) {
 
 	// AllowN with an explicit time, rather than Allow, so the decision is a function of the Clock and
 	// a test can move time instead of waiting for it.
-	now := t.Clock.now()
+	var now time.Time
+	if t.clock != nil {
+		now = t.clock.now()
+	} else {
+		now = time.Now()
+	}
 
 	if !l.AllowN(now, 1) {
 		// Reserve tells us when a token will be available, and CancelAt gives it back so asking

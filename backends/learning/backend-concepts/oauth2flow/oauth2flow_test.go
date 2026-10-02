@@ -248,7 +248,7 @@ func TestTheWholeFlow(t *testing.T) {
 
 	browser := httptest.NewRecorder()
 
-	authURL, state, err := f.Start(ctx, browser, "/dashboard")
+	authURL, state, err := f.StartBound(ctx, browser, "/dashboard")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -298,7 +298,7 @@ func TestTheWholeFlow(t *testing.T) {
 		t.Errorf("the provider received client_id %q", received.Get("client_id"))
 	}
 
-	token, got, err := f.Callback(ctx, httptest.NewRecorder(), callback)
+	token, got, err := f.CallbackBound(ctx, httptest.NewRecorder(), callback)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -330,7 +330,7 @@ func TestTheWholeFlow(t *testing.T) {
 		"useless without the verifier the app kept")
 
 	// The state was consumed, so the same callback cannot be replayed.
-	_, _, err = f.Callback(ctx, httptest.NewRecorder(), callback)
+	_, _, err = f.CallbackBound(ctx, httptest.NewRecorder(), callback)
 
 	if !errors.Is(err, ErrStateMismatch) {
 		t.Errorf("replaying the callback gave %v, want ErrStateMismatch", err)
@@ -348,7 +348,7 @@ func TestPKCEStopsAStolenCode(t *testing.T) {
 
 	browser := httptest.NewRecorder()
 
-	authURL, _, err := f.Start(ctx, browser, "/")
+	authURL, _, err := f.StartBound(ctx, browser, "/")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -404,7 +404,7 @@ func TestStateIsCheckedBeforeTheExchange(t *testing.T) {
 
 	browser := httptest.NewRecorder()
 
-	authURL, _, err := f.Start(ctx, browser, "/")
+	authURL, _, err := f.StartBound(ctx, browser, "/")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -422,7 +422,7 @@ func TestStateIsCheckedBeforeTheExchange(t *testing.T) {
 	before := len(p.tokenRequests)
 	p.mu.Unlock()
 
-	_, _, err = f.Callback(ctx, httptest.NewRecorder(), httptest.NewRequest("GET", tampered.String(), nil))
+	_, _, err = f.CallbackBound(ctx, httptest.NewRecorder(), httptest.NewRequest("GET", tampered.String(), nil))
 
 	if !errors.Is(err, ErrStateMismatch) {
 		t.Errorf("got %v, want ErrStateMismatch", err)
@@ -446,7 +446,7 @@ func TestStateIsCheckedBeforeTheExchange(t *testing.T) {
 	q.Del("state")
 	noState.RawQuery = q.Encode()
 
-	_, _, err = f.Callback(ctx, httptest.NewRecorder(), httptest.NewRequest("GET", noState.String(), nil))
+	_, _, err = f.CallbackBound(ctx, httptest.NewRecorder(), httptest.NewRequest("GET", noState.String(), nil))
 
 	if !errors.Is(err, ErrNoState) {
 		t.Errorf("got %v, want ErrNoState", err)
@@ -471,7 +471,7 @@ func TestStateIsBoundToTheBrowser(t *testing.T) {
 
 	attacker := httptest.NewRecorder()
 
-	authURL, _, err := f.Start(ctx, attacker, "/")
+	authURL, _, err := f.StartBound(ctx, attacker, "/")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -481,7 +481,7 @@ func TestStateIsBoundToTheBrowser(t *testing.T) {
 	// The victim's browser has its own cookie from its own visit to the login page, or none at all.
 	victim := httptest.NewRecorder()
 
-	if _, _, err := f.Start(ctx, victim, "/"); err != nil {
+	if _, _, err := f.StartBound(ctx, victim, "/"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -499,7 +499,7 @@ func TestStateIsBoundToTheBrowser(t *testing.T) {
 			before := len(p.tokenRequests)
 			p.mu.Unlock()
 
-			_, _, err := f.Callback(ctx, httptest.NewRecorder(), req)
+			_, _, err := f.CallbackBound(ctx, httptest.NewRecorder(), req)
 
 			if !errors.Is(err, ErrStateMismatch) {
 				t.Fatalf("the victim's browser completed the attacker's login: err = %v", err)
@@ -519,7 +519,7 @@ func TestStateIsBoundToTheBrowser(t *testing.T) {
 
 	// And the attacker's own state is still usable by the attacker's browser, because a refused
 	// callback must not consume a state it had no right to.
-	if _, _, err := f.Callback(ctx, httptest.NewRecorder(), attackersCallback); err != nil {
+	if _, _, err := f.CallbackBound(ctx, httptest.NewRecorder(), attackersCallback); err != nil {
 		t.Errorf("the attacker's own browser could not finish their own login: %v", err)
 	}
 }
@@ -531,7 +531,7 @@ func TestStateCookie(t *testing.T) {
 
 	browser := httptest.NewRecorder()
 
-	if _, _, err := f.Start(context.Background(), browser, "/"); err != nil {
+	if _, _, err := f.StartBound(context.Background(), browser, "/"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -564,7 +564,7 @@ func TestStateCookie(t *testing.T) {
 
 	after := httptest.NewRecorder()
 
-	_, _, _ = f.Callback(context.Background(), after, req)
+	_, _, _ = f.CallbackBound(context.Background(), after, req)
 
 	cleared := after.Result().Cookies()
 	if len(cleared) != 1 || cleared[0].MaxAge >= 0 {
@@ -584,7 +584,7 @@ func TestProviderErrorsAreNotMissingCodes(t *testing.T) {
 		"https://app.example/callback?error=access_denied&error_description=The+user+denied+the+request",
 		nil)
 
-	_, _, err := f.Callback(ctx, httptest.NewRecorder(), callback)
+	_, _, err := f.CallbackBound(ctx, httptest.NewRecorder(), callback)
 
 	if !errors.Is(err, ErrProviderDenied) {
 		t.Errorf("got %v, want ErrProviderDenied", err)
@@ -613,7 +613,7 @@ func TestStateExpires(t *testing.T) {
 
 	browser := httptest.NewRecorder()
 
-	authURL, _, err := f.Start(ctx, browser, "/")
+	authURL, _, err := f.StartBound(ctx, browser, "/")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -622,7 +622,7 @@ func TestStateExpires(t *testing.T) {
 
 	clock = clock.Add(11 * time.Minute)
 
-	_, _, err = f.Callback(ctx, httptest.NewRecorder(), callback)
+	_, _, err = f.CallbackBound(ctx, httptest.NewRecorder(), callback)
 
 	if !errors.Is(err, ErrStateExpired) {
 		t.Errorf("got %v, want ErrStateExpired", err)
@@ -743,14 +743,14 @@ func TestCodeIsSingleUse(t *testing.T) {
 
 	browser := httptest.NewRecorder()
 
-	authURL, state, err := f.Start(ctx, browser, "/")
+	authURL, state, err := f.StartBound(ctx, browser, "/")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	callback := walkTheFlow(t, authURL, browser)
 
-	if _, _, err := f.Callback(ctx, httptest.NewRecorder(), callback); err != nil {
+	if _, _, err := f.CallbackBound(ctx, httptest.NewRecorder(), callback); err != nil {
 		t.Fatal(err)
 	}
 
@@ -764,7 +764,7 @@ func TestCodeIsSingleUse(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, _, err = f.Callback(ctx, httptest.NewRecorder(), callback)
+	_, _, err = f.CallbackBound(ctx, httptest.NewRecorder(), callback)
 
 	if err == nil {
 		t.Fatal("the provider accepted a reused code")
@@ -841,4 +841,38 @@ func itoa(n int) string {
 		n /= 10
 	}
 	return string(digits)
+}
+
+// TestDeprecatedStartAndCallbackStillWork: the first version's pair still completes a login. It also still
+// accepts a callback from a browser that did not start the flow, which is the login CSRF StartBound and
+// CallbackBound close, and the reason both are deprecated.
+func TestDeprecatedStartAndCallbackStillWork(t *testing.T) {
+	p := newFakeProvider(t)
+	f := newFlow(t, p)
+	ctx := context.Background()
+
+	authURL, _, err := f.Start(ctx, "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	callback := walkTheFlow(t, authURL, httptest.NewRecorder())
+
+	token, _, err := f.Callback(ctx, callback)
+	if err != nil || token == nil {
+		t.Fatalf("the deprecated pair did not complete a login: %v", err)
+	}
+
+	// The attack the bound pair refuses: an attacker's genuine callback, finished in another browser.
+	authURL, _, err = f.Start(ctx, "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	attackersCallback := walkTheFlow(t, authURL, httptest.NewRecorder())
+	victimsRequest := httptest.NewRequest("GET", attackersCallback.URL.String(), nil)
+
+	if _, _, err := f.Callback(ctx, victimsRequest); err != nil {
+		t.Fatalf("expected the deprecated Callback to accept it, as it always did: %v", err)
+	}
 }

@@ -178,9 +178,45 @@ func (f *Flow) now() time.Time {
 // is "this browser, and no other", that is the right default.
 const StateCookie = "__Host-oauth_state"
 
-// Start generates the state and PKCE, stores them, sets the state cookie on w, and returns the URL to send the
-// user to.
-func (f *Flow) Start(ctx context.Context, w http.ResponseWriter, returnTo string) (string, State, error) {
+// StartBound generates the state and PKCE, stores them, sets the state cookie on w, and returns the URL to send
+// the user to. Use it with CallbackBound; see CallbackBound for why the cookie matters.
+func (f *Flow) StartBound(ctx context.Context, w http.ResponseWriter, returnTo string) (string, State, error) {
+	authURL, s, err := f.begin(ctx, returnTo)
+	if err != nil {
+		return "", State{}, err
+	}
+
+	// SameSite=Lax, not Strict. The provider's redirect back to the callback is a top-level navigation that
+	// starts on another site, and Strict withholds the cookie from exactly that request, so every login
+	// would fail. Lax sends it on top-level GET navigations and nothing else, which is the callback and only
+	// the callback.
+	//
+	// HttpOnly because no script needs it. MaxAge matches the TTL, so an abandoned login's cookie goes away
+	// on the same schedule as its stored state.
+	http.SetCookie(w, &http.Cookie{
+		Name:     StateCookie,
+		Value:    s.Value,
+		Path:     "/",
+		MaxAge:   int(f.TTL.Seconds()),
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	return authURL, s, nil
+}
+
+// Start generates the state and PKCE, stores them, and returns the URL to send the user to.
+//
+// Deprecated: use StartBound and CallbackBound. Start sets no cookie, so the flow it begins is not tied to the
+// browser that began it, and Callback cannot tell a victim's browser finishing an attacker's login from the
+// real thing (login CSRF; see CallbackBound). Kept so code written against the first version compiles.
+func (f *Flow) Start(ctx context.Context, returnTo string) (string, State, error) {
+	return f.begin(ctx, returnTo)
+}
+
+// begin is the part of starting a flow that does not involve the browser: state, PKCE, storage, the URL.
+func (f *Flow) begin(ctx context.Context, returnTo string) (string, State, error) {
 	pkce, err := NewPKCE()
 	if err != nil {
 		return "", State{}, err
@@ -202,23 +238,6 @@ func (f *Flow) Start(ctx context.Context, w http.ResponseWriter, returnTo string
 		return "", State{}, fmt.Errorf("storing state: %w", err)
 	}
 
-	// SameSite=Lax, not Strict. The provider's redirect back to the callback is a top-level navigation that
-	// starts on another site, and Strict withholds the cookie from exactly that request, so every login
-	// would fail. Lax sends it on top-level GET navigations and nothing else, which is the callback and only
-	// the callback.
-	//
-	// HttpOnly because no script needs it. MaxAge matches the TTL, so an abandoned login's cookie goes away
-	// on the same schedule as its stored state.
-	http.SetCookie(w, &http.Cookie{
-		Name:     StateCookie,
-		Value:    value,
-		Path:     "/",
-		MaxAge:   int(f.TTL.Seconds()),
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-	})
-
 	// AuthCodeURL takes the state and any extra parameters. The PKCE ones have helpers in
 	// x/oauth2, and spelling them out shows what is on the wire.
 	authURL := f.Config.AuthCodeURL(value,
@@ -234,8 +253,8 @@ func (f *Flow) Start(ctx context.Context, w http.ResponseWriter, returnTo string
 	return authURL, s, nil
 }
 
-// Callback validates the callback and exchanges the code for tokens. It clears the state cookie on w, whatever
-// the outcome.
+// CallbackBound validates the callback and exchanges the code for tokens. It clears the state cookie on w,
+// whatever the outcome.
 //
 // The order is the point: EVERY check happens before the exchange. An implementation that exchanges first and
 // validates state afterwards has already spent the code, and the CSRF protection is decoration.
@@ -249,8 +268,8 @@ func (f *Flow) Start(ctx context.Context, w http.ResponseWriter, returnTo string
 //
 // The question that stops it is "did THIS BROWSER start this flow?", and the cookie Start set is the answer.
 // The victim's browser does not have the attacker's cookie. The first version of this package checked the
-// store only; TestStateIsBoundToTheBrowser is the attack.
-func (f *Flow) Callback(ctx context.Context, w http.ResponseWriter, r *http.Request) (*oauth2.Token, State, error) {
+// store only, and Callback still does; TestStateIsBoundToTheBrowser is the attack.
+func (f *Flow) CallbackBound(ctx context.Context, w http.ResponseWriter, r *http.Request) (*oauth2.Token, State, error) {
 	// One use, pass or fail. A failed callback leaving the cookie behind would let a retry reuse it.
 	http.SetCookie(w, &http.Cookie{
 		Name:     StateCookie,
@@ -261,19 +280,9 @@ func (f *Flow) Callback(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	q := r.URL.Query()
-
-	// The provider's own error comes back as a query parameter, not an HTTP error. An
-	// implementation that only looks for `code` reports "no code" when the real answer is
-	// "the user clicked Deny", and the support ticket is unanswerable.
-	if e := q.Get("error"); e != "" {
-		return nil, State{}, fmt.Errorf("%w: %s: %s", ErrProviderDenied, e,
-			q.Get("error_description"))
-	}
-
-	value := q.Get("state")
-	if value == "" {
-		return nil, State{}, ErrNoState
+	value, err := callbackState(r)
+	if err != nil {
+		return nil, State{}, err
 	}
 
 	// The browser check comes BEFORE the store. A callback that fails it must not consume the state,
@@ -292,6 +301,46 @@ func (f *Flow) Callback(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		return nil, State{}, fmt.Errorf("%w: the state belongs to a flow another browser started",
 			ErrStateMismatch)
 	}
+
+	return f.exchange(ctx, r, value)
+}
+
+// Callback validates the callback against the store and exchanges the code for tokens.
+//
+// Deprecated: use StartBound and CallbackBound. Callback checks that this app issued the state, not that this
+// browser started the flow, which leaves login CSRF open (see CallbackBound). Kept so code written against the
+// first version compiles.
+func (f *Flow) Callback(ctx context.Context, r *http.Request) (*oauth2.Token, State, error) {
+	value, err := callbackState(r)
+	if err != nil {
+		return nil, State{}, err
+	}
+
+	return f.exchange(ctx, r, value)
+}
+
+// callbackState reads the provider's verdict and the state from the callback URL.
+func callbackState(r *http.Request) (string, error) {
+	q := r.URL.Query()
+
+	// The provider's own error comes back as a query parameter, not an HTTP error. An
+	// implementation that only looks for `code` reports "no code" when the real answer is
+	// "the user clicked Deny", and the support ticket is unanswerable.
+	if e := q.Get("error"); e != "" {
+		return "", fmt.Errorf("%w: %s: %s", ErrProviderDenied, e, q.Get("error_description"))
+	}
+
+	value := q.Get("state")
+	if value == "" {
+		return "", ErrNoState
+	}
+
+	return value, nil
+}
+
+// exchange consumes the stored state, checks its age, and trades the code for tokens.
+func (f *Flow) exchange(ctx context.Context, r *http.Request, value string) (*oauth2.Token, State, error) {
+	q := r.URL.Query()
 
 	// Take removes it, so a code cannot be replayed with the same state. Get-then-delete would
 	// leave a window; the store's contract is that Take is atomic.

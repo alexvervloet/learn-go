@@ -193,3 +193,16 @@ type Comparable[T comparable] struct {
 func (q *Comparable[T]) Remove(v T) (T, bool) {
 	return q.RemoveFunc(func(x T) bool { return x == v })
 }
+
+// IsEmpty reports whether the queue has no elements.
+//
+// Deprecated: use Len() == 0, as Go's own containers do. Kept so existing callers compile.
+func (q *Queue[T]) IsEmpty() bool { return q.count == 0 }
+
+// SearchAndRemove removes the first element equal to v, preserving the order of the rest.
+//
+// Deprecated: use RemoveFunc, which takes a predicate like slices.DeleteFunc. Kept so existing callers
+// compile.
+func (q *Queue[T]) SearchAndRemove(v T, equal func(a, b T) bool) (T, bool) {
+	return q.RemoveFunc(func(x T) bool { return equal(x, v) })
+}

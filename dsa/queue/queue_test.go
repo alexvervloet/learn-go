@@ -276,3 +276,20 @@ func TestAllWalksFrontToBackAndStopsOnBreak(t *testing.T) {
 		t.Errorf("break: saw %v and Len is %d; want [3 4] and 4", seen, q.Len())
 	}
 }
+
+// TestDeprecatedShimsStillWork: IsEmpty and SearchAndRemove behave as they did.
+func TestDeprecatedShimsStillWork(t *testing.T) {
+	var q Queue[int]
+	if !q.IsEmpty() {
+		t.Error("a fresh queue should be empty")
+	}
+
+	for _, v := range []int{1, 2, 3} {
+		q.Push(v)
+	}
+
+	got, ok := q.SearchAndRemove(2, func(a, b int) bool { return a == b })
+	if !ok || got != 2 || !slices.Equal(q.Slice(), []int{1, 3}) || q.IsEmpty() {
+		t.Errorf("SearchAndRemove(2) = %d, %v, left %v", got, ok, q.Slice())
+	}
+}

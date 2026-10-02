@@ -113,6 +113,9 @@ its pointer.
 | `All()` | An iterator, front to back, removing nothing | O(n) |
 | `RemoveFunc(match)` | Remove the first match, preserving order | O(n) |
 
+`IsEmpty` and `SearchAndRemove(v, equal)` still exist, marked `Deprecated`, so
+older callers compile. New code uses `Len() == 0` and `RemoveFunc`.
+
 ## Matchmaking
 
 `Matchmake` shows what a queue is for, and that a real one is rarely a plain

@@ -373,3 +373,31 @@ func BenchmarkSlicePrepend(b *testing.B) {
 		_ = s
 	}
 }
+
+// TestDeprecatedNamesStillWork: every old name does what its replacement does.
+func TestDeprecatedNamesStillWork(t *testing.T) {
+	var l LinkedList[int]
+	if !l.IsEmpty() {
+		t.Error("a fresh list should be empty")
+	}
+
+	l.AddToTail(2)
+	l.AddToHead(1)
+	l.AddToTail(3)
+
+	if h, ok := l.Head(); !ok || h != 1 {
+		t.Errorf("Head = %d, %v", h, ok)
+	}
+	if tl, ok := l.Tail(); !ok || tl != 3 {
+		t.Errorf("Tail = %d, %v", tl, ok)
+	}
+	if v, ok := l.RemoveFromHead(); !ok || v != 1 {
+		t.Errorf("RemoveFromHead = %d, %v", v, ok)
+	}
+	if v, ok := l.RemoveFromTail(); !ok || v != 3 {
+		t.Errorf("RemoveFromTail = %d, %v", v, ok)
+	}
+	if l.IsEmpty() || l.Len() != 1 {
+		t.Errorf("one element should remain, Len = %d", l.Len())
+	}
+}

@@ -65,6 +65,10 @@ would write today.
 | `All()` | An iterator over the values | O(n) |
 | `String()` | `10 -> 20 -> 30` | O(n) |
 
+The first version used `AddToHead`, `AddToTail`, `RemoveFromHead`,
+`RemoveFromTail`, `Head`, `Tail` and `IsEmpty`. They still exist, marked
+`Deprecated`, so older callers compile, and each one forwards to its new name.
+
 `PopBack` is O(n) and that is not an oversight: removing the last node
 requires the one before it, and a singly linked list cannot walk backwards. Fix
 it by making the list doubly linked, at the cost of a second pointer per node.

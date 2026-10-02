@@ -204,3 +204,54 @@ func (l *LinkedList[T]) Reverse() {
 
 	l.head = prev
 }
+
+// Deprecated names, kept so code written against the first version of this package still compiles.
+
+// IsEmpty reports whether the list has no elements.
+//
+// Deprecated: use Len() == 0, as Go's own containers do.
+func (l *LinkedList[T]) IsEmpty() bool {
+	return l.size == 0
+}
+
+// AddToHead inserts at the front.
+//
+// Deprecated: use PushFront, the name container/list uses.
+func (l *LinkedList[T]) AddToHead(v T) {
+	l.PushFront(v)
+}
+
+// AddToTail appends.
+//
+// Deprecated: use PushBack, the name container/list uses.
+func (l *LinkedList[T]) AddToTail(v T) {
+	l.PushBack(v)
+}
+
+// RemoveFromHead removes and returns the front.
+//
+// Deprecated: use PopFront.
+func (l *LinkedList[T]) RemoveFromHead() (T, bool) {
+	return l.PopFront()
+}
+
+// RemoveFromTail removes and returns the back.
+//
+// Deprecated: use PopBack.
+func (l *LinkedList[T]) RemoveFromTail() (T, bool) {
+	return l.PopBack()
+}
+
+// Head returns the front without removing it.
+//
+// Deprecated: use Front, the name container/list uses.
+func (l *LinkedList[T]) Head() (T, bool) {
+	return l.Front()
+}
+
+// Tail returns the back without removing it.
+//
+// Deprecated: use Back, the name container/list uses.
+func (l *LinkedList[T]) Tail() (T, bool) {
+	return l.Back()
+}

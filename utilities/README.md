@@ -27,8 +27,9 @@ difference between `-tag a -tag b` giving two tags and giving one.
 **Environment precedence comes from the DEFAULT.** The environment value is the flag's default, so a flag
 overwrites it and an absent flag leaves it. Reading the environment after parsing and overwriting gets it
 backwards, and a user cannot then override a variable their shell profile set. A variable that is set and does
-not parse, `TOOL_WORKERS=sixteen`, is an error naming it, the same as the flag would be. It used to fall back to
-the default, which ran with 4 workers and told nobody.
+not parse, `TOOL_WORKERS=sixteen`, falls back to the default under `Parse`, which runs with 4 workers and tells
+nobody. `ParseWith(..., ParseOptions{StrictEnv: true})` makes it an error naming the variable, the same as the
+flag would be, and is the form new code should use.
 
 **`-h` is not a failure.** `flag` returns `ErrHelp`, and every tutorial ignores it, which is why so many Go
 programs exit 2 when you ask for help and break a script that checks the code.

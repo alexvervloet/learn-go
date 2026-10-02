@@ -136,10 +136,11 @@ wrong:
   its load balancer, has no reason to believe any of them.
 
 This module ships replacements for both. `RealIP(trustProxyHeaders bool)` takes the rightmost
-entry and makes the trust decision an argument, and `Production` passes that decision through
-rather than making it. The first version of `Production` called `RealIP(true)`, so even
-`cmd/server`, run directly on a laptop, let any client choose the address it logged.
-`cmd/server` trusts the headers only when `TRUST_PROXY_HEADERS=true`.
+entry and makes the trust decision an argument. `Production` does not trust the headers, and
+`ProductionBehindProxy` does, for a service that only receives traffic through a proxy. The first
+version of `Production` called `RealIP(true)`, so even `cmd/server`, run directly on a laptop, let
+any client choose the address it logged. `cmd/server` uses `ProductionBehindProxy` only when
+`TRUST_PROXY_HEADERS=true`.
 
 ### CSRF without tokens
 
@@ -151,8 +152,10 @@ curl or another service, passes too, because CSRF is an attack that borrows a br
 
 That is also when it matters: an API that only accepts a bearer token in a header cannot be forged
 this way, since the forged request has no token to send, while one authenticated by cookie can.
-`Production` includes it, after the logger, so a refused request is still a logged line.
-`TestCrossOriginRefusesCrossSiteWrites` runs eight cases through it.
+`Production` does not include it, so existing services behave as they did; a cookie-authenticated
+one should opt in by wrapping its handler inside the chain, `Production(log)(cross(mux))`, which
+keeps a refused request a logged line with an ID. `cmd/server` does. `TestCrossOriginRefusesCrossSiteWrites`
+runs eight cases through it, and `TestCrossOriginIsOptInInsideProduction` shows both forms.
 
 ### What it all costs
 

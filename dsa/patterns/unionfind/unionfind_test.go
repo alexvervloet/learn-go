@@ -15,24 +15,24 @@ func TestZeroValueIsUsable(t *testing.T) {
 		t.Error("a new collection should be empty")
 	}
 
-	// Find asks; it does not add. An unknown element is reported, and nothing changes.
-	if _, ok := s.Find("a"); ok {
-		t.Error("Find on an unknown element reported it as known")
-	}
-	if s.Connected("a", "a") || s.SizeOf("a") != 0 {
-		t.Error("an unknown element is in no set, so connected to nothing and of size 0")
+	// Lookup asks without adding: an unknown element is reported, and nothing changes.
+	if _, ok := s.Lookup("a"); ok {
+		t.Error("Lookup on an unknown element reported it as known")
 	}
 	if s.Count() != 0 || s.Len() != 0 {
-		t.Errorf("after only questions: Count = %d, Len = %d; want 0, 0", s.Count(), s.Len())
+		t.Errorf("after Lookup: Count = %d, Len = %d; want 0, 0", s.Count(), s.Len())
 	}
 
-	// Union is the operation that adds, so edges can be fed without declaring vertices.
-	s.Union("a", "b")
-	if root, ok := s.Find("a"); !ok || (root != "a" && root != "b") {
-		t.Errorf("Find(\"a\") = %q, %t after a union with b", root, ok)
+	// Find adds implicitly, which is what lets a caller feed edges without declaring
+	// vertices first.
+	if got := s.Find("a"); got != "a" {
+		t.Errorf("Find(\"a\") = %q, want \"a\"", got)
 	}
-	if s.Count() != 1 || s.Len() != 2 {
-		t.Errorf("after one Union: Count = %d, Len = %d; want 1, 2", s.Count(), s.Len())
+	if s.Count() != 1 || s.Len() != 1 {
+		t.Errorf("after one Find: Count = %d, Len = %d; want 1, 1", s.Count(), s.Len())
+	}
+	if root, ok := s.Lookup("a"); !ok || root != "a" {
+		t.Errorf("Lookup(\"a\") after Find = %q, %t", root, ok)
 	}
 }
 

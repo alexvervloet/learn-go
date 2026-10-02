@@ -83,8 +83,8 @@ once the tree is already a star. The hop counts are tied there; only the writes 
 ## The map costs 29x
 
 `Sets` is backed by `map[T]T`, which is what lets it take any comparable key and add elements
-as `Union` meets them. (`Find` is comma-ok and adds nothing: a question should not change the
-next answer.) A slice-backed version over dense integer IDs does the same work in a fraction of
+implicitly. (`Find`, `Connected` and `SizeOf` add an element they have not seen; `Lookup` is the
+comma-ok form that asks without adding, for when a question should not change the next answer.) A slice-backed version over dense integer IDs does the same work in a fraction of
 the time:
 
 | | 20,000 elements |

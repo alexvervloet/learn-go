@@ -80,18 +80,25 @@ func (s *Sets[T]) Add(x T) bool {
 	return true
 }
 
-// Find returns the representative of x's set, and false if x is unknown.
+// Find returns the representative of x's set, adding x as a set of its own if it is unknown.
 //
-// Comma-ok, like a map lookup, and it adds nothing. An earlier version added an unknown x
-// as a set of its own, the way a Python defaultdict does, so asking Connected("a", "z")
-// about a "z" nobody had mentioned quietly grew Count by one. A question should not change
-// the answer to the next one. Union is the operation that adds, because it is already a
-// write.
+// The adding is a defaultdict habit: asking Connected("a", "z") about a "z" nobody mentioned
+// grows Count by one, so a question changes the answer to the next one. Lookup asks without
+// adding. Find keeps the adding behaviour because code written against it relies on it.
 //
 // The representative is an arbitrary member, not a meaningful one: it changes as sets merge.
 // Code that stores a Find result and compares it later is a bug, because the same set can
 // have a different representative after any Union.
-func (s *Sets[T]) Find(x T) (T, bool) {
+func (s *Sets[T]) Find(x T) T {
+	s.Add(x)
+
+	return s.root(x)
+}
+
+// Lookup returns the representative of x's set, and false if x is unknown. Comma-ok, like a map
+// lookup, and it adds nothing, which is the form to prefer when the question should not change
+// the structure.
+func (s *Sets[T]) Lookup(x T) (T, bool) {
 	if _, known := s.parent[x]; !known {
 		var zero T
 		return zero, false
@@ -149,14 +156,9 @@ func (s *Sets[T]) Union(x, y T) bool {
 	return true
 }
 
-// Connected reports whether x and y are in the same set. An unknown element is in no set,
-// so it is connected to nothing, itself included.
-func (s *Sets[T]) Connected(x, y T) bool {
-	rootX, okX := s.Find(x)
-	rootY, okY := s.Find(y)
-
-	return okX && okY && rootX == rootY
-}
+// Connected reports whether x and y are in the same set. Like Find, it adds unknown elements;
+// use Lookup on both to ask without adding.
+func (s *Sets[T]) Connected(x, y T) bool { return s.Find(x) == s.Find(y) }
 
 // Count returns the number of distinct sets.
 func (s *Sets[T]) Count() int { return s.count }
@@ -164,15 +166,8 @@ func (s *Sets[T]) Count() int { return s.count }
 // Len returns the number of known elements.
 func (s *Sets[T]) Len() int { return len(s.parent) }
 
-// SizeOf returns how many elements are in x's set, and 0 if x is unknown.
-func (s *Sets[T]) SizeOf(x T) int {
-	root, ok := s.Find(x)
-	if !ok {
-		return 0
-	}
-
-	return s.size[root]
-}
+// SizeOf returns how many elements are in x's set. Like Find, it adds x if it is unknown.
+func (s *Sets[T]) SizeOf(x T) int { return s.size[s.Find(x)] }
 
 // FindSteps returns the total number of parent pointers followed across every Find so far.
 //

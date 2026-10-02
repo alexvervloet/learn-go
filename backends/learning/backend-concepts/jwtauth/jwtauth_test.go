@@ -878,9 +878,9 @@ func TestRotationIsSafeDuringTraffic(t *testing.T) {
 	wg.Wait()
 }
 
-// TestAnUnconfiguredIssuerRefuses is the check that used to be skipped. With Issuer or Audience empty, a token
-// minted by another service sharing the key would verify here, and nothing would say so.
-func TestAnUnconfiguredIssuerRefuses(t *testing.T) {
+// TestAStrictIssuerRefusesWhenUnconfigured is the opt-in. With Issuer or Audience empty, a token minted by
+// another service sharing the key would verify here, and Strict turns that into an error.
+func TestAStrictIssuerRefusesWhenUnconfigured(t *testing.T) {
 	configured, err := NewHS256(secret, "k1")
 	if err != nil {
 		t.Fatal(err)
@@ -900,6 +900,7 @@ func TestAnUnconfiguredIssuerRefuses(t *testing.T) {
 		}
 
 		i.Issuer, i.Audience = missing.issuer, missing.audience
+		i.Strict = true
 
 		if _, err := i.Mint("user-1", nil, ""); !errors.Is(err, ErrUnconfigured) {
 			t.Errorf("Mint with %+v: got %v, want ErrUnconfigured", missing, err)
@@ -908,5 +909,38 @@ func TestAnUnconfiguredIssuerRefuses(t *testing.T) {
 		if _, err := i.Verify(token); !errors.Is(err, ErrUnconfigured) {
 			t.Errorf("Verify with %+v: got %v, want ErrUnconfigured", missing, err)
 		}
+	}
+}
+
+// TestTheDefaultSkipsAnUnsetCheck is the default, kept for code written against the first version: an empty
+// Audience is not checked, so a token minted for another audience verifies. Strict is what stops that.
+func TestTheDefaultSkipsAnUnsetCheck(t *testing.T) {
+	minter, err := NewHS256(secret, "k1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	minter.Issuer, minter.Audience = "learn-go", "admin"
+
+	token, err := minter.Mint("user-1", nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	lenient, err := NewHS256(secret, "k1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	lenient.Issuer = "learn-go"
+
+	if _, err := lenient.Verify(token); err != nil {
+		t.Errorf("the default should skip the unset audience check, as it always did: %v", err)
+	}
+
+	lenient.Strict = true
+
+	if _, err := lenient.Verify(token); !errors.Is(err, ErrUnconfigured) {
+		t.Errorf("Strict with no Audience: got %v, want ErrUnconfigured", err)
 	}
 }

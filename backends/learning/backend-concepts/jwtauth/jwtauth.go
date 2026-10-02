@@ -77,7 +77,7 @@ var (
 	ErrUnknownKey    = errors.New("unknown key id")
 	ErrForbidden     = errors.New("insufficient role")
 
-	// ErrUnconfigured is returned by Mint and Verify when Issuer or Audience is empty. See the fields.
+	// ErrUnconfigured is returned by Mint and Verify when Strict is set and Issuer or Audience is empty.
 	ErrUnconfigured = errors.New("jwtauth: Issuer and Audience must both be set")
 )
 
@@ -142,16 +142,20 @@ type Issuer struct {
 	// activeKID names the key new tokens are signed with.
 	activeKID string
 
-	// Issuer and Audience go into every minted token and are checked on every verify. Both are
-	// required: Mint and Verify return ErrUnconfigured while either is empty.
+	// Issuer and Audience go into minted tokens and are checked on verify, each only when it is set:
+	// leave one empty and that check is skipped. That is the default because code written against the
+	// first version relies on it.
 	//
-	// The first version skipped a check whose field was empty, which made forgetting them silent. A
-	// service that shares a signing key with another (common with HS256, where the key is a shared
-	// secret) then accepted the other's tokens, and nothing failed. Requiring them costs one line per
-	// service and turns the mistake into an error at the first request.
+	// It is also how a service that shares a signing key with another (common with HS256, where the
+	// key is a shared secret) ends up accepting the other's tokens without anything failing. Set
+	// Strict, and an empty Issuer or Audience is ErrUnconfigured from Mint and Verify instead of a
+	// skipped check. New code should.
 	Issuer   string
 	Audience string
-	TTL      time.Duration
+
+	// Strict makes Issuer and Audience required. See above.
+	Strict bool
+	TTL    time.Duration
 
 	// Now is injectable, so the expiry tests do not sleep.
 	Now func() time.Time
@@ -295,9 +299,9 @@ func (i *Issuer) now() time.Time {
 	return i.Now()
 }
 
-// configured reports whether Issuer and Audience are both set.
+// configured reports whether Issuer and Audience are both set, when Strict asks for them.
 func (i *Issuer) configured() error {
-	if i.Issuer == "" || i.Audience == "" {
+	if i.Strict && (i.Issuer == "" || i.Audience == "") {
 		return ErrUnconfigured
 	}
 
@@ -331,7 +335,9 @@ func (i *Issuer) Mint(subject string, roles []string, email string) (string, err
 		Email: email,
 	}
 
-	claims.Audience = jwt.ClaimStrings{i.Audience}
+	if i.Audience != "" {
+		claims.Audience = jwt.ClaimStrings{i.Audience}
+	}
 
 	token := jwt.NewWithClaims(i.Method, claims)
 
@@ -377,8 +383,13 @@ func (i *Issuer) Verify(token string) (Claims, error) {
 		jwt.WithValidMethods([]string{i.Method.Alg()}),
 		jwt.WithExpirationRequired(),
 		jwt.WithTimeFunc(i.now),
-		jwt.WithIssuer(i.Issuer),
-		jwt.WithAudience(i.Audience),
+	}
+
+	if i.Issuer != "" {
+		opts = append(opts, jwt.WithIssuer(i.Issuer))
+	}
+	if i.Audience != "" {
+		opts = append(opts, jwt.WithAudience(i.Audience))
 	}
 
 	parsed, err := jwt.ParseWithClaims(token, &claims, i.keyFunc, opts...)

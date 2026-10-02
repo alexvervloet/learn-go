@@ -127,6 +127,7 @@ the index below groups them by topic.
 - [A randomised test that fails 1% of the time is a flaky test](#a-randomised-test-that-fails-1-of-the-time-is-a-flaky-test)
 - [My fix for wasted work broke a test that assumed the work would start](#my-fix-for-wasted-work-broke-a-test-that-assumed-the-work-would-start)
 - [A test that skips prints `ok`, and I believed it](#a-test-that-skips-prints-ok-and-i-believed-it)
+- [I named three breaking changes; apidiff found nine more](#i-named-three-breaking-changes-apidiff-found-nine-more)
 
 ## 2026-09-25 — Two pieces of escape-analysis folklore, both wrong
 
@@ -2601,4 +2602,22 @@ harness skips when Redis is unreachable, and `go test` without `-v` reports a pa
 
 **Next time.** A mutation check that passes is a red flag, not a shrug. When a test depends on a service, confirm
 it ran: `go test -v` and look for `--- SKIP`, or count them, before trusting either a pass or a mutant's survival.
+
+## I named three breaking changes; apidiff found nine more
+
+**Expected.** After a round of fixes I told the user three things would break callers: the dsa renames, the
+stricter JWT issuer, and the cliflags environment rule. Undoing the breaks meant shimming those three.
+
+**What happened.** `apidiff -m -incompatible`, run per module against the commit before the work began, found
+the dsa renames and nine more groups of breaks across seven modules (the JWT and cliflags changes are behaviour,
+which apidiff cannot see, so they were on top). The nine included two security fixes whose signatures had changed
+(`oauth2flow.Start`/`Callback` gained a `ResponseWriter`, `middleware.Production` gained a bool), a function
+that started returning an error, a renamed struct field, three removed exported names, a dependency swap that
+changed the type of exported fields, and a struct that silently stopped being comparable because it gained a
+`func` field. None of those felt like API changes while I was making them; each felt like a fix.
+
+**Next time.** "Is this breaking?" is a question for the tool, not for memory. Run apidiff against the last
+released or baseline commit before claiming a change is compatible, and again after shimming, until it prints
+nothing. A `func`-typed field is the easy one to miss: it makes the whole struct non-comparable, and only a
+compile-time check (`_ = *a == *b`) or apidiff will say so.
 

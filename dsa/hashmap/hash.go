@@ -73,6 +73,12 @@ type Spread struct {
 	// version called it ChiSquare, which it is not, though it is used the same
 	// way: as a ratio against what a random hash would score.
 	Score float64
+
+	// ChiSquare holds the same value as Score.
+	//
+	// Deprecated: use Score. The value was never a chi-square statistic; the field is
+	// kept, and filled, so code reading the old name compiles and gets the same number.
+	ChiSquare float64
 }
 
 // Expected is the crowding score a uniformly random hash would produce for this
@@ -132,6 +138,7 @@ func Measure(hash func(string) uint64, keys []string, slots int) Spread {
 		Used:       used,
 		Worst:      worst,
 		Score:      sum,
+		ChiSquare:  sum,
 		Collisions: collisions,
 	}
 }

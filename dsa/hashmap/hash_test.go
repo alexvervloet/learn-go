@@ -134,3 +134,11 @@ func TestFloodingIsNotJustABadModulo(t *testing.T) {
 		t.Errorf("FNV1a cost %.2f probes per insertion on keys not chosen for it", cost)
 	}
 }
+
+// TestChiSquareIsScore: the deprecated field carries the same number, so old readers are unaffected.
+func TestChiSquareIsScore(t *testing.T) {
+	spread := Measure(FNV1a, testKeys(500), 128)
+	if spread.ChiSquare != spread.Score || spread.Score == 0 {
+		t.Errorf("ChiSquare = %v, Score = %v; want equal and non-zero", spread.ChiSquare, spread.Score)
+	}
+}

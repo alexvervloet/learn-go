@@ -59,9 +59,20 @@ func run() error {
 	// Proxy headers are trusted only when a deployment says it sits behind a proxy
 	// that sets them. This server is usually run directly, where any client could
 	// write its own X-Forwarded-For.
-	trustProxy := os.Getenv("TRUST_PROXY_HEADERS") == "true"
+	production := middleware.Production
+	if os.Getenv("TRUST_PROXY_HEADERS") == "true" {
+		production = middleware.ProductionBehindProxy
+	}
 
-	handler := middleware.Production(log, trustProxy)(mux)
+	// CSRF protection is opt-in, and this server opts in. It wraps the mux inside the chain, so a
+	// refused cross-site POST is still logged with its request ID.
+	cross, err := middleware.CrossOrigin()
+	if err != nil {
+		log.Error("cross-origin protection", "error", err)
+		os.Exit(1)
+	}
+
+	handler := production(log)(cross(mux))
 
 	cfg := server.Default(addr)
 	srv := server.New(cfg, handler, log)

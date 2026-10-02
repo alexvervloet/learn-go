@@ -87,7 +87,7 @@ func BenchmarkEachMiddleware(b *testing.B) {
 		{"chi StripSlashes", chimw.StripSlashes(handler)},
 		{"chi Compress", chimw.Compress(5)(handler)},
 		{"chi Recoverer", chimw.Recoverer(handler)},
-		{"the whole Production chain", Production(discard, false)(handler)},
+		{"the whole Production chain", Production(discard)(handler)},
 	}
 
 	req := httptest.NewRequest("GET", "/", nil)

@@ -453,7 +453,7 @@ func TestWrapperKeepsFlush(t *testing.T) {
 func TestProductionStreams(t *testing.T) {
 	read := make(chan struct{})
 
-	srv := httptest.NewServer(Production(discardLogger(), false)(http.HandlerFunc(
+	srv := httptest.NewServer(Production(discardLogger())(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/x-ndjson")
 
@@ -513,7 +513,7 @@ func TestProductionStreams(t *testing.T) {
 // TestProductionCanHijack is the WebSocket half. An upgrade takes over the connection with Hijack, and a
 // wrapper that hides http.Hijacker makes every upgrade fail with "not supported" through this chain.
 func TestProductionCanHijack(t *testing.T) {
-	srv := httptest.NewServer(Production(discardLogger(), false)(http.HandlerFunc(
+	srv := httptest.NewServer(Production(discardLogger())(http.HandlerFunc(
 		func(w http.ResponseWriter, _ *http.Request) {
 			conn, buf, err := http.NewResponseController(w).Hijack()
 			if err != nil {
@@ -867,12 +867,12 @@ func TestProductionTrustsProxyHeadersOnlyWhenTold(t *testing.T) {
 		return r
 	}
 
-	Production(discardLogger(), false)(handler).ServeHTTP(httptest.NewRecorder(), req())
+	Production(discardLogger())(handler).ServeHTTP(httptest.NewRecorder(), req())
 	if seen != "203.0.113.7:51234" {
 		t.Errorf("untrusted: RemoteAddr = %q; the forged header was believed", seen)
 	}
 
-	Production(discardLogger(), true)(handler).ServeHTTP(httptest.NewRecorder(), req())
+	ProductionBehindProxy(discardLogger())(handler).ServeHTTP(httptest.NewRecorder(), req())
 	if seen != "198.51.100.9" {
 		t.Errorf("trusted: RemoteAddr = %q, want the rightmost entry, the one the proxy added", seen)
 	}
@@ -944,18 +944,32 @@ func TestCrossOriginRefusesCrossSiteWrites(t *testing.T) {
 	}
 }
 
-// TestProductionRefusesCrossSiteWrites is the chain, not the middleware: the one a real service runs has it.
-func TestProductionRefusesCrossSiteWrites(t *testing.T) {
+// TestCrossOriginIsOptInInsideProduction: Production alone lets a cross-site POST through, as it always did,
+// and wrapping the handler with CrossOrigin inside it refuses one.
+func TestCrossOriginIsOptInInsideProduction(t *testing.T) {
 	ok := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
-	h := Production(slog.New(slog.NewTextHandler(io.Discard, nil)), false)(ok)
 
-	r := httptest.NewRequest(http.MethodPost, "http://api.example/things", nil)
-	r.Header.Set("Sec-Fetch-Site", "cross-site")
+	cross, err := CrossOrigin()
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	w := httptest.NewRecorder()
-	h.ServeHTTP(w, r)
+	for _, tc := range []struct {
+		name string
+		h    http.Handler
+		want int
+	}{
+		{"Production alone", Production(discardLogger())(ok), http.StatusOK},
+		{"Production with CrossOrigin inside", Production(discardLogger())(cross(ok)), http.StatusForbidden},
+	} {
+		r := httptest.NewRequest(http.MethodPost, "http://api.example/things", nil)
+		r.Header.Set("Sec-Fetch-Site", "cross-site")
 
-	if w.Code != http.StatusForbidden {
-		t.Errorf("a cross-site POST through Production got %d, want 403", w.Code)
+		w := httptest.NewRecorder()
+		tc.h.ServeHTTP(w, r)
+
+		if w.Code != tc.want {
+			t.Errorf("%s: a cross-site POST got %d, want %d", tc.name, w.Code, tc.want)
+		}
 	}
 }

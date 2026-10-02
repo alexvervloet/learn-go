@@ -60,26 +60,40 @@ import (
 // The order is the argument:
 //
 //  1. RealIP        before anything that logs or rate-limits by address. THIS
-//     package's, not chi's, which is deprecated as IP-spoofable. Whether to
-//     trust the proxy headers is the caller's decision, and the only safe
-//     default is no: a server reachable directly lets any client write its
-//     own X-Forwarded-For. The first version passed true unconditionally
+//     package's, not chi's, which is deprecated as IP-spoofable. Production
+//     does not trust the proxy headers, because a server reachable directly
+//     lets any client write its own X-Forwarded-For; ProductionBehindProxy
+//     does, for a deployment that sits behind one. The first version trusted
+//     them unconditionally
 //  2. RequestID     before logging, so the line has an ID
 //  3. Logger        outside Recovery, so a panicking request still gets a request line
 //  4. Recovery      outside the handler
-//  5. CrossOrigin   after logging, so a refused cross-site POST is still a logged line
-//     with an ID, and before anything that does work for it
-//  6. CleanPath     before routing, since it changes the path the router sees
-//  7. SecureHeaders anywhere before the handler writes
-//  8. Compress      innermost of the response-touching ones, so it wraps the smallest set
-//  9. Timeout       innermost, so it bounds only the handler
-func Production(log *slog.Logger, trustProxyHeaders bool) Middleware {
+//  5. CleanPath     before routing, since it changes the path the router sees
+//  6. SecureHeaders anywhere before the handler writes
+//  7. Compress      innermost of the response-touching ones, so it wraps the smallest set
+//  8. Timeout       innermost, so it bounds only the handler
+//
+// CrossOrigin is not in the chain; a cookie-authenticated service should add it. Wrap the handler,
+// inside Production, so a refused cross-site request is still a logged line with an ID:
+//
+//	cross, _ := middleware.CrossOrigin()
+//	handler := middleware.Production(log)(cross(mux))
+func Production(log *slog.Logger) Middleware {
+	return production(log, false)
+}
+
+// ProductionBehindProxy is Production for a service that only receives traffic through a proxy that sets
+// X-Forwarded-For. It trusts the rightmost entry; see RealIP for why that and not the leftmost.
+func ProductionBehindProxy(log *slog.Logger) Middleware {
+	return production(log, true)
+}
+
+func production(log *slog.Logger, trustProxyHeaders bool) Middleware {
 	return Chain(
 		RealIP(trustProxyHeaders),
 		RequestID,
 		Logger(log),
 		Recovery(log),
-		http.NewCrossOriginProtection().Handler, // CrossOrigin with no trusted origins, which cannot fail
 		CleanPath,
 		SecureHeaders,
 		chimw.Compress(5),
